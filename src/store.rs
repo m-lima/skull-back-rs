@@ -4,41 +4,22 @@ pub type Id = u32;
 
 macro_rules! impl_store_data {
     ($name:ty) => {
-        impl Data for $name {
-            fn id(&self) -> Id {
-                self.id
-            }
-        }
-
-        impl InnerData for $name {
-            fn set_id(&mut self, id: Id) {
-                self.id = id;
-            }
-        }
+        impl Data for $name {}
     };
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("entry not found for id `{0}`")]
+    #[error("Entry not found for id `{0}`")]
     NotFound(Id),
-    #[error("store full")]
+    #[error("Store full")]
     StoreFull,
-    #[error("unknown error: {0}")]
-    Unknown(Box<dyn std::error::Error>),
 }
 
-pub trait Data {
-    fn id(&self) -> Id;
-}
-
-trait InnerData: Data {
-    fn set_id(&mut self, id: Id);
-}
+pub trait Data {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Skull {
-    id: Id,
     name: String,
     price: f32,
 }
@@ -47,7 +28,6 @@ impl_store_data!(Skull);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Quick {
-    id: Id,
     skull: Skull,
     amount: f32,
 }
@@ -56,7 +36,6 @@ impl_store_data!(Quick);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Occurrence {
-    id: Id,
     skull: Skull,
     amount: f32,
     time: std::time::SystemTime,
@@ -71,6 +50,8 @@ pub trait Store: Send + 'static {
 }
 
 pub trait Crud<D: Data> {
+    fn list(&self) -> Result<Vec<(&Id, &D)>, Error>;
+    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error>;
     fn create(&mut self, data: D) -> Result<Id, Error>;
     fn read(&self, id: Id) -> Result<&D, Error>;
     fn update(&mut self, id: Id, data: D) -> Result<D, Error>;

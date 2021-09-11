@@ -58,12 +58,13 @@ impl Store {
         Self(std::sync::Arc::new(std::sync::Mutex::new(store)))
     }
 
-    pub fn get(&self) -> &std::sync::Arc<std::sync::Mutex<dyn store::Store>> {
-        &self.0
-    }
-
-    pub fn get_mut(&mut self) -> &mut std::sync::Arc<std::sync::Mutex<dyn store::Store>> {
-        &mut self.0
+    pub fn get(
+        &mut self,
+    ) -> Result<
+        std::sync::MutexGuard<'_, dyn store::Store>,
+        std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>,
+    > {
+        self.0.lock()
     }
 }
 

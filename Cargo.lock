@@ -861,6 +861,7 @@ dependencies = [
  "gotham_derive",
  "log",
  "serde",
+ "serde_json",
  "simplelog",
  "thiserror",
 ]

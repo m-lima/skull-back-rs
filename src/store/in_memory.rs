@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, InnerData, Occurrence, Quick, Skull, Store};
+use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
 
 #[derive(Debug, Default)]
 pub struct InMemory {
@@ -34,22 +34,29 @@ impl<D: Data> Default for Container<D> {
     }
 }
 
-impl<D: InnerData> Crud<D> for Container<D> {
-    fn create(&mut self, mut data: D) -> Result<Id, Error> {
+impl<D: Data> Crud<D> for Container<D> {
+    fn list(&self) -> Result<Vec<(&Id, &D)>, Error> {
+        Ok(self.data.iter().collect())
+    }
+
+    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error> {
+        Ok(self.data.iter().filter(|d| (filter)(d.1)).collect())
+    }
+
+    fn create(&mut self, data: D) -> Result<Id, Error> {
         if self.count == u32::MAX {
             return Err(Error::StoreFull);
         }
         let id = self.count;
         self.count += 1;
-        data.set_id(id);
-        self.data.insert(data.id(), data);
+        self.data.insert(id, data);
         Ok(id)
     }
     fn read(&self, id: Id) -> Result<&D, Error> {
         self.data.get(&id).ok_or(Error::NotFound(id))
     }
     fn update(&mut self, id: Id, data: D) -> Result<D, Error> {
-        self.data.insert(data.id(), data).ok_or(Error::NotFound(id))
+        self.data.insert(id, data).ok_or(Error::NotFound(id))
     }
     fn delete(&mut self, id: Id) -> Result<D, Error> {
         self.data.remove(&id).ok_or(Error::NotFound(id))
@@ -62,11 +69,8 @@ mod test {
 
     #[test]
     fn create() {
-        use super::Data;
-
         let mut store = InMemory::default();
         let skull = Skull {
-            id: 3,
             name: String::from("skull"),
             price: 0.4,
         };
@@ -74,7 +78,6 @@ mod test {
 
         assert!(store.skull.data.len() == 1);
         assert!(id == 0);
-        assert!(store.skull.data[&id].id() == 0);
     }
 
     #[test]
@@ -82,7 +85,6 @@ mod test {
         let mut store = InMemory::default();
         store.skull.count = u32::MAX;
         let skull = Skull {
-            id: 3,
             name: String::from("skull"),
             price: 0.4,
         };
@@ -98,12 +100,10 @@ mod test {
         let mut store = InMemory::default();
         let id = 3;
         let skull = Skull {
-            id,
             name: String::from("skull"),
             price: 0.4,
         };
         let expected = Skull {
-            id,
             name: String::from("skull"),
             price: 0.4,
         };
@@ -127,22 +127,18 @@ mod test {
         let mut store = InMemory::default();
         let id = 3;
         let old = Skull {
-            id,
             name: String::from("skull"),
             price: 0.4,
         };
         let old_expected = Skull {
-            id,
             name: String::from("skull"),
             price: 0.4,
         };
         let new = Skull {
-            id,
             name: String::from("bla"),
             price: 0.7,
         };
         let new_expected = Skull {
-            id,
             name: String::from("bla"),
             price: 0.7,
         };
@@ -157,7 +153,6 @@ mod test {
         let mut store = InMemory::default();
         let id = 3;
         let new = Skull {
-            id,
             name: String::from("bla"),
             price: 0.7,
         };
@@ -172,12 +167,10 @@ mod test {
         let mut store = InMemory::default();
         let id = 3;
         let skull = Skull {
-            id,
             name: String::from("skull"),
             price: 0.4,
         };
         let expected = Skull {
-            id,
             name: String::from("skull"),
             price: 0.4,
         };
@@ -201,7 +194,6 @@ mod test {
     fn id_always_grows() {
         let mut store = InMemory::default();
         let skull = Skull {
-            id: 3,
             name: String::from("skull"),
             price: 0.4,
         };
@@ -213,7 +205,6 @@ mod test {
         }
 
         let skull = Skull {
-            id: 3,
             name: String::from("skull"),
             price: 0.4,
         };
