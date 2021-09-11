@@ -58,7 +58,7 @@ impl<D: InnerData> Crud<D> for Container<D> {
 
 #[cfg(test)]
 mod test {
-    use super::{Error, Id, InMemory, Skull, Store};
+    use super::{Error, InMemory, Skull, Store};
 
     #[test]
     fn create() {
