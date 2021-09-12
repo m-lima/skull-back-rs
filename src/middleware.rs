@@ -1,4 +1,5 @@
 use crate::handler;
+use crate::mapper;
 use crate::store;
 
 type HandlerFuture = std::pin::Pin<Box<gotham::handler::HandlerFuture>>;
@@ -7,9 +8,42 @@ type HandlerFuture = std::pin::Pin<Box<gotham::handler::HandlerFuture>>;
 pub struct Log;
 
 impl Log {
-    fn request_info(
-        state: &gotham::state::State,
-    ) -> (String, &gotham::hyper::Method, &gotham::hyper::Uri, &str) {
+    #[inline]
+    fn log_level(error: &handler::Error) -> log::Level {
+        use handler::Error;
+        use mapper::Error as MapperError;
+        use store::Error as StoreError;
+
+        match error {
+            Error::Store(StoreError::NotFound(_)) | Error::Mapper(MapperError::Deserialize(_)) => {
+                log::Level::Info
+            }
+            Error::Store(StoreError::StoreFull) => log::Level::Warn,
+            Error::FailedToAcquireLock
+            | Error::Serialize(_)
+            | Error::Http(_)
+            | Error::Mapper(MapperError::Hyper(_)) => log::Level::Error,
+        }
+    }
+
+    #[inline]
+    fn status_to_color(status: u16) -> colored::ColoredString {
+        use colored::Colorize;
+        if status < 200 {
+            status.to_string().blue()
+        } else if status < 400 {
+            status.to_string().green()
+        } else if status < 500 {
+            status.to_string().yellow()
+        } else if status < 600 {
+            status.to_string().red()
+        } else {
+            status.to_string().white()
+        }
+    }
+
+    // TODO: A lot of string allocation going on here
+    fn log(state: &gotham::state::State, level: log::Level, status: u16, tail: &str) {
         use gotham::hyper;
         use gotham::state::FromState;
 
@@ -27,23 +61,22 @@ impl Log {
         // Request info
         let method = hyper::Method::borrow_from(state);
         let path = hyper::Uri::borrow_from(state);
-        let length = hyper::HeaderMap::borrow_from(state)
+        let request_length = hyper::HeaderMap::borrow_from(state)
             .get(hyper::header::CONTENT_LENGTH)
             .and_then(|len| len.to_str().ok())
-            .unwrap_or("");
+            .map_or_else(String::new, |len| format!(" {}b", len));
 
-        (ip, method, path, length)
-    }
-
-    fn log_level(error: &handler::Error) -> log::Level {
-        use handler::Error;
-        match error {
-            Error::Store(store::Error::NotFound(_)) | Error::Deserialize(_) => log::Level::Info,
-            Error::Store(store::Error::StoreFull) => log::Level::Warn,
-            Error::FailedToAcquireLock | Error::Serialize(_) | Error::Http(_) | Error::Hyper(_) => {
-                log::Level::Error
-            }
-        }
+        // Log out
+        log::log!(
+            level,
+            "{} {} {}{} - {}{}",
+            ip,
+            method,
+            path,
+            request_length,
+            Self::status_to_color(status),
+            tail,
+        );
     }
 }
 
@@ -56,44 +89,34 @@ impl gotham::middleware::Middleware for Log {
             chain(state)
                 .await
                 .map(|(state, response)| {
-                    let (ip, method, path, length) = Self::request_info(&state);
-
-                    // Response info
                     let status = response.status().as_u16();
+                    let length = gotham::hyper::body::HttpBody::size_hint(response.body())
+                        .exact()
+                        .filter(|len| *len > 0)
+                        .map_or_else(String::new, |len| {
+                            if response
+                                .headers()
+                                .contains_key(gotham::hyper::header::CONTENT_ENCODING)
+                            {
+                                format!(" [z] {}b", len)
+                            } else {
+                                format!(" {}b", len)
+                            }
+                        });
 
-                    // Log out
-                    log::info!("{} {} - {} {} {}", status, ip, method, path, length);
+                    Self::log(&state, log::Level::Info, status, &length);
 
                     (state, response)
                 })
                 .map_err(|(state, error)| {
-                    let (ip, method, path, length) = Self::request_info(&state);
-
-                    // Response info
                     let status = error.status().as_u16();
+                    let (level, error_message) =
+                        error.downcast_cause_ref::<handler::Error>().map_or_else(
+                            || (log::Level::Error, String::from(" [Unknown error]")),
+                            |e| (Self::log_level(e), format!(" [{}]", e)),
+                        );
 
-                    // Log out
-                    if let Some(error) = error.downcast_cause_ref::<handler::Error>() {
-                        log::log!(
-                            Self::log_level(error),
-                            "{} {} - {} {} {} [{}]",
-                            status,
-                            ip,
-                            method,
-                            path,
-                            length,
-                            error,
-                        );
-                    } else {
-                        log::error!(
-                            "{} {} - {} {} {} [Unknown error]",
-                            status,
-                            ip,
-                            method,
-                            path,
-                            length
-                        );
-                    }
+                    Self::log(&state, level, status, &error_message);
 
                     (state, error)
                 })

@@ -13,7 +13,7 @@ pub enum Error {
     StoreFull,
 }
 
-pub trait Data {}
+pub trait Data: serde::Serialize + serde::de::DeserializeOwned {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Skull {
@@ -43,14 +43,6 @@ pub struct Occurrence {
 
 impl Data for Occurrence {}
 
-// TODO: This is a usuful class. But mostly for mapping output. Maybe doesn't belong here
-#[derive(serde::Serialize, Clone, Debug, PartialEq)]
-pub struct DataWithId<'a, D: Data> {
-    id: Id,
-    #[serde(flatten)]
-    data: &'a D,
-}
-
 pub trait Store: Send + 'static {
     fn skull(&mut self) -> &mut dyn Crud<Skull>;
     fn quick(&mut self) -> &mut dyn Crud<Quick>;
@@ -59,9 +51,8 @@ pub trait Store: Send + 'static {
 
 // TODO: When using a RDB, will this interface still make sense?
 pub trait Crud<D: Data> {
-    fn list(&self) -> Result<Vec<DataWithId<'_, D>>, Error>;
-    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>)
-        -> Result<Vec<DataWithId<'_, D>>, Error>;
+    fn list(&self) -> Result<Vec<(&Id, &D)>, Error>;
+    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error>;
     fn create(&mut self, data: D) -> Result<Id, Error>;
     fn read(&self, id: Id) -> Result<&D, Error>;
     fn update(&mut self, id: Id, data: D) -> Result<D, Error>;

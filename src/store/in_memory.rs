@@ -1,4 +1,4 @@
-use super::{Crud, Data, DataWithId, Error, Id, Occurrence, Quick, Skull, Store};
+use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
 
 #[derive(Debug, Default)]
 pub struct InMemory {
@@ -35,30 +35,12 @@ impl<D: Data> Default for Container<D> {
 }
 
 impl<D: Data> Crud<D> for Container<D> {
-    fn list(&self) -> Result<Vec<DataWithId<'_, D>>, Error> {
-        Ok(self
-            .data
-            .iter()
-            .map(|pair| DataWithId {
-                id: *pair.0,
-                data: pair.1,
-            })
-            .collect())
+    fn list(&self) -> Result<Vec<(&Id, &D)>, Error> {
+        Ok(self.data.iter().collect())
     }
 
-    fn filter_list(
-        &self,
-        filter: Box<dyn Fn(&D) -> bool>,
-    ) -> Result<Vec<DataWithId<'_, D>>, Error> {
-        Ok(self
-            .data
-            .iter()
-            .filter(|d| (filter)(d.1))
-            .map(|pair| DataWithId {
-                id: *pair.0,
-                data: pair.1,
-            })
-            .collect())
+    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error> {
+        Ok(self.data.iter().filter(|d| (filter)(d.1)).collect())
     }
 
     fn create(&mut self, data: D) -> Result<Id, Error> {

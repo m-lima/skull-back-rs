@@ -1,4 +1,5 @@
 use crate::handler;
+use crate::mapper;
 use crate::middleware;
 use crate::options;
 use crate::store;
@@ -23,29 +24,16 @@ pub fn route(options: options::Options) -> gotham::router::Router {
             route.post("/").to(handler::skull::Create);
             route
                 .get("/:id:[0-9]+")
-                .with_path_extractor::<IdExtractor>()
+                .with_path_extractor::<mapper::request::Id>()
                 .to(handler::skull::Read);
             route
                 .put("/:id:[0-9]+")
-                .with_path_extractor::<IdExtractor>()
+                .with_path_extractor::<mapper::request::Id>()
                 .to(handler::skull::Update);
             route
                 .delete("/:id:[0-9]+")
-                .with_path_extractor::<IdExtractor>()
+                .with_path_extractor::<mapper::request::Id>()
                 .to(handler::skull::Delete);
         });
     })
-}
-
-// TODO: Move to mapper? Have input extractors and output serializer there?
-#[derive(serde::Deserialize, gotham_derive::StateData, gotham_derive::StaticResponseExtender)]
-pub struct IdExtractor {
-    id: store::Id,
-}
-
-impl IdExtractor {
-    #[inline]
-    pub fn id(self) -> store::Id {
-        self.id
-    }
 }
