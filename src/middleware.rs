@@ -38,9 +38,9 @@ impl Log {
     fn log_level(error: &handler::Error) -> log::Level {
         use handler::Error;
         match error {
-            Error::Store(store::Error::NotFound(_)) => log::Level::Info,
+            Error::Store(store::Error::NotFound(_)) | Error::Deserialize(_) => log::Level::Info,
             Error::Store(store::Error::StoreFull) => log::Level::Warn,
-            Error::FailedToAcquireLock | Error::Serde | Error::Http(_) | Error::Hyper(_) => {
+            Error::FailedToAcquireLock | Error::Serialize(_) | Error::Http(_) | Error::Hyper(_) => {
                 log::Level::Error
             }
         }

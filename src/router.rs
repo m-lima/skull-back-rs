@@ -25,25 +25,15 @@ pub fn route(options: options::Options) -> gotham::router::Router {
                 .get("/:id:[0-9]+")
                 .with_path_extractor::<IdExtractor>()
                 .to(handler::skull::Read);
-            // route
-            //     .put("/:id:[0-9]+")
-            //     .with_path_extractor::<IdExtractor>()
-            //     .to(handler::skull::update);
-            // route
-            //     .delete("/:id:[0-9]+")
-            //     .with_path_extractor::<IdExtractor>()
-            //     .to(handler::skull::delete);
+            route
+                .put("/:id:[0-9]+")
+                .with_path_extractor::<IdExtractor>()
+                .to(handler::skull::Update);
+            route
+                .delete("/:id:[0-9]+")
+                .with_path_extractor::<IdExtractor>()
+                .to(handler::skull::Delete);
         });
-        // route
-        //     .get("/:store/:id:[0-9]+")
-        //     .with_path_extractor::<GetExtractor>()
-        //     .to(get);
-
-        // route
-        //     .get("/:store")
-        //     .with_path_extractor::<GetAllPathExtractor>()
-        //     .with_query_string_extractor::<GetAllQueryExtractor>()
-        //     .to(get_all);
     })
 }
 
@@ -59,31 +49,3 @@ impl IdExtractor {
         self.id
     }
 }
-
-// #[derive(serde::Deserialize, gotham_derive::StateData, gotham_derive::StaticResponseExtender)]
-// pub struct GetAllPathExtractor {
-//     store: Store,
-// }
-
-// #[derive(serde::Deserialize, gotham_derive::StateData, gotham_derive::StaticResponseExtender)]
-// pub struct GetAllQueryExtractor {
-//     limit: Option<u32>,
-// }
-
-// #[derive(serde::Deserialize)]
-// #[serde(rename_all = "lowercase")]
-// pub enum Store {
-//     Skull,
-//     Quick,
-//     Occurrence,
-// }
-
-// impl std::fmt::Display for Store {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match *self {
-//             Self::Skull => f.write_str("Skull"),
-//             Self::Quick => f.write_str("Quick"),
-//             Self::Occurrence => f.write_str("Occurrence"),
-//         }
-//     }
-// }

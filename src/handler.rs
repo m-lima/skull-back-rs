@@ -7,8 +7,10 @@ pub enum Error {
     Store(store::Error),
     #[error("Failed to acquire lock")]
     FailedToAcquireLock,
-    #[error("Failed to serialize")]
-    Serde,
+    #[error("Failed to deserialize: {0}")]
+    Deserialize(serde_json::Error),
+    #[error("Failed to serialize: {0}")]
+    Serialize(serde_json::Error),
     #[error("Hyper error: {0}")]
     Hyper(gotham::hyper::Error),
     #[error("HTTP error: {0}")]
@@ -20,7 +22,8 @@ impl Error {
         match self {
             Self::Store(store::Error::NotFound(_)) => gotham::hyper::StatusCode::NOT_FOUND,
             Self::Store(store::Error::StoreFull) => gotham::hyper::StatusCode::INSUFFICIENT_STORAGE,
-            Self::FailedToAcquireLock | Self::Serde | Self::Http(_) | Self::Hyper(_) => {
+            Self::Deserialize(_) => gotham::hyper::StatusCode::BAD_REQUEST,
+            Self::FailedToAcquireLock | Self::Serialize(_) | Self::Http(_) | Self::Hyper(_) => {
                 gotham::hyper::StatusCode::INTERNAL_SERVER_ERROR
             }
         }
@@ -41,12 +44,6 @@ impl From<store::Error> for Error {
 impl From<std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>> for Error {
     fn from(_: std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>) -> Self {
         Self::FailedToAcquireLock
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(_: serde_json::Error) -> Self {
-        Self::Serde
     }
 }
 
@@ -110,7 +107,7 @@ pub mod skull {
             let json = {
                 let mut store = store.get()?;
                 let skulls = store.skull().list()?;
-                serde_json::to_string(&skulls)?
+                serde_json::to_string(&skulls).map_err(Error::Serialize)?
             };
 
             let response = gotham::hyper::Response::builder()
@@ -136,7 +133,7 @@ pub mod skull {
 
             let skull = {
                 let body = body::to_bytes(Body::take_from(state)).await?;
-                serde_json::from_slice(&body)?
+                serde_json::from_slice(&body).map_err(Error::Deserialize)?
             };
             let store = middleware::Store::borrow_mut_from(state);
 
@@ -146,9 +143,9 @@ pub mod skull {
             };
 
             let response = gotham::hyper::Response::builder()
-                .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
+                .header(gotham::hyper::header::LOCATION, id)
                 .status(gotham::hyper::StatusCode::CREATED)
-                .body(gotham::hyper::Body::from(format!(r#"{{"id":{}}}"#, id)))?;
+                .body(gotham::hyper::Body::empty())?;
 
             Ok(response)
         }
@@ -163,7 +160,6 @@ pub mod skull {
         async fn handle(
             state: &mut gotham::state::State,
         ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
-            use gotham::handler::IntoResponse;
             use gotham::state::FromState;
 
             let id = router::IdExtractor::take_from(state).id();
@@ -172,13 +168,80 @@ pub mod skull {
             let json = {
                 let mut store = store.get()?;
                 let skull = store.skull().read(id)?;
-                serde_json::to_string(&skull)?
+                serde_json::to_string(&skull).map_err(Error::Serialize)?
             };
-            let response = json.into_response(state);
+
+            let response = gotham::hyper::Response::builder()
+                .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
+                .status(gotham::hyper::StatusCode::OK)
+                .body(gotham::hyper::Body::from(json))?;
 
             Ok(response)
         }
     }
 
     impl_handle!(Read);
+
+    #[derive(Copy, Clone)]
+    pub struct Update;
+
+    impl Update {
+        async fn handle(
+            state: &mut gotham::state::State,
+        ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
+            use gotham::hyper::{body, Body};
+            use gotham::state::FromState;
+
+            let skull = {
+                let body = body::to_bytes(Body::take_from(state)).await?;
+                serde_json::from_slice(&body).map_err(Error::Deserialize)?
+            };
+            let id = router::IdExtractor::take_from(state).id();
+            let store = middleware::Store::borrow_mut_from(state);
+
+            let json = {
+                let mut store = store.get()?;
+                let skull = store.skull().update(id, skull)?;
+                serde_json::to_string(&skull).map_err(Error::Serialize)?
+            };
+
+            let response = gotham::hyper::Response::builder()
+                .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
+                .status(gotham::hyper::StatusCode::OK)
+                .body(gotham::hyper::Body::from(json))?;
+
+            Ok(response)
+        }
+    }
+
+    impl_handle!(Update);
+
+    #[derive(Copy, Clone)]
+    pub struct Delete;
+
+    impl Delete {
+        async fn handle(
+            state: &mut gotham::state::State,
+        ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
+            use gotham::state::FromState;
+
+            let id = router::IdExtractor::take_from(state).id();
+            let store = middleware::Store::borrow_mut_from(state);
+
+            let json = {
+                let mut store = store.get()?;
+                let skull = store.skull().delete(id)?;
+                serde_json::to_string(&skull).map_err(Error::Serialize)?
+            };
+
+            let response = gotham::hyper::Response::builder()
+                .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
+                .status(gotham::hyper::StatusCode::OK)
+                .body(gotham::hyper::Body::from(json))?;
+
+            Ok(response)
+        }
+    }
+
+    impl_handle!(Delete);
 }

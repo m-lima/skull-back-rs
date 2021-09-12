@@ -51,15 +51,6 @@ pub struct DataWithId<'a, D: Data> {
     data: &'a D,
 }
 
-impl<'a, D: Data> DataWithId<'a, D> {
-    fn build(pair: &(&'a Id, &'a D)) -> Self {
-        Self {
-            id: *pair.0,
-            data: pair.1,
-        }
-    }
-}
-
 pub trait Store: Send + 'static {
     fn skull(&mut self) -> &mut dyn Crud<Skull>;
     fn quick(&mut self) -> &mut dyn Crud<Quick>;
