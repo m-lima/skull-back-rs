@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
+use super::{Crud, Data, DataWithId, Error, Id, Occurrence, Quick, Skull, Store};
 
 #[derive(Debug, Default)]
 pub struct InMemory {
@@ -35,12 +35,30 @@ impl<D: Data> Default for Container<D> {
 }
 
 impl<D: Data> Crud<D> for Container<D> {
-    fn list(&self) -> Result<Vec<(&Id, &D)>, Error> {
-        Ok(self.data.iter().collect())
+    fn list(&self) -> Result<Vec<DataWithId<'_, D>>, Error> {
+        Ok(self
+            .data
+            .iter()
+            .map(|pair| DataWithId {
+                id: *pair.0,
+                data: pair.1,
+            })
+            .collect())
     }
 
-    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error> {
-        Ok(self.data.iter().filter(|d| (filter)(d.1)).collect())
+    fn filter_list(
+        &self,
+        filter: Box<dyn Fn(&D) -> bool>,
+    ) -> Result<Vec<DataWithId<'_, D>>, Error> {
+        Ok(self
+            .data
+            .iter()
+            .filter(|d| (filter)(d.1))
+            .map(|pair| DataWithId {
+                id: *pair.0,
+                data: pair.1,
+            })
+            .collect())
     }
 
     fn create(&mut self, data: D) -> Result<Id, Error> {
@@ -67,13 +85,20 @@ impl<D: Data> Crud<D> for Container<D> {
 mod test {
     use super::{Error, InMemory, Skull, Store};
 
+    fn new_skull(name: &str, unit_price: f32) -> Skull {
+        Skull {
+            name: String::from(name),
+            color: 0,
+            icon: String::new(),
+            unit_price,
+            limit: None,
+        }
+    }
+
     #[test]
     fn create() {
         let mut store = InMemory::default();
-        let skull = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
+        let skull = new_skull("skull", 0.4);
         let id = store.skull().create(skull).unwrap();
 
         assert!(store.skull.data.len() == 1);
@@ -84,10 +109,7 @@ mod test {
     fn create_store_full() {
         let mut store = InMemory::default();
         store.skull.count = u32::MAX;
-        let skull = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
+        let skull = new_skull("skull", 0.4);
 
         assert_eq!(
             store.skull().create(skull).unwrap_err().to_string(),
@@ -99,14 +121,8 @@ mod test {
     fn read() {
         let mut store = InMemory::default();
         let id = 3;
-        let skull = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
-        let expected = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
+        let skull = new_skull("skull", 0.4);
+        let expected = skull.clone();
         store.skull.data.insert(id, skull);
 
         assert_eq!(store.skull().read(id).unwrap(), &expected);
@@ -126,22 +142,10 @@ mod test {
     fn update() {
         let mut store = InMemory::default();
         let id = 3;
-        let old = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
-        let old_expected = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
-        let new = Skull {
-            name: String::from("bla"),
-            price: 0.7,
-        };
-        let new_expected = Skull {
-            name: String::from("bla"),
-            price: 0.7,
-        };
+        let old = new_skull("skull", 0.4);
+        let old_expected = old.clone();
+        let new = new_skull("bla", 0.7);
+        let new_expected = new.clone();
         store.skull.data.insert(id, old);
 
         assert_eq!(store.skull().update(id, new).unwrap(), old_expected);
@@ -152,10 +156,7 @@ mod test {
     fn update_not_found() {
         let mut store = InMemory::default();
         let id = 3;
-        let new = Skull {
-            name: String::from("bla"),
-            price: 0.7,
-        };
+        let new = new_skull("bla", 0.7);
         assert_eq!(
             store.skull().update(id, new).unwrap_err().to_string(),
             Error::NotFound(id).to_string()
@@ -166,14 +167,8 @@ mod test {
     fn delete() {
         let mut store = InMemory::default();
         let id = 3;
-        let skull = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
-        let expected = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
+        let skull = new_skull("skull", 0.4);
+        let expected = skull.clone();
         store.skull.data.insert(id, skull);
 
         assert_eq!(store.skull().delete(id).unwrap(), expected);
@@ -193,24 +188,14 @@ mod test {
     #[test]
     fn id_always_grows() {
         let mut store = InMemory::default();
-        let skull = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
-        {
-            let id = store.skull().create(skull).unwrap();
-            assert_eq!(id, 0);
-            assert!(store.skull().delete(id).is_ok());
-            assert!(store.skull.data.is_empty());
-        }
+        let skull = new_skull("skull", 0.4);
 
-        let skull = Skull {
-            name: String::from("skull"),
-            price: 0.4,
-        };
-        {
-            let id = store.skull().create(skull).unwrap();
-            assert_eq!(id, 1);
-        }
+        let mut id = store.skull().create(skull.clone()).unwrap();
+        assert_eq!(id, 0);
+        assert!(store.skull().delete(id).is_ok());
+        assert!(store.skull.data.is_empty());
+
+        id = store.skull().create(skull).unwrap();
+        assert_eq!(id, 1);
     }
 }
