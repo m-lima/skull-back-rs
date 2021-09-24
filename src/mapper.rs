@@ -23,6 +23,7 @@ pub mod request {
         pub id: store::Id,
     }
 
+    // TODO: Limit body size
     pub async fn body<D: store::Data>(state: &mut gotham::state::State) -> Result<D, Error> {
         use gotham::hyper::{body, Body};
         use gotham::state::FromState;

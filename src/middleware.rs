@@ -43,12 +43,18 @@ impl Log {
     }
 
     // TODO: A lot of string allocation going on here
-    fn log(state: &gotham::state::State, level: log::Level, status: u16, tail: &str) {
+    fn log(
+        state: &gotham::state::State,
+        level: log::Level,
+        status: u16,
+        tail: &str,
+        start: std::time::Instant,
+    ) {
         use gotham::hyper;
         use gotham::state::FromState;
 
         let ip = hyper::HeaderMap::borrow_from(state)
-            .get(hyper::header::HeaderName::from_static("x-forwarded-for"))
+            .get("x-forwarded-for")
             .and_then(|fwd| fwd.to_str().ok())
             .map_or_else(
                 || {
@@ -58,7 +64,11 @@ impl Log {
                 |fwd| format!("{} [p]", fwd),
             );
 
-        // Request info
+        let user = hyper::HeaderMap::borrow_from(state)
+            .get("x-user")
+            .and_then(|fwd| fwd.to_str().ok())
+            .unwrap_or("UNKNOWN");
+
         let method = hyper::Method::borrow_from(state);
         let path = hyper::Uri::borrow_from(state);
         let request_length = hyper::HeaderMap::borrow_from(state)
@@ -69,13 +79,15 @@ impl Log {
         // Log out
         log::log!(
             level,
-            "{} {} {}{} - {}{}",
+            "{} {} {} {}{} - {}{} - {:?}",
             ip,
+            user,
             method,
             path,
             request_length,
             Self::status_to_color(status),
             tail,
+            start.elapsed()
         );
     }
 }
@@ -86,9 +98,10 @@ impl gotham::middleware::Middleware for Log {
         Chain: FnOnce(gotham::state::State) -> HandlerFuture + Send + 'static,
     {
         Box::pin(async {
+            let start = std::time::Instant::now();
             chain(state)
                 .await
-                .map(|(state, response)| {
+                .map(move |(state, response)| {
                     let status = response.status().as_u16();
                     let length = gotham::hyper::body::HttpBody::size_hint(response.body())
                         .exact()
@@ -104,7 +117,7 @@ impl gotham::middleware::Middleware for Log {
                             }
                         });
 
-                    Self::log(&state, log::Level::Info, status, &length);
+                    Self::log(&state, log::Level::Info, status, &length, start);
 
                     (state, response)
                 })
@@ -116,7 +129,7 @@ impl gotham::middleware::Middleware for Log {
                             |e| (Self::log_level(e), format!(" [{}]", e)),
                         );
 
-                    Self::log(&state, level, status, &error_message);
+                    Self::log(&state, level, status, &error_message, start);
 
                     (state, error)
                 })
