@@ -48,16 +48,18 @@ pub enum Error {
 
 impl Error {
     fn status_code(&self) -> gotham::hyper::StatusCode {
+        use gotham::hyper::StatusCode;
         match self {
-            Self::Store(store::Error::NotFound(_)) => gotham::hyper::StatusCode::NOT_FOUND,
-            Self::Store(store::Error::StoreFull) => gotham::hyper::StatusCode::INSUFFICIENT_STORAGE,
-            Self::Mapper(mapper::Error::Deserialize(_)) => gotham::hyper::StatusCode::BAD_REQUEST,
+            Self::Store(store::Error::NotFound(_)) => StatusCode::NOT_FOUND,
+            Self::Store(store::Error::StoreFull) => StatusCode::INSUFFICIENT_STORAGE,
+            Self::Mapper(mapper::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
+            Self::Mapper(mapper::Error::PayloadTooLarge) => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::Mapper(mapper::Error::ContentLengthMissing) => StatusCode::LENGTH_REQUIRED,
+            Self::Mapper(mapper::Error::ReadTimeout) => StatusCode::REQUEST_TIMEOUT,
             Self::FailedToAcquireLock
             | Self::Serialize(_)
             | Self::Http(_)
-            | Self::Mapper(mapper::Error::Hyper(_)) => {
-                gotham::hyper::StatusCode::INTERNAL_SERVER_ERROR
-            }
+            | Self::Mapper(mapper::Error::Hyper(_)) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

@@ -4,12 +4,12 @@ pub enum Error {
     Deserialize(serde_json::Error),
     #[error("Hyper error: {0}")]
     Hyper(gotham::hyper::Error),
-}
-
-impl From<gotham::hyper::Error> for Error {
-    fn from(e: gotham::hyper::Error) -> Self {
-        Self::Hyper(e)
-    }
+    #[error("Content length missing")]
+    ContentLengthMissing,
+    #[error("Payload too large")]
+    PayloadTooLarge,
+    #[error("Read timeout")]
+    ReadTimeout,
 }
 
 pub mod request {
@@ -23,12 +23,28 @@ pub mod request {
         pub id: store::Id,
     }
 
-    // TODO: Limit body size
     pub async fn body<D: store::Data>(state: &mut gotham::state::State) -> Result<D, Error> {
-        use gotham::hyper::{body, Body};
+        use gotham::hyper;
         use gotham::state::FromState;
 
-        let body = body::to_bytes(Body::take_from(state)).await?;
+        let request_length = hyper::HeaderMap::borrow_from(state)
+            .get(hyper::header::CONTENT_LENGTH)
+            .and_then(|len| len.to_str().ok())
+            .and_then(|len| len.parse::<usize>().ok())
+            .ok_or(Error::ContentLengthMissing)?;
+
+        if request_length > 1024 {
+            return Err(Error::PayloadTooLarge);
+        }
+
+        // Hyper reads up to Content-Length. No need for chunk-wise verification
+        let body = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            hyper::body::to_bytes(hyper::Body::borrow_mut_from(state)),
+        )
+        .await
+        .map_err(|_| Error::ReadTimeout)?
+        .map_err(Error::Hyper)?;
         serde_json::from_slice(&body).map_err(Error::Deserialize)
     }
 }

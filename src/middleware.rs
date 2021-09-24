@@ -15,10 +15,15 @@ impl Log {
         use store::Error as StoreError;
 
         match error {
-            Error::Store(StoreError::NotFound(_)) | Error::Mapper(MapperError::Deserialize(_)) => {
-                log::Level::Info
+            Error::Store(StoreError::NotFound(_))
+            | Error::Mapper(
+                MapperError::Deserialize(_)
+                | MapperError::PayloadTooLarge
+                | MapperError::ContentLengthMissing,
+            ) => log::Level::Info,
+            Error::Store(StoreError::StoreFull) | Error::Mapper(MapperError::ReadTimeout) => {
+                log::Level::Warn
             }
-            Error::Store(StoreError::StoreFull) => log::Level::Warn,
             Error::FailedToAcquireLock
             | Error::Serialize(_)
             | Error::Http(_)
