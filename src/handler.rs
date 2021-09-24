@@ -75,6 +75,12 @@ impl From<store::Error> for Error {
     }
 }
 
+impl From<mapper::Error> for Error {
+    fn from(e: mapper::Error) -> Self {
+        Self::Mapper(e)
+    }
+}
+
 impl From<std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>> for Error {
     fn from(_: std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>) -> Self {
         Self::FailedToAcquireLock
@@ -84,12 +90,6 @@ impl From<std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>> f
 impl From<gotham::hyper::http::Error> for Error {
     fn from(e: gotham::hyper::http::Error) -> Self {
         Self::Http(e)
-    }
-}
-
-impl From<mapper::Error> for Error {
-    fn from(e: mapper::Error) -> Self {
-        Self::Mapper(e)
     }
 }
 

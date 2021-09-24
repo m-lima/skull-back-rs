@@ -47,7 +47,6 @@ impl Log {
         }
     }
 
-    // TODO: A lot of string allocation going on here
     fn log(
         state: &gotham::state::State,
         level: log::Level,

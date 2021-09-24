@@ -4,7 +4,6 @@ use crate::middleware;
 use crate::options;
 use crate::store;
 
-// TODO: Move to main?
 pub fn route(options: options::Options) -> gotham::router::Router {
     use gotham::pipeline;
     use gotham::router::builder;
