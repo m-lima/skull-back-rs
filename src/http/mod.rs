@@ -30,15 +30,21 @@ pub fn route(options: options::Options) -> gotham::router::Router {
                     .collect::<Vec<(store::Id, store::Skull)>>())
             }));
 
-            // route.post("/").to(handler::skull::Create);
+            route
+                .post("/")
+                .to_new_handler(handler::Create::new(|store, skull| {
+                    store.skull().create(skull).map_err(error::Error::Store)
+                }));
             // route
             //     .get("/:id:[0-9]+")
             //     .with_path_extractor::<mapper::request::Id>()
             //     .to(handler::skull::Read);
-            // route
-            //     .put("/:id:[0-9]+")
-            //     .with_path_extractor::<mapper::request::Id>()
-            //     .to(handler::skull::Update);
+            route
+                .put("/:id:[0-9]+")
+                .with_path_extractor::<mapper::request::Id>()
+                .to_new_handler(handler::Update::new(|store, id, skull| {
+                    store.skull().update(id, skull).map_err(error::Error::Store)
+                }));
             // route
             //     .delete("/:id:[0-9]+")
             //     .with_path_extractor::<mapper::request::Id>()
