@@ -1,8 +1,5 @@
-mod handler;
-mod mapper;
-mod middleware;
+mod http;
 mod options;
-mod router;
 mod store;
 
 fn init_logger() {
@@ -28,11 +25,11 @@ fn main() {
         log::info!("Core threads set to {}", options.threads);
         gotham::start_with_num_threads(
             format!("0.0.0.0:{}", options.port),
-            router::route(options),
+            http::route(options),
             threads,
         );
     } else {
         log::info!("Core threads set to automatic");
-        gotham::start(format!("0.0.0.0:{}", options.port), router::route(options));
+        gotham::start(format!("0.0.0.0:{}", options.port), http::route(options));
     }
 }

@@ -1,4 +1,4 @@
-use crate::mapper;
+use super::mapper;
 use crate::store;
 
 macro_rules! impl_handle {
@@ -94,8 +94,8 @@ impl From<gotham::hyper::http::Error> for Error {
 }
 
 pub mod skull {
+    use super::super::{mapper, middleware};
     use super::Error;
-    use crate::{mapper, middleware};
 
     #[derive(Copy, Clone)]
     pub struct List;
