@@ -1,5 +1,4 @@
-use super::handler;
-use super::mapper;
+use super::error;
 use crate::store;
 
 type HandlerFuture = std::pin::Pin<Box<gotham::handler::HandlerFuture>>;
@@ -9,9 +8,9 @@ pub struct Log;
 
 impl Log {
     #[inline]
-    fn log_level(error: &handler::Error) -> log::Level {
-        use handler::Error;
-        use mapper::Error as MapperError;
+    fn log_level(error: &error::Error) -> log::Level {
+        use super::mapper::Error as MapperError;
+        use error::Error;
         use store::Error as StoreError;
 
         match error {
@@ -127,7 +126,7 @@ impl gotham::middleware::Middleware for Log {
                 .map_err(|(state, error)| {
                     let status = error.status().as_u16();
                     let (level, error_message) =
-                        error.downcast_cause_ref::<handler::Error>().map_or_else(
+                        error.downcast_cause_ref::<error::Error>().map_or_else(
                             || (log::Level::Error, String::from(" [Unknown error]")),
                             |e| (Self::log_level(e), format!(" [{}]", e)),
                         );
