@@ -19,21 +19,21 @@ pub fn route(options: options::Options) -> gotham::router::Router {
 
     builder::build_router(chain, pipelines, |route| {
         route.scope("/skull", |route| {
-            route.get("/").to(handler::skull::List);
+            route.get("/").to(handler::List::new(|_| Ok(String::new())));
 
-            route.post("/").to(handler::skull::Create);
-            route
-                .get("/:id:[0-9]+")
-                .with_path_extractor::<mapper::request::Id>()
-                .to(handler::skull::Read);
-            route
-                .put("/:id:[0-9]+")
-                .with_path_extractor::<mapper::request::Id>()
-                .to(handler::skull::Update);
-            route
-                .delete("/:id:[0-9]+")
-                .with_path_extractor::<mapper::request::Id>()
-                .to(handler::skull::Delete);
+            // route.post("/").to(handler::skull::Create);
+            // route
+            //     .get("/:id:[0-9]+")
+            //     .with_path_extractor::<mapper::request::Id>()
+            //     .to(handler::skull::Read);
+            // route
+            //     .put("/:id:[0-9]+")
+            //     .with_path_extractor::<mapper::request::Id>()
+            //     .to(handler::skull::Update);
+            // route
+            //     .delete("/:id:[0-9]+")
+            //     .with_path_extractor::<mapper::request::Id>()
+            //     .to(handler::skull::Delete);
         });
     })
 }
