@@ -21,10 +21,9 @@ impl Log {
                 | MapperError::PayloadTooLarge
                 | MapperError::ContentLengthMissing,
             ) => log::Level::Info,
-            Error::Store(StoreError::StoreFull) | Error::Mapper(MapperError::ReadTimeout) => {
-                log::Level::Warn
-            }
-            Error::FailedToAcquireLock
+            Error::Mapper(MapperError::ReadTimeout) => log::Level::Warn,
+            Error::Store(StoreError::StoreFull)
+            | Error::FailedToAcquireLock
             | Error::Serialize(_)
             | Error::Http(_)
             | Error::Mapper(MapperError::Hyper(_)) => log::Level::Error,
