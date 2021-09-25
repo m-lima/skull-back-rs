@@ -875,8 +875,18 @@ dependencies = [
  "serde",
  "serde_json",
  "simplelog",
+ "skull-macro",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "skull-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

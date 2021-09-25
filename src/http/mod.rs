@@ -20,9 +20,14 @@ pub fn route(options: options::Options) -> gotham::router::Router {
 
     builder::build_router(chain, pipelines, |route| {
         route.scope("/skull", |route| {
-            route.get("/").to(handler::List::new(|mut store| {
-                let skulls = store.skull().list()?;
-                serde_json::to_string(&skulls).map_err(error::Error::Serialize)
+            route.get("/").to_new_handler(handler::List::new(|store| {
+                Ok(store
+                    .skull()
+                    .list()
+                    .map_err(error::Error::Store)?
+                    .iter()
+                    .map(|(id, skull)| (**id, (*skull).clone()))
+                    .collect::<Vec<(store::Id, store::Skull)>>())
             }));
 
             // route.post("/").to(handler::skull::Create);
