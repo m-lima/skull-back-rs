@@ -2,6 +2,7 @@ use super::mapper;
 use super::middleware;
 use crate::store;
 
+// TODO: Remove once try-blocks lands https://github.com/rust-lang/rust/issues/31436
 macro_rules! impl_handle {
     ($name:ty, $F:tt) => {
         impl<F> $name

@@ -50,6 +50,7 @@ pub trait Store: Send + 'static {
 }
 
 // TODO: When using a RDB, will this interface still make sense?
+// TODO: Is it possible to avoid the Vec's?
 pub trait Crud<D: Data> {
     fn list(&self) -> Result<Vec<(&Id, &D)>, Error>;
     fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error>;
