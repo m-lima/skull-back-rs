@@ -1,5 +1,5 @@
-mod server;
 mod options;
+mod server;
 mod store;
 
 fn init_logger() {
@@ -8,6 +8,9 @@ fn init_logger() {
         .build();
 
     simplelog::TermLogger::init(
+        #[cfg(debug_assertions)]
+        simplelog::LevelFilter::Debug,
+        #[cfg(not(debug_assertions))]
         simplelog::LevelFilter::Info,
         config,
         simplelog::TerminalMode::Mixed,
