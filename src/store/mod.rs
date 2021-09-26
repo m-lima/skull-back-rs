@@ -63,3 +63,28 @@ pub trait Crud<D: Data> {
 pub fn in_memory() -> in_memory::InMemory {
     in_memory::InMemory::default()
 }
+
+pub trait CrudSelector<D: Data> {
+    fn select(store: &mut dyn Store) -> &mut dyn Crud<D>;
+}
+
+struct SkullSelector;
+impl CrudSelector<Skull> for SkullSelector {
+    fn select(store: &mut dyn Store) -> &mut dyn Crud<Skull> {
+        store.skull()
+    }
+}
+
+struct QuickSelector;
+impl CrudSelector<Quick> for QuickSelector {
+    fn select(store: &mut dyn Store) -> &mut dyn Crud<Quick> {
+        store.quick()
+    }
+}
+
+struct OccurrenceSelector;
+impl CrudSelector<Occurrence> for OccurrenceSelector {
+    fn select(store: &mut dyn Store) -> &mut dyn Crud<Occurrence> {
+        store.occurrence()
+    }
+}
