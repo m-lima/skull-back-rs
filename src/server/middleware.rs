@@ -26,6 +26,17 @@ impl Log {
     }
 
     #[inline]
+    fn log_level_for(status: u16) -> log::Level {
+        if status < 400 {
+            log::Level::Info
+        } else if status < 500 {
+            log::Level::Warn
+        } else {
+            log::Level::Error
+        }
+    }
+
+    #[inline]
     fn status_to_color(status: u16) -> colored::ColoredString {
         use colored::Colorize;
         if status < 200 {
@@ -104,16 +115,7 @@ impl gotham::middleware::Middleware for Log {
                     let length = gotham::hyper::body::HttpBody::size_hint(response.body())
                         .exact()
                         .filter(|len| *len > 0)
-                        .map_or_else(String::new, |len| {
-                            if response
-                                .headers()
-                                .contains_key(gotham::hyper::header::CONTENT_ENCODING)
-                            {
-                                format!(" [z] {}b", len)
-                            } else {
-                                format!(" {}b", len)
-                            }
-                        });
+                        .map_or_else(String::new, |len| format!(" {}b", len));
 
                     Self::log(&state, log::Level::Info, status, &length, start);
 
@@ -122,7 +124,7 @@ impl gotham::middleware::Middleware for Log {
                 .map_err(|(state, error)| {
                     let status = error.status().as_u16();
                     let (level, error_message) = error.downcast_cause_ref::<Error>().map_or_else(
-                        || (log::Level::Error, String::from(" [Unknown error]")),
+                        || (Self::log_level_for(status), " [Unknown error]".to_owned()),
                         |e| (Self::log_level(e), format!(" [{}]", e)),
                     );
 
@@ -134,7 +136,7 @@ impl gotham::middleware::Middleware for Log {
     }
 }
 
-#[derive(Clone, gotham_derive::StateData)]
+#[derive(Clone, gotham_derive::StateData, gotham_derive::NewMiddleware)]
 pub struct Store(std::sync::Arc<std::sync::Mutex<dyn store::Store>>);
 
 impl Store {
@@ -166,10 +168,32 @@ impl gotham::middleware::Middleware for Store {
     }
 }
 
-impl gotham::middleware::NewMiddleware for Store {
-    type Instance = Self;
+#[derive(Clone, gotham_derive::StateData, gotham_derive::NewMiddleware)]
+pub struct Cors(gotham::hyper::header::HeaderValue);
 
-    fn new_middleware(&self) -> gotham::anyhow::Result<Self::Instance> {
-        Ok(self.clone())
+impl Cors {
+    pub fn new(cors: gotham::hyper::header::HeaderValue) -> Self {
+        Self(cors)
+    }
+}
+
+impl gotham::middleware::Middleware for Cors {
+    fn call<Chain>(
+        self,
+        state: gotham::state::State,
+        chain: Chain,
+    ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>>
+    where
+        Chain: FnOnce(gotham::state::State) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>>
+            + 'static
+            + Send,
+    {
+        Box::pin(async {
+            chain(state).await.map(|(state, mut response)| {
+                let headers = response.headers_mut();
+                headers.insert(gotham::hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, self.0);
+                (state, response)
+            })
+        })
     }
 }
