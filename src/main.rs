@@ -1,4 +1,4 @@
-mod http;
+mod server;
 mod options;
 mod store;
 
@@ -25,11 +25,11 @@ fn main() {
         log::info!("Core threads set to {}", options.threads);
         gotham::start_with_num_threads(
             format!("0.0.0.0:{}", options.port),
-            http::route(options),
+            server::route(options),
             threads,
         );
     } else {
         log::info!("Core threads set to automatic");
-        gotham::start(format!("0.0.0.0:{}", options.port), http::route(options));
+        gotham::start(format!("0.0.0.0:{}", options.port), server::route(options));
     }
 }
