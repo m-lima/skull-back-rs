@@ -20,40 +20,20 @@ pub fn route(options: options::Options) -> gotham::router::Router {
 
     builder::build_router(chain, pipelines, |route| {
         route.scope("/skull", |route| {
-            route.get("/").to(handler::List::new(|store| {
-                Ok(store
-                    .skull()
-                    .list()
-                    .map_err(error::Error::Store)?
-                    .iter()
-                    .map(|(id, skull)| (**id, (*skull).clone()))
-                    .collect::<Vec<(store::Id, store::Skull)>>())
-
-                // TODO: Fix this onwership problem. It's causing double copy (once for ownership
-                // and again for serialization
-                // store.skull().list().map_err(error::Error::Store)
-            }));
-
-            route.post("/").to_new_handler(handler::Create::new(yo));
-            // route
-            //     .post("/")
-            //     .to_new_handler(handler::Create::new(|store, skull| {
-            //         store.skull().create(skull).map_err(error::Error::Store)
-            //     }));
-            // route
-            //     .get("/:id:[0-9]+")
-            //     .with_path_extractor::<mapper::request::Id>()
-            //     .to(handler::skull::Read);
+            route.get("/").to(handler::List::<store::Skull>::new());
+            route.post("/").to(handler::Create::<store::Skull>::new());
+            route
+                .get("/:id:[0-9]+")
+                .with_path_extractor::<mapper::request::Id>()
+                .to(handler::Read::<store::Skull>::new());
             route
                 .put("/:id:[0-9]+")
                 .with_path_extractor::<mapper::request::Id>()
-                .to_new_handler(handler::Update::new(|store, id, skull| {
-                    store.skull().update(id, skull).map_err(error::Error::Store)
-                }));
-            // route
-            //     .delete("/:id:[0-9]+")
-            //     .with_path_extractor::<mapper::request::Id>()
-            //     .to(handler::skull::Delete);
+                .to(handler::Update::<store::Skull>::new());
+            route
+                .delete("/:id:[0-9]+")
+                .with_path_extractor::<mapper::request::Id>()
+                .to(handler::Delete::<store::Skull>::new());
         });
     })
 }

@@ -3,28 +3,53 @@ use super::mapper;
 use super::middleware;
 use crate::store;
 
-// List
-pub struct List<HandlerFunc, Output>(HandlerFunc)
-where
-    HandlerFunc: Fn(&mut dyn store::Store) -> Result<Output, error::Error>;
+macro_rules! impl_handler {
+    ($handler: ty, $param: tt) => {
+        impl<$param> $handler {
+            pub fn new() -> Self {
+                Self(Default::default())
+            }
+        }
 
-impl<HandlerFunc, Output> List<HandlerFunc, Output>
-where
-    HandlerFunc: Fn(&mut dyn store::Store) -> Result<Output, error::Error>,
-    Output: serde::ser::Serialize,
-{
-    pub fn new(handler_func: HandlerFunc) -> Self {
-        Self(handler_func)
-    }
+        impl<$param> Clone for $handler {
+            fn clone(&self) -> Self {
+                Self(self.0)
+            }
+        }
+        impl<$param> Copy for $handler {}
 
+        impl<$param: store::CrudSelector> gotham::handler::Handler for $handler
+        where
+            $param: 'static + Send + Sync,
+        {
+            fn handle(
+                self,
+                mut state: gotham::state::State,
+            ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>> {
+                Box::pin(async {
+                    match Self::handle(&mut state).await {
+                        Ok(r) => Ok((state, r)),
+                        Err(e) => Err((state, e.into_handler_error())),
+                    }
+                })
+            }
+        }
+    };
+}
+
+pub struct List<D>(std::marker::PhantomData<D>);
+
+impl<D: store::CrudSelector> List<D> {
     async fn handle(
-        self,
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
         use gotham::state::FromState;
 
-        let data = (self.0)(&mut *middleware::Store::borrow_mut_from(state).get()?)?;
-        let json = serde_json::to_vec(&data).map_err(error::Error::Serialize)?;
+        let json = {
+            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
+            let data = D::select(&mut *lock).list()?;
+            serde_json::to_vec(&data).map_err(error::Error::Serialize)?
+        };
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -39,62 +64,22 @@ where
     }
 }
 
-impl<HandlerFunc, Output> Clone for List<HandlerFunc, Output>
-where
-    HandlerFunc: Fn(&mut dyn store::Store) -> Result<Output, error::Error> + Copy,
-{
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
+impl_handler!(List<D>, D);
 
-impl<HandlerFunc, Output> Copy for List<HandlerFunc, Output> where
-    HandlerFunc: Fn(&mut dyn store::Store) -> Result<Output, error::Error> + Copy
-{
-}
+pub struct Create<D>(std::marker::PhantomData<D>);
 
-impl<HandlerFunc, Output> gotham::handler::Handler for List<HandlerFunc, Output>
-where
-    HandlerFunc: Fn(&mut dyn store::Store) -> Result<Output, error::Error> + 'static + Send,
-    Output: serde::Serialize + 'static,
-{
-    fn handle(
-        self,
-        mut state: gotham::state::State,
-    ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>> {
-        Box::pin(async {
-            match self.handle(&mut state).await {
-                Ok(r) => Ok((state, r)),
-                Err(e) => Err((state, e.into_handler_error())),
-            }
-        })
-    }
-}
-
-// Create
-pub struct Create<HandlerFunc, Data>(HandlerFunc, std::marker::PhantomData<Data>)
-where
-    HandlerFunc: Fn(&mut dyn store::Store, Data) -> Result<store::Id, error::Error>,
-    Data: store::Data;
-
-impl<HandlerFunc, Data> Create<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, Data) -> Result<store::Id, error::Error>,
-    Data: store::Data,
-{
-    pub fn new(handler_func: HandlerFunc) -> Self {
-        Self(handler_func, std::marker::PhantomData::default())
-    }
-
+impl<D: store::CrudSelector> Create<D> {
     async fn handle(
-        self,
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
         use gotham::state::FromState;
 
-        let body = mapper::request::body(state).await?;
+        let data = mapper::request::body(state).await?;
 
-        let id = (self.0)(&mut *middleware::Store::borrow_mut_from(state).get()?, body)?;
+        let id = {
+            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
+            D::select(&mut *lock).create(data)?
+        };
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::LOCATION, id)
@@ -109,67 +94,23 @@ where
     }
 }
 
-impl<HandlerFunc, Data> Clone for Create<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, Data) -> Result<store::Id, error::Error> + Copy,
-    Data: store::Data,
-{
-    fn clone(&self) -> Self {
-        Self(self.0, self.1)
-    }
-}
+impl_handler!(Create<D>, D);
 
-impl<HandlerFunc, Data> Copy for Create<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, Data) -> Result<store::Id, error::Error> + Copy,
-    Data: store::Data,
-{
-}
+pub struct Read<D>(std::marker::PhantomData<D>);
 
-impl<HandlerFunc, Data> gotham::handler::Handler for Create<HandlerFunc, Data>
-where
-    HandlerFunc:
-        Fn(&mut dyn store::Store, Data) -> Result<store::Id, error::Error> + 'static + Send,
-    Data: store::Data + 'static + Send,
-{
-    fn handle(
-        self,
-        state: gotham::state::State,
-    ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>> {
-        Box::pin(async {
-            match self.handle(&mut state).await {
-                Ok(r) => Ok((state, r)),
-                Err(e) => Err((state, e.into_handler_error())),
-            }
-        })
-    }
-}
-
-// Read
-pub struct Read<HandlerFunc, Data>(HandlerFunc)
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error>,
-    Data: store::Data;
-
-impl<HandlerFunc, Data> Read<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error>,
-    Data: store::Data,
-{
-    pub fn new(handler_func: HandlerFunc) -> Self {
-        Self(handler_func)
-    }
-
+impl<D: store::CrudSelector> Read<D> {
     async fn handle(
-        self,
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
         use gotham::state::FromState;
 
         let id = mapper::request::Id::take_from(state).id;
 
-        let data = (self.0)(&mut *middleware::Store::borrow_mut_from(state).get()?, id)?;
-        let json = serde_json::to_vec(&data).map_err(error::Error::Serialize)?;
+        let json = {
+            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
+            let data = D::select(&mut *lock).read(id)?;
+            serde_json::to_vec(data).map_err(error::Error::Serialize)?
+        };
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -184,73 +125,24 @@ where
     }
 }
 
-impl<HandlerFunc, Data> Clone for Read<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error> + Copy,
-    Data: store::Data,
-{
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
+impl_handler!(Read<D>, D);
 
-impl<HandlerFunc, Data> Copy for Read<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error> + Copy,
-    Data: store::Data,
-{
-}
+pub struct Update<D>(std::marker::PhantomData<D>);
 
-impl<HandlerFunc, Data> gotham::handler::Handler for Read<HandlerFunc, Data>
-where
-    HandlerFunc:
-        Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error> + 'static + Send,
-    Data: store::Data + 'static + Send,
-{
-    fn handle(
-        self,
-        state: gotham::state::State,
-    ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>> {
-        Box::pin(async {
-            match self.handle(&mut state).await {
-                Ok(r) => Ok((state, r)),
-                Err(e) => Err((state, e.into_handler_error())),
-            }
-        })
-    }
-}
-
-// Update
-pub struct Update<HandlerFunc, Data, Output>(HandlerFunc, std::marker::PhantomData<Data>)
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id, Data) -> Result<Output, error::Error>,
-    Data: store::Data;
-
-impl<HandlerFunc, Data, Output> Update<HandlerFunc, Data, Output>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id, Data) -> Result<Output, error::Error>,
-    Data: store::Data,
-    Output: serde::ser::Serialize,
-{
-    pub fn new(handler_func: HandlerFunc) -> Self {
-        Self(handler_func, std::marker::PhantomData::default())
-    }
-
+impl<D: store::CrudSelector> Update<D> {
     async fn handle(
-        self,
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
         use gotham::state::FromState;
 
-        let body = mapper::request::body(state).await?;
         let id = mapper::request::Id::take_from(state).id;
+        let data = mapper::request::body(state).await?;
 
-        let data = (self.0)(
-            &mut *middleware::Store::borrow_mut_from(state).get()?,
-            id,
-            body,
-        )?;
-        let json = serde_json::to_vec(&data).map_err(error::Error::Serialize)?;
+        let json = {
+            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
+            let data = D::select(&mut *lock).update(id, data)?;
+            serde_json::to_vec(&data).map_err(error::Error::Serialize)?
+        };
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -265,68 +157,23 @@ where
     }
 }
 
-impl<HandlerFunc, Data, Output> Clone for Update<HandlerFunc, Data, Output>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id, Data) -> Result<Output, error::Error> + Copy,
-    Data: store::Data,
-{
-    fn clone(&self) -> Self {
-        Self(self.0, self.1)
-    }
-}
+impl_handler!(Update<D>, D);
 
-impl<HandlerFunc, Data, Output> Copy for Update<HandlerFunc, Data, Output>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id, Data) -> Result<Output, error::Error> + Copy,
-    Data: store::Data,
-{
-}
+pub struct Delete<D>(std::marker::PhantomData<D>);
 
-impl<HandlerFunc, Data, Output> gotham::handler::Handler for Update<HandlerFunc, Data, Output>
-where
-    HandlerFunc:
-        Fn(&mut dyn store::Store, store::Id, Data) -> Result<Output, error::Error> + 'static + Send,
-    Data: store::Data + 'static + Send,
-    Output: 'static + serde::Serialize,
-{
-    fn handle(
-        self,
-        state: gotham::state::State,
-    ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>> {
-        Box::pin(async {
-            match self.handle(&mut state).await {
-                Ok(r) => Ok((state, r)),
-                Err(e) => Err((state, e.into_handler_error())),
-            }
-        })
-    }
-}
-
-// Delete
-pub struct Delete<HandlerFunc, Data>(HandlerFunc)
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error>,
-    Data: store::Data;
-
-impl<HandlerFunc, Data> Delete<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error>,
-    Data: store::Data,
-{
-    pub fn new(handler_func: HandlerFunc) -> Self {
-        Self(handler_func)
-    }
-
+impl<D: store::CrudSelector> Delete<D> {
     async fn handle(
-        self,
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
         use gotham::state::FromState;
 
         let id = mapper::request::Id::take_from(state).id;
 
-        let data = (self.0)(&mut *middleware::Store::borrow_mut_from(state).get()?, id)?;
-        let json = serde_json::to_vec(&data).map_err(error::Error::Serialize)?;
+        let json = {
+            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
+            let data = D::select(&mut *lock).delete(id)?;
+            serde_json::to_vec(&data).map_err(error::Error::Serialize)?
+        };
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -341,38 +188,4 @@ where
     }
 }
 
-impl<HandlerFunc, Data> Clone for Delete<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error> + Copy,
-    Data: store::Data,
-{
-    fn clone(&self) -> Self {
-        Self(self.0)
-    }
-}
-
-impl<HandlerFunc, Data> Copy for Delete<HandlerFunc, Data>
-where
-    HandlerFunc: Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error> + Copy,
-    Data: store::Data,
-{
-}
-
-impl<HandlerFunc, Data> gotham::handler::Handler for Delete<HandlerFunc, Data>
-where
-    HandlerFunc:
-        Fn(&mut dyn store::Store, store::Id) -> Result<Data, error::Error> + 'static + Send,
-    Data: store::Data + 'static + Send,
-{
-    fn handle(
-        self,
-        state: gotham::state::State,
-    ) -> std::pin::Pin<Box<gotham::handler::HandlerFuture>> {
-        Box::pin(async {
-            match self.handle(&mut state).await {
-                Ok(r) => Ok((state, r)),
-                Err(e) => Err((state, e.into_handler_error())),
-            }
-        })
-    }
-}
+impl_handler!(Delete<D>, D);
