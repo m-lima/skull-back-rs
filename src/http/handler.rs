@@ -1,4 +1,4 @@
-use super::error;
+use super::error::Error;
 use super::mapper;
 use super::middleware;
 use crate::store;
@@ -42,13 +42,13 @@ pub struct List<D>(std::marker::PhantomData<D>);
 impl<D: store::CrudSelector> List<D> {
     async fn handle(
         state: &mut gotham::state::State,
-    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
+    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
         let json = {
             let mut lock = middleware::Store::borrow_mut_from(state).get()?;
             let data = D::select(&mut *lock).list()?;
-            serde_json::to_vec(&data).map_err(error::Error::Serialize)?
+            serde_json::to_vec(&data)?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -71,7 +71,7 @@ pub struct Create<D>(std::marker::PhantomData<D>);
 impl<D: store::CrudSelector> Create<D> {
     async fn handle(
         state: &mut gotham::state::State,
-    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
+    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
         let data = mapper::request::body(state).await?;
@@ -101,7 +101,7 @@ pub struct Read<D>(std::marker::PhantomData<D>);
 impl<D: store::CrudSelector> Read<D> {
     async fn handle(
         state: &mut gotham::state::State,
-    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
+    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
         let id = mapper::request::Id::take_from(state).id;
@@ -109,7 +109,7 @@ impl<D: store::CrudSelector> Read<D> {
         let json = {
             let mut lock = middleware::Store::borrow_mut_from(state).get()?;
             let data = D::select(&mut *lock).read(id)?;
-            serde_json::to_vec(data).map_err(error::Error::Serialize)?
+            serde_json::to_vec(data)?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -132,7 +132,7 @@ pub struct Update<D>(std::marker::PhantomData<D>);
 impl<D: store::CrudSelector> Update<D> {
     async fn handle(
         state: &mut gotham::state::State,
-    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
+    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
         let id = mapper::request::Id::take_from(state).id;
@@ -141,7 +141,7 @@ impl<D: store::CrudSelector> Update<D> {
         let json = {
             let mut lock = middleware::Store::borrow_mut_from(state).get()?;
             let data = D::select(&mut *lock).update(id, data)?;
-            serde_json::to_vec(&data).map_err(error::Error::Serialize)?
+            serde_json::to_vec(&data)?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -164,7 +164,7 @@ pub struct Delete<D>(std::marker::PhantomData<D>);
 impl<D: store::CrudSelector> Delete<D> {
     async fn handle(
         state: &mut gotham::state::State,
-    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, error::Error> {
+    ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
         let id = mapper::request::Id::take_from(state).id;
@@ -172,7 +172,7 @@ impl<D: store::CrudSelector> Delete<D> {
         let json = {
             let mut lock = middleware::Store::borrow_mut_from(state).get()?;
             let data = D::select(&mut *lock).delete(id)?;
-            serde_json::to_vec(&data).map_err(error::Error::Serialize)?
+            serde_json::to_vec(&data)?
         };
 
         let response = gotham::hyper::Response::builder()

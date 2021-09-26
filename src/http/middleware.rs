@@ -1,4 +1,4 @@
-use super::error;
+use super::error::Error;
 use crate::store;
 
 type HandlerFuture = std::pin::Pin<Box<gotham::handler::HandlerFuture>>;
@@ -8,24 +8,20 @@ pub struct Log;
 
 impl Log {
     #[inline]
-    fn log_level(error: &error::Error) -> log::Level {
-        use super::mapper::Error as MapperError;
-        use error::Error;
+    fn log_level(error: &Error) -> log::Level {
         use store::Error as StoreError;
 
         match error {
             Error::Store(StoreError::NotFound(_))
-            | Error::Mapper(
-                MapperError::Deserialize(_)
-                | MapperError::PayloadTooLarge
-                | MapperError::ContentLengthMissing,
-            ) => log::Level::Info,
-            Error::Mapper(MapperError::ReadTimeout) => log::Level::Warn,
+            | Error::Deserialize(_)
+            | Error::PayloadTooLarge
+            | Error::ContentLengthMissing => log::Level::Info,
+            Error::ReadTimeout => log::Level::Warn,
             Error::Store(StoreError::StoreFull)
             | Error::FailedToAcquireLock
             | Error::Serialize(_)
             | Error::Http(_)
-            | Error::Mapper(MapperError::Hyper(_)) => log::Level::Error,
+            | Error::Hyper(_) => log::Level::Error,
         }
     }
 
@@ -125,11 +121,10 @@ impl gotham::middleware::Middleware for Log {
                 })
                 .map_err(|(state, error)| {
                     let status = error.status().as_u16();
-                    let (level, error_message) =
-                        error.downcast_cause_ref::<error::Error>().map_or_else(
-                            || (log::Level::Error, String::from(" [Unknown error]")),
-                            |e| (Self::log_level(e), format!(" [{}]", e)),
-                        );
+                    let (level, error_message) = error.downcast_cause_ref::<Error>().map_or_else(
+                        || (log::Level::Error, String::from(" [Unknown error]")),
+                        |e| (Self::log_level(e), format!(" [{}]", e)),
+                    );
 
                     Self::log(&state, level, status, &error_message, start);
 

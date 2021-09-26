@@ -1,19 +1,5 @@
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Failed to deserialize: {0}")]
-    Deserialize(serde_json::Error),
-    #[error("Hyper error: {0}")]
-    Hyper(gotham::hyper::Error),
-    #[error("Content length missing")]
-    ContentLengthMissing,
-    #[error("Payload too large")]
-    PayloadTooLarge,
-    #[error("Read timeout")]
-    ReadTimeout,
-}
-
 pub mod request {
-    use super::Error;
+    use super::super::error::Error;
     use crate::store;
 
     #[derive(
