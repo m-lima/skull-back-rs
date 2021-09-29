@@ -21,11 +21,72 @@ impl Store for InMemory {
 
 #[derive(Debug)]
 pub(super) struct Container<D: Data> {
+    data: std::collections::HashMap<String, UserContainer<D>>,
+}
+
+impl<D: Data> Default for Container<D> {
+    fn default() -> Self {
+        Self {
+            data: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl<D: Data> Crud<D> for Container<D> {
+    fn list(&self, user: &str) -> Result<Vec<(&Id, &D)>, Error> {
+        self.data
+            .get(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .map(UserContainer::list)
+    }
+
+    fn filter_list(
+        &self,
+        user: &str,
+        filter: Box<dyn Fn(&D) -> bool>,
+    ) -> Result<Vec<(&Id, &D)>, Error> {
+        self.data
+            .get(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .map(|store| store.filter_list(&filter))
+    }
+
+    fn create(&mut self, user: &str, data: D) -> Result<Id, Error> {
+        self.data
+            .get_mut(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .and_then(|store| store.create(data))
+    }
+
+    fn read(&self, user: &str, id: Id) -> Result<&D, Error> {
+        self.data
+            .get(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .and_then(|store| store.read(id))
+    }
+
+    fn update(&mut self, user: &str, id: Id, data: D) -> Result<D, Error> {
+        self.data
+            .get_mut(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .and_then(|store| store.update(id, data))
+    }
+
+    fn delete(&mut self, user: &str, id: Id) -> Result<D, Error> {
+        self.data
+            .get_mut(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .and_then(|store| store.delete(id))
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct UserContainer<D: Data> {
     count: u32,
     data: std::collections::HashMap<Id, D>,
 }
 
-impl<D: Data> Default for Container<D> {
+impl<D: Data> Default for UserContainer<D> {
     fn default() -> Self {
         Self {
             count: 0,
@@ -34,13 +95,13 @@ impl<D: Data> Default for Container<D> {
     }
 }
 
-impl<D: Data> Crud<D> for Container<D> {
-    fn list(&self) -> Result<Vec<(&Id, &D)>, Error> {
-        Ok(self.data.iter().collect())
+impl<D: Data> UserContainer<D> {
+    fn list(&self) -> Vec<(&Id, &D)> {
+        self.data.iter().collect()
     }
 
-    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error> {
-        Ok(self.data.iter().filter(|d| (filter)(d.1)).collect())
+    fn filter_list(&self, filter: &dyn Fn(&D) -> bool) -> Vec<(&Id, &D)> {
+        self.data.iter().filter(|d| (filter)(d.1)).collect()
     }
 
     fn create(&mut self, data: D) -> Result<Id, Error> {
@@ -52,12 +113,15 @@ impl<D: Data> Crud<D> for Container<D> {
         self.data.insert(id, data);
         Ok(id)
     }
+
     fn read(&self, id: Id) -> Result<&D, Error> {
         self.data.get(&id).ok_or(Error::NotFound(id))
     }
+
     fn update(&mut self, id: Id, data: D) -> Result<D, Error> {
         self.data.insert(id, data).ok_or(Error::NotFound(id))
     }
+
     fn delete(&mut self, id: Id) -> Result<D, Error> {
         self.data.remove(&id).ok_or(Error::NotFound(id))
     }
@@ -76,6 +140,11 @@ mod test {
             limit: None,
         }
     }
+
+    // fn new_store(user: &str) -> InMemory {
+    //     let mut store = InMemory::default();
+    //     store.
+    // }
 
     #[test]
     fn create() {

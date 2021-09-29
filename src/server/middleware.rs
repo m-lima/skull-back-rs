@@ -12,9 +12,11 @@ impl Log {
         use store::Error as StoreError;
 
         match error {
-            Error::Store(StoreError::NotFound(_))
+            Error::Store(StoreError::NotFound(_) | StoreError::NoSuchUser(_))
             | Error::Deserialize(_)
             | Error::PayloadTooLarge
+            | Error::MissingUser
+            | Error::BadHeader
             | Error::ContentLengthMissing => log::Level::Info,
             Error::ReadTimeout => log::Level::Warn,
             Error::Store(StoreError::StoreFull)
@@ -145,7 +147,7 @@ impl Store {
     }
 
     pub fn get(
-        &mut self,
+        &self,
     ) -> Result<
         std::sync::MutexGuard<'_, dyn store::Store>,
         std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>,

@@ -15,6 +15,8 @@ pub type Color = u32;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("User not found `{0}`")]
+    NoSuchUser(String),
     #[error("Entry not found for id `{0}`")]
     NotFound(Id),
     #[error("Store full")]
@@ -44,9 +46,10 @@ impl Data for Quick {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Occurrence {
-    skull: Skull,
+    skull: Id,
     amount: f32,
-    time: std::time::SystemTime,
+    #[serde(with = "time")]
+    secs: std::time::SystemTime,
 }
 
 impl Data for Occurrence {}
@@ -57,15 +60,43 @@ pub trait Store: Send + 'static {
     fn occurrence(&mut self) -> &mut dyn Crud<Occurrence>;
 }
 
+mod time {
+    pub fn serialize<S>(time: &std::time::SystemTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        let secs = time
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| serde::ser::Error::custom("Time is before UNIX_EPOCH"))?
+            .as_secs();
+
+        serializer.serialize_u64(secs)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<std::time::SystemTime, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let secs = <u64 as serde::Deserialize>::deserialize(deserializer)?;
+        std::time::UNIX_EPOCH
+            .checked_add(std::time::Duration::from_secs(secs))
+            .ok_or_else(|| serde::de::Error::custom("Could not parse UNIX EPOCH"))
+    }
+}
+
 // TODO: When using a RDB, will this interface still make sense?
 // TODO: Is it possible to avoid the Vec's?
 pub trait Crud<D: Data> {
-    fn list(&self) -> Result<Vec<(&Id, &D)>, Error>;
-    fn filter_list(&self, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<(&Id, &D)>, Error>;
-    fn create(&mut self, data: D) -> Result<Id, Error>;
-    fn read(&self, id: Id) -> Result<&D, Error>;
-    fn update(&mut self, id: Id, data: D) -> Result<D, Error>;
-    fn delete(&mut self, id: Id) -> Result<D, Error>;
+    fn list(&self, user: &str) -> Result<Vec<(&Id, &D)>, Error>;
+    fn filter_list(
+        &self,
+        user: &str,
+        filter: Box<dyn Fn(&D) -> bool>,
+    ) -> Result<Vec<(&Id, &D)>, Error>;
+    fn create(&mut self, user: &str, data: D) -> Result<Id, Error>;
+    fn read(&self, user: &str, id: Id) -> Result<&D, Error>;
+    fn update(&mut self, user: &str, id: Id, data: D) -> Result<D, Error>;
+    fn delete(&mut self, user: &str, id: Id) -> Result<D, Error>;
 }
 
 pub trait CrudSelector: Data {

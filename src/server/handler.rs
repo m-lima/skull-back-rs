@@ -45,9 +45,10 @@ impl<D: store::CrudSelector> List<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
+        let user = mapper::request::User::borrow_from(state)?;
         let json = {
-            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
-            let data = D::select(&mut *lock).list()?;
+            let mut lock = middleware::Store::borrow_from(state).get()?;
+            let data = D::select(&mut *lock).list(user)?;
             serde_json::to_vec(&data)?
         };
 
@@ -74,11 +75,12 @@ impl<D: store::CrudSelector> Create<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
-        let data = mapper::request::body(state).await?;
+        let user = mapper::request::User::borrow_from(state).map(String::from)?;
+        let data = mapper::request::Body::take_from(state).await?;
 
         let id = {
-            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
-            D::select(&mut *lock).create(data)?
+            let mut lock = middleware::Store::borrow_from(state).get()?;
+            D::select(&mut *lock).create(&user, data)?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -104,11 +106,12 @@ impl<D: store::CrudSelector> Read<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
-        let id = mapper::request::Id::take_from(state).id;
+        let user = mapper::request::User::borrow_from(state)?;
+        let id = mapper::request::Id::borrow_from(state).id;
 
         let json = {
-            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
-            let data = D::select(&mut *lock).read(id)?;
+            let mut lock = middleware::Store::borrow_from(state).get()?;
+            let data = D::select(&mut *lock).read(user, id)?;
             serde_json::to_vec(data)?
         };
 
@@ -135,12 +138,13 @@ impl<D: store::CrudSelector> Update<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
-        let id = mapper::request::Id::take_from(state).id;
-        let data = mapper::request::body(state).await?;
+        let user = mapper::request::User::borrow_from(state).map(String::from)?;
+        let id = mapper::request::Id::borrow_from(state).id;
+        let data = mapper::request::Body::take_from(state).await?;
 
         let json = {
-            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
-            let data = D::select(&mut *lock).update(id, data)?;
+            let mut lock = middleware::Store::borrow_from(state).get()?;
+            let data = D::select(&mut *lock).update(&user, id, data)?;
             serde_json::to_vec(&data)?
         };
 
@@ -167,11 +171,12 @@ impl<D: store::CrudSelector> Delete<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
-        let id = mapper::request::Id::take_from(state).id;
+        let user = mapper::request::User::borrow_from(state)?;
+        let id = mapper::request::Id::borrow_from(state).id;
 
         let json = {
-            let mut lock = middleware::Store::borrow_mut_from(state).get()?;
-            let data = D::select(&mut *lock).delete(id)?;
+            let mut lock = middleware::Store::borrow_from(state).get()?;
+            let data = D::select(&mut *lock).delete(user, id)?;
             serde_json::to_vec(&data)?
         };
 

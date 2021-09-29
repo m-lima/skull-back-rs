@@ -4,6 +4,10 @@ use crate::store;
 pub enum Error {
     #[error("{0}")]
     Store(store::Error),
+    #[error("Bad header")]
+    BadHeader,
+    #[error("Missing user header")]
+    MissingUser,
     #[error("Failed to deserialize: {0}")]
     Deserialize(serde_json::Error),
     #[error("Hyper error: {0}")]
@@ -25,10 +29,13 @@ pub enum Error {
 impl Error {
     fn status_code(&self) -> gotham::hyper::StatusCode {
         use gotham::hyper::StatusCode;
+        use store::Error as StoreError;
+
         match self {
-            Self::Store(store::Error::NotFound(_)) => StatusCode::NOT_FOUND,
-            Self::Store(store::Error::StoreFull) => StatusCode::INSUFFICIENT_STORAGE,
-            Self::Deserialize(_) => StatusCode::BAD_REQUEST,
+            Self::Store(StoreError::NotFound(_)) => StatusCode::NOT_FOUND,
+            Self::Store(StoreError::StoreFull) => StatusCode::INSUFFICIENT_STORAGE,
+            Self::MissingUser | Self::Store(StoreError::NoSuchUser(_)) => StatusCode::FORBIDDEN,
+            Self::Deserialize(_) | Self::BadHeader => StatusCode::BAD_REQUEST,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ContentLengthMissing => StatusCode::LENGTH_REQUIRED,
             Self::ReadTimeout => StatusCode::REQUEST_TIMEOUT,
