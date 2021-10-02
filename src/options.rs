@@ -30,6 +30,10 @@ pub struct Options {
     /// and the api will be nested under "/api"
     #[clap(short, long, parse(try_from_str = to_index_root))]
     pub web_path: Option<std::path::PathBuf>,
+
+    /// Initializes with at least these users present
+    #[clap(short, long)]
+    pub users: Vec<String>,
 }
 
 fn to_cors(

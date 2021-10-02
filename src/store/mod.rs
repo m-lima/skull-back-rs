@@ -1,14 +1,27 @@
+// mod in_file;
 mod in_memory;
+
+mod id_setter {
+    pub trait IdSetter {
+        fn set_id(&mut self, id: super::Id);
+    }
+}
+
+use id_setter::IdSetter;
 
 pub type Id = u32;
 
-pub fn in_memory() -> in_memory::InMemory {
-    in_memory::InMemory::default()
+pub fn in_memory<S, I>(users: I) -> impl Store
+where
+    S: ToString,
+    I: std::iter::IntoIterator<Item = S>,
+{
+    in_memory::InMemory::new(users)
 }
 
-pub fn in_file<P>(_path: P) -> in_memory::InMemory {
-    in_memory::InMemory::default()
-}
+// pub fn in_file<P: AsRef<std::path::Path>>(path: P) -> in_file::InFile {
+//     in_file::InFile::new(path)
+// }
 
 // TODO: Should this be a String and let the front end parse it?
 pub type Color = u32;
@@ -23,10 +36,13 @@ pub enum Error {
     StoreFull,
 }
 
-pub trait Data: serde::Serialize + serde::de::DeserializeOwned {}
+pub trait Data: id_setter::IdSetter + serde::Serialize + serde::de::DeserializeOwned {
+    fn id(&self) -> Id;
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Skull {
+    id: Id,
     name: String,
     color: Color,
     icon: String,
@@ -34,27 +50,60 @@ pub struct Skull {
     limit: Option<f32>,
 }
 
-impl Data for Skull {}
+impl Data for Skull {
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
+impl IdSetter for Skull {
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Quick {
-    skull: Skull,
+    id: Id,
+    skull: Id,
     amount: f32,
 }
 
-impl Data for Quick {}
+impl Data for Quick {
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
+impl IdSetter for Quick {
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Occurrence {
+    id: Id,
     skull: Id,
     amount: f32,
     #[serde(with = "time")]
     secs: std::time::SystemTime,
 }
 
-impl Data for Occurrence {}
+impl Data for Occurrence {
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
+impl IdSetter for Occurrence {
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
+    }
+}
 
 pub trait Store: Send + 'static {
+    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error>;
     fn skull(&mut self) -> &mut dyn Crud<Skull>;
     fn quick(&mut self) -> &mut dyn Crud<Quick>;
     fn occurrence(&mut self) -> &mut dyn Crud<Occurrence>;
@@ -87,12 +136,8 @@ mod time {
 // TODO: When using a RDB, will this interface still make sense?
 // TODO: Is it possible to avoid the Vec's?
 pub trait Crud<D: Data> {
-    fn list(&self, user: &str) -> Result<Vec<(&Id, &D)>, Error>;
-    fn filter_list(
-        &self,
-        user: &str,
-        filter: Box<dyn Fn(&D) -> bool>,
-    ) -> Result<Vec<(&Id, &D)>, Error>;
+    fn list(&self, user: &str) -> Result<Vec<&D>, Error>;
+    fn filter_list(&self, user: &str, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<&D>, Error>;
     fn create(&mut self, user: &str, data: D) -> Result<Id, Error>;
     fn read(&self, user: &str, id: Id) -> Result<&D, Error>;
     fn update(&mut self, user: &str, id: Id, data: D) -> Result<D, Error>;

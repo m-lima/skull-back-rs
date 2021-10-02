@@ -9,9 +9,12 @@ use crate::store;
 // Allowed because we can't create closures with moving the same data
 #[allow(clippy::option_if_let_else)]
 pub fn route(options: options::Options) -> gotham::router::Router {
-    let store = options
-        .store_path
-        .map_or_else(store::in_memory, store::in_file);
+    // let store: &dyn store::Store;
+    // store = options
+    //     .store_path
+    //     .map_or_else(|| &store::in_memory(), |p| &store::in_file(p));
+
+    let store = store::in_memory(options.users);
 
     if let Some(cors) = options.cors {
         with_cors(store, cors)
@@ -67,6 +70,9 @@ where
     C: gotham::pipeline::chain::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
     P: std::panic::RefUnwindSafe + Send + Sync + 'static,
 {
+    use gotham::router::builder::DefineSingleRoute;
+
+    route.get("/modified").to(handler::LastModified);
     route.scope("/skull", Resource::<store::Skull>::setup);
     route.scope("/quick", Resource::<store::Quick>::setup);
     route.scope("/occurrence", Resource::<store::Occurrence>::setup);

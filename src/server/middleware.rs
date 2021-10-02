@@ -138,6 +138,7 @@ impl gotham::middleware::Middleware for Log {
     }
 }
 
+// TODO: Got a big ol lock here, for all users, all data types
 #[derive(Clone, gotham_derive::StateData, gotham_derive::NewMiddleware)]
 pub struct Store(std::sync::Arc<std::sync::Mutex<dyn store::Store>>);
 
