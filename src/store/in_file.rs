@@ -46,6 +46,7 @@ impl InFile {
         for user in &users {
             let path = path.join(user);
             if !path.exists() {
+                log::debug!("Creating {}", path.display());
                 std::fs::create_dir(&path).map_err(|e| {
                     anyhow::anyhow!("Could not create user directory {}: {}", path.display(), e)
                 })?;
@@ -57,6 +58,7 @@ impl InFile {
                 [Skull::name(), Quick::name(), Occurrence::name()].map(|name| path.join(name))
             {
                 if !file.exists() {
+                    log::debug!("Creating {}", path.display());
                     std::fs::File::create(&file).map_err(|e| {
                         anyhow::anyhow!("Could not create {}: {}", file.display(), e)
                     })?;
@@ -64,89 +66,20 @@ impl InFile {
                     anyhow::bail!("Path {} is not a file", file.display());
                 }
             }
+            log::info!("Allowing {}", user);
         }
-
-        log::info!(
-            "Allowing users [{}]",
-            users
-                .iter()
-                .map(Clone::clone)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
 
         Ok(Self { path, users })
     }
 }
 
-impl InFile {
-    fn validate(&self, user: &str) -> Result<(), Error> {
-        if self.users.contains(user) {
-            Ok(())
-        } else {
-            Err(Error::NoSuchUser(String::from(user)))
-        }
-    }
-
-    fn reader<D: Named>(&self, user: &str) -> Result<csv::Reader<std::fs::File>, Error> {
-        self.validate(user)?;
-        let file = std::fs::File::open(self.path.join(user).join(D::name()))?;
-        Ok(csv::ReaderBuilder::new()
-            .has_headers(false)
-            .delimiter(b'\t')
-            .from_reader(file))
-    }
-
-    fn load<D: Named>(&self, user: &str) -> Result<Vec<D>, Error> {
-        let mut reader = self.reader::<D>(user)?;
-
-        let mut entries = vec![];
-        for entry in reader.deserialize::<D>() {
-            match entry {
-                Ok(entry) => entries.push(entry),
-                Err(e) => {
-                    return Err(Error::Serde(e.to_string()));
-                }
-            }
-        }
-
-        Ok(entries)
-    }
-
-    fn write<D: Data>(path: std::path::PathBuf, entries: Vec<D>) -> Result<(), Error> {
-        use std::io::Write;
-
-        let mut writer = csv::WriterBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .from_writer(vec![]);
-        for entry in entries {
-            writer
-                .serialize(entry)
-                .map_err(|e| Error::Serde(e.to_string()))?;
-        }
-
-        std::fs::OpenOptions::new()
-            .truncate(true)
-            .write(true)
-            .open(path)?
-            .write_all(
-                writer
-                    .into_inner()
-                    .map_err(|e| Error::Serde(e.to_string()))?
-                    .as_slice(),
-            )
-            .map_err(Error::Io)
-    }
-}
-
 impl Store for InFile {
     fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error> {
-        self.validate(user)?;
-        let path = self.path.join(user);
-        let skull = std::fs::metadata(path.join("skull")).and_then(|f| f.modified())?;
-        let quick = std::fs::metadata(path.join("quick")).and_then(|f| f.modified())?;
-        let occurrence = std::fs::metadata(path.join("occurrence")).and_then(|f| f.modified())?;
+        let user = fs::User::new(user, self)?;
+        let skull = std::fs::metadata(user.to_path::<Skull>()).and_then(|f| f.modified())?;
+        let quick = std::fs::metadata(user.to_path::<Quick>()).and_then(|f| f.modified())?;
+        let occurrence =
+            std::fs::metadata(user.to_path::<Occurrence>()).and_then(|f| f.modified())?;
 
         Ok(std::cmp::max(skull, std::cmp::max(quick, occurrence)))
     }
@@ -166,13 +99,15 @@ impl Store for InFile {
 
 impl<D: Named> Crud<D> for InFile {
     fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, D>>, Error> {
-        let mut reader = self.reader::<D>(user)?;
-
-        Ok(reader
-            .deserialize()
-            .filter_map(Result::ok)
-            .map(std::borrow::Cow::Owned)
-            .collect())
+        fs::UserPath::new::<D>(user, self)
+            .and_then(fs::reader)
+            .map(|mut reader| {
+                reader
+                    .deserialize()
+                    .filter_map(Result::ok)
+                    .map(std::borrow::Cow::Owned)
+                    .collect()
+            })
     }
 
     fn filter_list(
@@ -180,72 +115,68 @@ impl<D: Named> Crud<D> for InFile {
         user: &str,
         filter: Box<dyn Fn(&D) -> bool>,
     ) -> Result<Vec<std::borrow::Cow<'_, D>>, Error> {
-        let mut reader = self.reader::<D>(user)?;
-
-        Ok(reader
-            .deserialize()
-            .filter_map(Result::ok)
-            .filter(|d| (filter)(d))
-            .map(std::borrow::Cow::Owned)
-            .collect())
+        fs::UserPath::new::<D>(user, self)
+            .and_then(fs::reader)
+            .map(|mut reader| {
+                reader
+                    .deserialize()
+                    .filter_map(Result::ok)
+                    .filter(|d| (filter)(d))
+                    .map(std::borrow::Cow::Owned)
+                    .collect()
+            })
     }
 
     fn create(&mut self, user: &str, mut data: D) -> Result<Id, Error> {
-        let id = self.reader::<D>(user).map(|mut reader| {
-            reader
-                .deserialize::<D>()
-                .filter_map(Result::ok)
-                .last()
-                .map_or(0, |d| d.id() + 1)
-        })?;
+        let user = fs::UserPath::new::<D>(user, self)?;
 
-        data.set_id(id);
-
-        let file = std::fs::OpenOptions::new()
-            .append(true)
-            .open(self.path.join(user).join(D::name()))?;
-
-        let mut writer = csv::WriterBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .from_writer(file);
-        writer.serialize(data).map_err(|e| Error::Io(e.into()))?;
-        Ok(id)
+        fs::reader(&user)
+            .map(|mut reader| {
+                reader
+                    .deserialize::<D>()
+                    .filter_map(Result::ok)
+                    .last()
+                    .map_or(0, |d| d.id() + 1)
+            })
+            .and_then(|id| {
+                data.set_id(id);
+                fs::append(user, data)?;
+                Ok(id)
+            })
     }
 
     fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, D>, Error> {
-        let mut reader = self.reader::<D>(user)?;
-
-        reader
-            .deserialize()
-            .filter_map(Result::ok)
-            .find(|d| Data::id(d) == id)
-            .map(std::borrow::Cow::Owned)
-            .ok_or(Error::NotFound(id))
+        fs::UserPath::new::<D>(user, self)
+            .and_then(fs::reader)
+            .and_then(|mut reader| {
+                reader
+                    .deserialize()
+                    .filter_map(Result::ok)
+                    .find(|d| Data::id(d) == id)
+                    .map(std::borrow::Cow::Owned)
+                    .ok_or(Error::NotFound(id))
+            })
     }
 
     fn update(&mut self, user: &str, id: Id, mut data: D) -> Result<D, Error> {
-        let mut entries = self.load::<D>(user)?;
+        let user = fs::UserPath::new::<D>(user, self)?;
 
-        let index = find(id, &entries).ok_or(Error::NotFound(id))?;
-        let old = &mut entries[index];
-        data.set_id(old.id());
-        std::mem::swap(old, &mut data);
-
-        Self::write(self.path.join(user).join(D::name()), entries)?;
-
-        Ok(data)
+        fs::modify(user, |entries: &mut Vec<D>| {
+            let index = find(id, entries).ok_or(Error::NotFound(id))?;
+            let old = &mut entries[index];
+            data.set_id(old.id());
+            std::mem::swap(old, &mut data);
+            Ok(data)
+        })
     }
 
     fn delete(&mut self, user: &str, id: Id) -> Result<D, Error> {
-        let mut entries = self.load::<D>(user)?;
+        let user = fs::UserPath::new::<D>(user, self)?;
 
-        let index = find(id, &entries).ok_or(Error::NotFound(id))?;
-        let data = entries.remove(index);
-
-        Self::write(self.path.join(user).join(D::name()), entries)?;
-
-        Ok(data)
+        fs::modify(user, |entries: &mut Vec<D>| {
+            let index = find(id, entries).ok_or(Error::NotFound(id))?;
+            Ok(entries.remove(index))
+        })
     }
 }
 
@@ -263,6 +194,119 @@ fn find<D: Data>(id: Id, data: &[D]) -> Option<usize> {
         }
     }
     None
+}
+
+mod fs {
+    use super::{Error, InFile, Named};
+
+    #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
+    pub struct User(std::path::PathBuf);
+
+    impl User {
+        pub fn new(user: &str, store: &InFile) -> Result<Self, Error> {
+            if store.users.contains(user) {
+                Ok(Self(store.path.join(user)))
+            } else {
+                Err(Error::NoSuchUser(String::from(user)))
+            }
+        }
+
+        pub fn to_path<D: Named>(&self) -> UserPath {
+            UserPath(self.0.join(D::name()))
+        }
+    }
+
+    #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
+    pub struct UserPath(std::path::PathBuf);
+
+    impl UserPath {
+        pub fn new<D: Named>(user: &str, store: &InFile) -> Result<Self, Error> {
+            if store.users.contains(user) {
+                Ok(Self(store.path.join(user).join(D::name())))
+            } else {
+                Err(Error::NoSuchUser(String::from(user)))
+            }
+        }
+    }
+
+    impl AsRef<std::path::Path> for UserPath {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    pub fn reader<U: std::borrow::Borrow<UserPath>>(
+        user: U,
+    ) -> Result<csv::Reader<std::fs::File>, Error> {
+        let file = std::fs::File::open(user.borrow())?;
+        Ok(csv::ReaderBuilder::new()
+            .has_headers(false)
+            .delimiter(b'\t')
+            .from_reader(file))
+    }
+
+    pub fn modify<D, F>(user: UserPath, action: F) -> Result<D, Error>
+    where
+        D: Named,
+        F: FnOnce(&mut Vec<D>) -> Result<D, Error>,
+    {
+        let mut entries = load(&user)?;
+        let data = action(&mut entries)?;
+        write(user, entries)?;
+        Ok(data)
+    }
+
+    fn load<U: std::borrow::Borrow<UserPath>, D: Named>(user: U) -> Result<Vec<D>, Error> {
+        let mut reader = reader(user)?;
+
+        let mut entries = vec![];
+        for entry in reader.deserialize::<D>() {
+            match entry {
+                Ok(entry) => entries.push(entry),
+                Err(e) => {
+                    return Err(Error::Serde(e.to_string()));
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+
+    fn write<D: Named>(user: UserPath, entries: Vec<D>) -> Result<(), Error> {
+        use std::io::Write;
+
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(b'\t')
+            .has_headers(false)
+            .from_writer(vec![]);
+        for entry in entries {
+            writer
+                .serialize(entry)
+                .map_err(|e| Error::Serde(e.to_string()))?;
+        }
+
+        std::fs::OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .open(user)?
+            .write_all(
+                writer
+                    .into_inner()
+                    .map_err(|e| Error::Serde(e.to_string()))?
+                    .as_slice(),
+            )
+            .map_err(Error::Io)
+    }
+
+    pub fn append<D: Named>(user: UserPath, data: D) -> Result<(), Error> {
+        let file = std::fs::OpenOptions::new().append(true).open(user)?;
+
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(b'\t')
+            .has_headers(false)
+            .from_writer(file);
+        writer.serialize(data).map_err(|e| Error::Io(e.into()))
+    }
 }
 
 pub trait Named: Data {
