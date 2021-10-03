@@ -38,16 +38,19 @@ fn main() {
     let options = options::parse();
     init_logger();
 
-    if options.threads > 0 {
-        let threads = usize::from(options.threads);
-        log::info!("Core threads set to {}", options.threads);
-        gotham::start_with_num_threads(
-            format!("0.0.0.0:{}", options.port),
-            server::route(options),
-            threads,
-        );
+    let port = options.port;
+    let threads = options.threads;
+    let route = server::route(options).unwrap_or_else(|e| {
+        log::error!("Could not initialize router: {}", e);
+        std::process::exit(-1);
+    });
+
+    if threads > 0 {
+        let threads = usize::from(threads);
+        log::info!("Core threads set to {}", threads);
+        gotham::start_with_num_threads(format!("0.0.0.0:{}", port), route, threads);
     } else {
         log::info!("Core threads set to automatic");
-        gotham::start(format!("0.0.0.0:{}", options.port), server::route(options));
+        gotham::start(format!("0.0.0.0:{}", port), route);
     }
 }

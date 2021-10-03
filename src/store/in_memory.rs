@@ -80,18 +80,28 @@ impl<D: Data> Default for Container<D> {
 }
 
 impl<D: Data> Crud<D> for Container<D> {
-    fn list(&self, user: &str) -> Result<Vec<&D>, Error> {
+    fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, D>>, Error> {
         self.data
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))
             .map(UserContainer::list)
+            .map(|s| s.map(std::borrow::Cow::Borrowed).collect())
     }
 
-    fn filter_list(&self, user: &str, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<&D>, Error> {
+    fn filter_list(
+        &self,
+        user: &str,
+        filter: Box<dyn Fn(&D) -> bool>,
+    ) -> Result<Vec<std::borrow::Cow<'_, D>>, Error> {
         self.data
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))
-            .map(|store| store.filter_list(&filter))
+            .map(UserContainer::list)
+            .map(|s| {
+                s.filter(|d| (filter)(d))
+                    .map(std::borrow::Cow::Borrowed)
+                    .collect()
+            })
     }
 
     fn create(&mut self, user: &str, data: D) -> Result<Id, Error> {
@@ -101,11 +111,12 @@ impl<D: Data> Crud<D> for Container<D> {
             .and_then(|store| store.create(data))
     }
 
-    fn read(&self, user: &str, id: Id) -> Result<&D, Error> {
+    fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, D>, Error> {
         self.data
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))
             .and_then(|store| store.read(id))
+            .map(std::borrow::Cow::Borrowed)
     }
 
     fn update(&mut self, user: &str, id: Id, data: D) -> Result<D, Error> {
@@ -159,12 +170,8 @@ impl<D: Data> UserContainer<D> {
         None
     }
 
-    fn list(&self) -> Vec<&D> {
-        self.data.iter().collect()
-    }
-
-    fn filter_list(&self, filter: &dyn Fn(&D) -> bool) -> Vec<&D> {
-        self.data.iter().filter(|d| (filter)(d)).collect()
+    fn list(&self) -> impl std::iter::Iterator<Item = &D> {
+        self.data.iter()
     }
 
     fn create(&mut self, mut data: D) -> Result<Id, Error> {

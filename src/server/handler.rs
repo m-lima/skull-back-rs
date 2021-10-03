@@ -164,7 +164,7 @@ impl<D: store::CrudSelector> Read<D> {
         let json = {
             let mut lock = middleware::Store::borrow_from(state).get()?;
             let data = D::select(&mut *lock).read(user, id)?;
-            serde_json::to_vec(data)?
+            serde_json::to_vec(&data)?
         };
 
         let response = gotham::hyper::Response::builder()

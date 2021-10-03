@@ -8,27 +8,26 @@ use crate::store;
 
 // Allowed because we can't create closures with moving the same data
 #[allow(clippy::option_if_let_else)]
-pub fn route(options: options::Options) -> gotham::router::Router {
-    // let store: &dyn store::Store;
-    // store = options
-    //     .store_path
-    //     .map_or_else(|| &store::in_memory(), |p| &store::in_file(p));
-
-    let store = store::in_memory(options.users);
+pub fn route(options: options::Options) -> anyhow::Result<gotham::router::Router> {
+    let store = match options.store_path {
+        Some(path) if path.is_dir() => middleware::Store::new(store::in_file(path, options.users)?),
+        Some(path) => middleware::Store::new(store::in_file(path, options.users)?),
+        None => middleware::Store::new(store::in_memory(options.users)),
+    };
 
     if let Some(cors) = options.cors {
-        with_cors(store, cors)
+        Ok(with_cors(store, cors))
     } else {
-        without_cors(store, options.web_path)
+        Ok(without_cors(store, options.web_path))
     }
 }
 
 fn with_cors(
-    store: impl store::Store,
+    store: middleware::Store,
     cors: gotham::hyper::http::HeaderValue,
 ) -> gotham::router::Router {
     let pipeline = gotham::pipeline::new_pipeline()
-        .add(middleware::Store::new(store))
+        .add(store)
         .add(middleware::Log)
         .add(middleware::Cors::new(cors))
         .build();
@@ -38,11 +37,11 @@ fn with_cors(
 }
 
 fn without_cors(
-    store: impl store::Store,
+    store: middleware::Store,
     web_path: Option<std::path::PathBuf>,
 ) -> gotham::router::Router {
     let pipeline = gotham::pipeline::new_pipeline()
-        .add(middleware::Store::new(store))
+        .add(store)
         .add(middleware::Log)
         .build();
 

@@ -1,4 +1,4 @@
-// mod in_file;
+mod in_file;
 mod in_memory;
 
 mod id_setter {
@@ -19,9 +19,14 @@ where
     in_memory::InMemory::new(users)
 }
 
-// pub fn in_file<P: AsRef<std::path::Path>>(path: P) -> in_file::InFile {
-//     in_file::InFile::new(path)
-// }
+pub fn in_file<S, I, P>(path: P, users: I) -> anyhow::Result<impl Store>
+where
+    S: AsRef<str>,
+    I: std::iter::IntoIterator<Item = S>,
+    P: AsRef<std::path::Path>,
+{
+    in_file::InFile::new(path, users)
+}
 
 // TODO: Should this be a String and let the front end parse it?
 pub type Color = u32;
@@ -34,9 +39,21 @@ pub enum Error {
     NotFound(Id),
     #[error("Store full")]
     StoreFull,
+    #[error("{0}")]
+    Io(std::io::Error),
+    #[error("Serde error: {0}")]
+    Serde(String),
 }
 
-pub trait Data: id_setter::IdSetter + serde::Serialize + serde::de::DeserializeOwned {
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+pub trait Data:
+    id_setter::IdSetter + Clone + serde::Serialize + serde::de::DeserializeOwned
+{
     fn id(&self) -> Id;
 }
 
@@ -136,10 +153,14 @@ mod time {
 // TODO: When using a RDB, will this interface still make sense?
 // TODO: Is it possible to avoid the Vec's?
 pub trait Crud<D: Data> {
-    fn list(&self, user: &str) -> Result<Vec<&D>, Error>;
-    fn filter_list(&self, user: &str, filter: Box<dyn Fn(&D) -> bool>) -> Result<Vec<&D>, Error>;
+    fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, D>>, Error>;
+    fn filter_list(
+        &self,
+        user: &str,
+        filter: Box<dyn Fn(&D) -> bool>,
+    ) -> Result<Vec<std::borrow::Cow<'_, D>>, Error>;
     fn create(&mut self, user: &str, data: D) -> Result<Id, Error>;
-    fn read(&self, user: &str, id: Id) -> Result<&D, Error>;
+    fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, D>, Error>;
     fn update(&mut self, user: &str, id: Id, data: D) -> Result<D, Error>;
     fn delete(&mut self, user: &str, id: Id) -> Result<D, Error>;
 }

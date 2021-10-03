@@ -39,7 +39,11 @@ impl Error {
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ContentLengthMissing => StatusCode::LENGTH_REQUIRED,
             Self::ReadTimeout => StatusCode::REQUEST_TIMEOUT,
-            Self::FailedToAcquireLock | Self::Serialize(_) | Self::Http(_) | Self::Hyper(_) => {
+            Self::FailedToAcquireLock
+            | Self::Serialize(_)
+            | Self::Http(_)
+            | Self::Hyper(_)
+            | Self::Store(StoreError::Io(_) | StoreError::Serde(_)) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         }
