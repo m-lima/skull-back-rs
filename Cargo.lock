@@ -914,6 +914,7 @@ dependencies = [
  "gotham",
  "gotham_derive",
  "log",
+ "rand",
  "serde",
  "serde_json",
  "simplelog",
