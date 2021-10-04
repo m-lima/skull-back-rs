@@ -1,4 +1,5 @@
-docker build -t skull .
+docker build -t skull:rs .
+docker tag skull:rs skull:latest
 docker stop skull
 docker rm skull
 docker create \
