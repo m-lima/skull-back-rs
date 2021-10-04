@@ -71,7 +71,7 @@ where
 {
     use gotham::router::builder::DefineSingleRoute;
 
-    route.get("/modified").to(handler::LastModified);
+    route.get("/last-modified").to(handler::LastModified);
     route.scope("/skull", Resource::<store::Skull>::setup);
     route.scope("/quick", Resource::<store::Quick>::setup);
     route.scope("/occurrence", Resource::<store::Occurrence>::setup);

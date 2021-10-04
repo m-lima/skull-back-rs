@@ -49,16 +49,8 @@ impl LastModified {
         let user = mapper::request::User::borrow_from(state)?;
         let json = {
             let lock = middleware::Store::borrow_from(state).get()?;
-            let last_modified = lock.last_modified(user)?;
-            format!(
-                "{{\"last_modified\":{}}}",
-                last_modified
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_err(|_| Error::Serialize(serde::ser::Error::custom(
-                        "Time is before UNIX_EPOCH"
-                    )))?
-                    .as_secs()
-            )
+            let data = lock.last_modified(user)?;
+            serde_json::to_vec(&data)?
         };
 
         let response = gotham::hyper::Response::builder()

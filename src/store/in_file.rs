@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
+use super::{Crud, Data, Error, Id, LastModified, Occurrence, Quick, Skull, Store};
 
 pub struct InFile {
     path: std::path::PathBuf,
@@ -74,14 +74,15 @@ impl InFile {
 }
 
 impl Store for InFile {
-    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error> {
+    fn last_modified(&self, user: &str) -> Result<LastModified, Error> {
         let user = fs::User::new(user, self)?;
         let skull = std::fs::metadata(user.to_path::<Skull>()).and_then(|f| f.modified())?;
         let quick = std::fs::metadata(user.to_path::<Quick>()).and_then(|f| f.modified())?;
         let occurrence =
             std::fs::metadata(user.to_path::<Occurrence>()).and_then(|f| f.modified())?;
 
-        Ok(std::cmp::max(skull, std::cmp::max(quick, occurrence)))
+        let timestamp = std::cmp::max(skull, std::cmp::max(quick, occurrence));
+        Ok(LastModified { timestamp })
     }
 
     fn skull(&mut self) -> &mut dyn Crud<Skull> {

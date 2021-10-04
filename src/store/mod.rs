@@ -28,9 +28,6 @@ where
     in_file::InFile::new(path, users)
 }
 
-// TODO: Should this be a String and let the front end parse it?
-pub type Color = u32;
-
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("User not found `{0}`")]
@@ -59,10 +56,12 @@ pub trait Data:
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Skull {
+    #[serde(default)]
     id: Id,
     name: String,
-    color: Color,
+    color: String,
     icon: String,
+    #[serde(rename = "unitPrice")]
     unit_price: f32,
     limit: Option<f32>,
 }
@@ -81,6 +80,7 @@ impl IdSetter for Skull {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Quick {
+    #[serde(default)]
     id: Id,
     skull: Id,
     amount: f32,
@@ -100,11 +100,12 @@ impl IdSetter for Quick {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Occurrence {
+    #[serde(default)]
     id: Id,
     skull: Id,
     amount: f32,
-    #[serde(with = "time")]
-    secs: std::time::SystemTime,
+    #[serde(rename = "millis", with = "time")]
+    timestamp: std::time::SystemTime,
 }
 
 impl Data for Occurrence {
@@ -119,8 +120,14 @@ impl IdSetter for Occurrence {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct LastModified {
+    #[serde(rename = "millis", with = "time")]
+    timestamp: std::time::SystemTime,
+}
+
 pub trait Store: Send + 'static {
-    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error>;
+    fn last_modified(&self, user: &str) -> Result<LastModified, Error>;
     fn skull(&mut self) -> &mut dyn Crud<Skull>;
     fn quick(&mut self) -> &mut dyn Crud<Quick>;
     fn occurrence(&mut self) -> &mut dyn Crud<Occurrence>;
@@ -131,21 +138,21 @@ mod time {
     where
         S: serde::ser::Serializer,
     {
-        let secs = time
+        let millis = time
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|_| serde::ser::Error::custom("Time is before UNIX_EPOCH"))?
-            .as_secs();
+            .as_millis();
 
-        serializer.serialize_u64(secs)
+        serializer.serialize_u128(millis)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<std::time::SystemTime, D::Error>
     where
         D: serde::de::Deserializer<'de>,
     {
-        let secs = <u64 as serde::Deserialize>::deserialize(deserializer)?;
+        let millis = <u64 as serde::Deserialize>::deserialize(deserializer)?;
         std::time::UNIX_EPOCH
-            .checked_add(std::time::Duration::from_secs(secs))
+            .checked_add(std::time::Duration::from_millis(millis))
             .ok_or_else(|| serde::de::Error::custom("Could not parse UNIX EPOCH"))
     }
 }

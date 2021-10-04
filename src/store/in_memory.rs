@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
+use super::{Crud, Data, Error, Id, LastModified, Occurrence, Quick, Skull, Store};
 
 #[derive(Debug, Default)]
 pub struct InMemory {
@@ -33,8 +33,8 @@ impl InMemory {
 }
 
 impl Store for InMemory {
-    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error> {
-        Ok(std::cmp::max(
+    fn last_modified(&self, user: &str) -> Result<LastModified, Error> {
+        let timestamp = std::cmp::max(
             std::cmp::max(
                 self.skull
                     .data
@@ -52,7 +52,9 @@ impl Store for InMemory {
                 .get(user)
                 .ok_or_else(|| Error::NoSuchUser(String::from(user)))?
                 .last_modified,
-        ))
+        );
+
+        Ok(LastModified { timestamp })
     }
 
     fn skull(&mut self) -> &mut dyn Crud<Skull> {
