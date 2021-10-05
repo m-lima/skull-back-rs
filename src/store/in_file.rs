@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, LastModified, Occurrence, Quick, Skull, Store};
+use super::{Crud, Data, Error, Id, LastModified, Occurrence, Quick, Skull, Store, WithId};
 
 pub struct InFile {
     path: std::path::PathBuf,
@@ -99,7 +99,7 @@ impl Store for InFile {
 }
 
 impl<D: Named> Crud<D> for InFile {
-    fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, D>>, Error> {
+    fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
             .map(|mut reader| {
@@ -114,8 +114,8 @@ impl<D: Named> Crud<D> for InFile {
     fn filter_list(
         &self,
         user: &str,
-        filter: Box<dyn Fn(&D) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, D>>, Error> {
+        filter: Box<dyn Fn(&WithId<D>) -> bool>,
+    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
             .map(|mut reader| {
@@ -128,60 +128,60 @@ impl<D: Named> Crud<D> for InFile {
             })
     }
 
-    fn create(&mut self, user: &str, mut data: D) -> Result<Id, Error> {
+    fn create(&mut self, user: &str, data: D) -> Result<Id, Error> {
         let user = fs::UserPath::new::<D>(user, self)?;
 
         fs::reader(&user)
             .map(|mut reader| {
                 reader
-                    .deserialize::<D>()
+                    .deserialize::<WithId<D>>()
                     .filter_map(Result::ok)
                     .last()
-                    .map_or(0, |d| d.id() + 1)
+                    .map_or(0, |d| d.id + 1)
             })
             .and_then(|id| {
-                data.set_id(id);
-                fs::append(user, data)?;
+                let with_id = WithId::new(id, data);
+                fs::append(user, with_id)?;
                 Ok(id)
             })
     }
 
-    fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, D>, Error> {
+    fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
             .and_then(|mut reader| {
                 reader
-                    .deserialize()
+                    .deserialize::<WithId<D>>()
                     .filter_map(Result::ok)
-                    .find(|d| Data::id(d) == id)
+                    .find(|d| d.id == id)
                     .map(std::borrow::Cow::Owned)
                     .ok_or(Error::NotFound(id))
             })
     }
 
-    fn update(&mut self, user: &str, id: Id, mut data: D) -> Result<D, Error> {
+    fn update(&mut self, user: &str, id: Id, data: D) -> Result<WithId<D>, Error> {
         let user = fs::UserPath::new::<D>(user, self)?;
 
-        fs::modify(user, |entries: &mut Vec<D>| {
+        fs::modify(user, |entries| {
             let index = find(id, entries).ok_or(Error::NotFound(id))?;
             let old = &mut entries[index];
-            data.set_id(old.id());
-            std::mem::swap(old, &mut data);
-            Ok(data)
+            let mut with_id = WithId::new(old.id, data);
+            std::mem::swap(old, &mut with_id);
+            Ok(with_id)
         })
     }
 
-    fn delete(&mut self, user: &str, id: Id) -> Result<D, Error> {
+    fn delete(&mut self, user: &str, id: Id) -> Result<WithId<D>, Error> {
         let user = fs::UserPath::new::<D>(user, self)?;
 
-        fs::modify(user, |entries: &mut Vec<D>| {
+        fs::modify(user, |entries| {
             let index = find(id, entries).ok_or(Error::NotFound(id))?;
             Ok(entries.remove(index))
         })
     }
 }
 
-fn find<D: Data>(id: Id, data: &[D]) -> Option<usize> {
+fn find<D: Data>(id: Id, data: &[WithId<D>]) -> Option<usize> {
     let index = if data.is_empty() {
         return None;
     } else {
@@ -190,7 +190,7 @@ fn find<D: Data>(id: Id, data: &[D]) -> Option<usize> {
     };
 
     for i in (0..=index).rev() {
-        if data[i].id() == id {
+        if data[i].id == id {
             return Some(i);
         }
     }
@@ -198,7 +198,7 @@ fn find<D: Data>(id: Id, data: &[D]) -> Option<usize> {
 }
 
 mod fs {
-    use super::{Error, InFile, Named};
+    use super::{Error, InFile, Named, WithId};
 
     #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
     pub struct User(std::path::PathBuf);
@@ -246,10 +246,10 @@ mod fs {
             .from_reader(file))
     }
 
-    pub fn modify<D, F>(user: UserPath, action: F) -> Result<D, Error>
+    pub fn modify<D, F>(user: UserPath, action: F) -> Result<WithId<D>, Error>
     where
         D: Named,
-        F: FnOnce(&mut Vec<D>) -> Result<D, Error>,
+        F: FnOnce(&mut Vec<WithId<D>>) -> Result<WithId<D>, Error>,
     {
         let mut entries = load(&user)?;
         let data = action(&mut entries)?;
@@ -257,11 +257,11 @@ mod fs {
         Ok(data)
     }
 
-    fn load<U: std::borrow::Borrow<UserPath>, D: Named>(user: U) -> Result<Vec<D>, Error> {
+    fn load<U: std::borrow::Borrow<UserPath>, D: Named>(user: U) -> Result<Vec<WithId<D>>, Error> {
         let mut reader = reader(user)?;
 
         let mut entries = vec![];
-        for entry in reader.deserialize::<D>() {
+        for entry in reader.deserialize::<WithId<D>>() {
             match entry {
                 Ok(entry) => entries.push(entry),
                 Err(e) => {
@@ -273,7 +273,7 @@ mod fs {
         Ok(entries)
     }
 
-    fn write<D: Named>(user: UserPath, entries: Vec<D>) -> Result<(), Error> {
+    fn write<D: Named>(user: UserPath, entries: Vec<WithId<D>>) -> Result<(), Error> {
         use std::io::Write;
 
         let mut writer = csv::WriterBuilder::new()
@@ -299,7 +299,7 @@ mod fs {
             .map_err(Error::Io)
     }
 
-    pub fn append<D: Named>(user: UserPath, data: D) -> Result<(), Error> {
+    pub fn append<D: Named>(user: UserPath, data: WithId<D>) -> Result<(), Error> {
         let file = std::fs::OpenOptions::new().append(true).open(user)?;
 
         let mut writer = csv::WriterBuilder::new()
@@ -334,7 +334,7 @@ impl Named for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use super::{Error, Id, InFile, Skull, Store};
+    use super::{Error, InFile, Skull, Store, WithId};
 
     const USER: &str = "bloink";
     const SKULLS: &str = r#"0	skull	0		0.1	
@@ -407,11 +407,10 @@ mod test {
         }
     }
 
-    fn new_skull(name: &str, unit_price: f32, id: Id) -> Skull {
+    fn new_skull(name: &str, unit_price: f32) -> Skull {
         Skull {
-            id,
             name: String::from(name),
-            color: 0,
+            color: String::new(),
             icon: String::new(),
             unit_price,
             limit: None,
@@ -421,7 +420,7 @@ mod test {
     #[test]
     fn reject_unknown_user() {
         let mut store = TestStore::new();
-        let skull = new_skull("skull", 0.4, 0);
+        let skull = new_skull("skull", 0.4);
         assert_eq!(
             store
                 .skull()
@@ -449,10 +448,7 @@ mod test {
         store.skull().filter_list(USER, Box::new(|_| true)).unwrap();
         assert_eq!(store.last_modified(USER).unwrap(), last_modified);
 
-        store
-            .skull()
-            .create(USER, new_skull("bla", 1.0, 0))
-            .unwrap();
+        store.skull().create(USER, new_skull("bla", 1.0)).unwrap();
         assert_ne!(store.last_modified(USER).unwrap(), last_modified);
         last_modified = store.last_modified(USER).unwrap();
 
@@ -461,7 +457,7 @@ mod test {
 
         store
             .skull()
-            .update(USER, 0, new_skull("bla", 2.0, 0))
+            .update(USER, 0, new_skull("bla", 2.0))
             .unwrap();
         assert_ne!(store.last_modified(USER).unwrap(), last_modified);
         last_modified = store.last_modified(USER).unwrap();
@@ -472,7 +468,7 @@ mod test {
 
         assert!(store
             .skull()
-            .update(USER, 3, new_skull("bla", 1.0, 0))
+            .update(USER, 3, new_skull("bla", 1.0))
             .is_err());
         assert_eq!(store.last_modified(USER).unwrap(), last_modified);
 
@@ -484,7 +480,6 @@ mod test {
             .create(
                 USER,
                 super::Quick {
-                    id: 0,
                     skull: 0,
                     amount: 3.0,
                 },
@@ -497,12 +492,12 @@ mod test {
     fn create() {
         let mut store = TestStore::new().with_data();
         {
-            let skull = new_skull("skull", 0.1, 2);
+            let skull = new_skull("skull", 0.1);
             let id = store.skull().create(USER, skull).unwrap();
             assert!(id == 11);
         }
         {
-            let skull = new_skull("skull", 0.3, 4);
+            let skull = new_skull("skull", 0.3);
             let id = store.skull().create(USER, skull).unwrap();
             assert!(id == 12);
         }
@@ -521,7 +516,7 @@ mod test {
     fn read() {
         let mut store = TestStore::new().with_data();
 
-        let expected = new_skull("skool", 0.3, 4);
+        let expected = WithId::new(4, new_skull("skool", 0.3));
         assert_eq!(store.skull().read(USER, 4).unwrap().into_owned(), expected);
         store.verify_skull(SKULLS);
     }
@@ -541,8 +536,8 @@ mod test {
     fn update() {
         let mut store = TestStore::new().with_data();
 
-        let old = new_skull("skool", 0.3, 4);
-        let new = new_skull("bla", 0.7, 5);
+        let old = WithId::new(4, new_skull("skool", 0.3));
+        let new = new_skull("bla", 0.7);
 
         assert_eq!(store.skull().update(USER, 4, new).unwrap(), old);
 
@@ -558,7 +553,7 @@ mod test {
     fn update_not_found() {
         let mut store = TestStore::new().with_data();
 
-        let new = new_skull("bla", 0.7, 5);
+        let new = new_skull("bla", 0.7);
 
         assert_eq!(
             store.skull().update(USER, 1, new).unwrap_err().to_string(),
@@ -571,7 +566,7 @@ mod test {
     fn delete() {
         let mut store = TestStore::new().with_data();
 
-        let old = new_skull("skool", 0.3, 4);
+        let old = WithId::new(4, new_skull("skool", 0.3));
 
         assert_eq!(store.skull().delete(USER, 4).unwrap(), old);
         store.verify_skull(
@@ -604,7 +599,7 @@ mod test {
                 .unwrap();
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| new_skull("skull", i as f32, i))
+                .map(|i| new_skull("skull", i as f32))
                 .for_each(|s| writer.serialize(s).unwrap());
         }
 
@@ -624,7 +619,7 @@ mod test {
         for i in 0..30 {
             store
                 .skull()
-                .create(USER, new_skull("skull", i as f32, 0))
+                .create(USER, new_skull("skull", i as f32))
                 .unwrap();
         }
 
@@ -641,7 +636,7 @@ mod test {
                 .from_writer(vec![]);
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| new_skull("skull", i as f32, i))
+                .map(|i| new_skull("skull", i as f32))
                 .for_each(|s| writer.serialize(s).unwrap());
             writer.into_inner().unwrap()
         };
