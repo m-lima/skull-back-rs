@@ -35,6 +35,8 @@ pub enum Error {
     Io(std::io::Error),
     #[error("Serde error: {0}")]
     Serde(String),
+    #[error("Bad timestamp")]
+    BadTimestamp,
 }
 
 impl From<std::io::Error> for Error {
@@ -105,13 +107,15 @@ pub trait Store: Send + 'static {
 }
 
 mod time {
+    use super::Error;
+
     pub fn serialize<S>(time: &std::time::SystemTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
         let millis = time
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| serde::ser::Error::custom("Time is before UNIX_EPOCH"))?
+            .map_err(|_| serde::ser::Error::custom(Error::BadTimestamp))?
             .as_millis();
 
         serializer.serialize_u128(millis)
@@ -124,7 +128,7 @@ mod time {
         let millis = <u64 as serde::Deserialize>::deserialize(deserializer)?;
         std::time::UNIX_EPOCH
             .checked_add(std::time::Duration::from_millis(millis))
-            .ok_or_else(|| serde::de::Error::custom("Could not parse UNIX EPOCH"))
+            .ok_or_else(|| serde::de::Error::custom(Error::BadTimestamp))
     }
 }
 

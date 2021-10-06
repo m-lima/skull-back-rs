@@ -98,13 +98,14 @@ impl Store for InFile {
     }
 }
 
-impl<D: Named> Crud<D> for InFile {
+impl<D: Fileable> Crud<D> for InFile {
     fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
-            .map(|mut reader| {
+            .map(|reader| {
                 reader
-                    .deserialize()
+                    .filter_map(Result::ok)
+                    .map(D::read)
                     .filter_map(Result::ok)
                     .map(std::borrow::Cow::Owned)
                     .collect()
@@ -118,9 +119,10 @@ impl<D: Named> Crud<D> for InFile {
     ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
-            .map(|mut reader| {
+            .map(|reader| {
                 reader
-                    .deserialize()
+                    .filter_map(Result::ok)
+                    .map(D::read)
                     .filter_map(Result::ok)
                     .filter(|d| (filter)(d))
                     .map(std::borrow::Cow::Owned)
@@ -132,16 +134,17 @@ impl<D: Named> Crud<D> for InFile {
         let user = fs::UserPath::new::<D>(user, self)?;
 
         fs::reader(&user)
-            .map(|mut reader| {
+            .map(|reader| {
                 reader
-                    .deserialize::<WithId<D>>()
+                    .filter_map(Result::ok)
+                    .map(D::read)
                     .filter_map(Result::ok)
                     .last()
                     .map_or(0, |d| d.id + 1)
             })
             .and_then(|id| {
                 let with_id = WithId::new(id, data);
-                fs::append(user, with_id)?;
+                fs::append(user, &with_id)?;
                 Ok(id)
             })
     }
@@ -149,9 +152,10 @@ impl<D: Named> Crud<D> for InFile {
     fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
-            .and_then(|mut reader| {
+            .and_then(|reader| {
                 reader
-                    .deserialize::<WithId<D>>()
+                    .filter_map(Result::ok)
+                    .map(D::read)
                     .filter_map(Result::ok)
                     .find(|d| d.id == id)
                     .map(std::borrow::Cow::Owned)
@@ -198,7 +202,7 @@ fn find<D: Data>(id: Id, data: &[WithId<D>]) -> Option<usize> {
 }
 
 mod fs {
-    use super::{Error, InFile, Named, WithId};
+    use super::{Error, Fileable, InFile, WithId};
 
     #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
     pub struct User(std::path::PathBuf);
@@ -212,7 +216,7 @@ mod fs {
             }
         }
 
-        pub fn to_path<D: Named>(&self) -> UserPath {
+        pub fn to_path<D: Fileable>(&self) -> UserPath {
             UserPath(self.0.join(D::name()))
         }
     }
@@ -221,7 +225,7 @@ mod fs {
     pub struct UserPath(std::path::PathBuf);
 
     impl UserPath {
-        pub fn new<D: Named>(user: &str, store: &InFile) -> Result<Self, Error> {
+        pub fn new<D: Fileable>(user: &str, store: &InFile) -> Result<Self, Error> {
             if store.users.contains(user) {
                 Ok(Self(store.path.join(user).join(D::name())))
             } else {
@@ -238,17 +242,14 @@ mod fs {
 
     pub fn reader<U: std::borrow::Borrow<UserPath>>(
         user: U,
-    ) -> Result<csv::Reader<std::fs::File>, Error> {
-        let file = std::fs::File::open(user.borrow())?;
-        Ok(csv::ReaderBuilder::new()
-            .has_headers(false)
-            .delimiter(b'\t')
-            .from_reader(file))
+    ) -> Result<std::io::Lines<std::io::BufReader<std::fs::File>>, Error> {
+        use std::io::BufRead;
+        Ok(std::io::BufReader::new(std::fs::File::open(user.borrow())?).lines())
     }
 
     pub fn modify<D, F>(user: UserPath, action: F) -> Result<WithId<D>, Error>
     where
-        D: Named,
+        D: Fileable,
         F: FnOnce(&mut Vec<WithId<D>>) -> Result<WithId<D>, Error>,
     {
         let mut entries = load(&user)?;
@@ -257,11 +258,11 @@ mod fs {
         Ok(data)
     }
 
-    fn load<U: std::borrow::Borrow<UserPath>, D: Named>(user: U) -> Result<Vec<WithId<D>>, Error> {
-        let mut reader = reader(user)?;
-
+    fn load<U: std::borrow::Borrow<UserPath>, D: Fileable>(
+        user: U,
+    ) -> Result<Vec<WithId<D>>, Error> {
         let mut entries = vec![];
-        for entry in reader.deserialize::<WithId<D>>() {
+        for entry in reader(user)?.map(|e| e.map_err(Error::Io).and_then(D::read)) {
             match entry {
                 Ok(entry) => entries.push(entry),
                 Err(e) => {
@@ -273,68 +274,245 @@ mod fs {
         Ok(entries)
     }
 
-    fn write<D: Named>(user: UserPath, entries: Vec<WithId<D>>) -> Result<(), Error> {
+    fn write<D: Fileable>(user: UserPath, entries: Vec<WithId<D>>) -> Result<(), Error> {
         use std::io::Write;
 
-        let mut writer = csv::WriterBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .from_writer(vec![]);
+        let mut buffer = vec![];
         for entry in entries {
-            writer
-                .serialize(entry)
-                .map_err(|e| Error::Serde(e.to_string()))?;
+            D::write(&entry, &mut buffer)?;
         }
 
         std::fs::OpenOptions::new()
             .truncate(true)
             .write(true)
             .open(user)?
-            .write_all(
-                writer
-                    .into_inner()
-                    .map_err(|e| Error::Serde(e.to_string()))?
-                    .as_slice(),
-            )
+            .write_all(buffer.as_slice())
             .map_err(Error::Io)
     }
 
-    pub fn append<D: Named>(user: UserPath, data: WithId<D>) -> Result<(), Error> {
-        let file = std::fs::OpenOptions::new().append(true).open(user)?;
-
-        let mut writer = csv::WriterBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .from_writer(file);
-        writer.serialize(data).map_err(|e| Error::Io(e.into()))
+    pub fn append<D: Fileable>(user: UserPath, data: &WithId<D>) -> Result<(), Error> {
+        let mut file = std::fs::OpenOptions::new().append(true).open(user)?;
+        D::write(data, &mut file)
     }
 }
 
-pub trait Named: Data {
+pub trait Fileable: Data {
     fn name() -> &'static str;
+    fn read(string: String) -> Result<WithId<Self>, Error>;
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error>;
 }
 
-impl Named for Skull {
+impl Fileable for Skull {
     fn name() -> &'static str {
         "skull"
     }
-}
 
-impl Named for Quick {
-    fn name() -> &'static str {
-        "quick"
+    fn read(string: String) -> Result<WithId<Self>, Error> {
+        let mut split = string.split('\t');
+
+        let id = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `id` found for Skull")))
+            .and_then(|v| {
+                v.parse()
+                    .map_err(|e| Error::Serde(format!("Could not parse `id` for Skull: {}", e)))
+            })?;
+
+        let name = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `name` found for Skull")))
+            .map(String::from)?;
+
+        let color = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `color` found for Skull")))
+            .map(String::from)?;
+
+        let icon = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `icon` found for Skull")))
+            .map(String::from)?;
+
+        let unit_price = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `unit_price` found for Skull")))
+            .and_then(|v| {
+                v.parse().map_err(|e| {
+                    Error::Serde(format!("Could not parse `unit_price` for Skull: {}", e))
+                })
+            })?;
+
+        let limit =
+            if let Some(limit) = split.next().filter(|v| !v.is_empty()) {
+                if split.next().is_some() {
+                    return Err(Error::Serde(String::from("Too many fields for Skull")));
+                }
+                Some(limit.parse().map_err(|e| {
+                    Error::Serde(format!("Could not parse `limit` for Skull: {}", e))
+                })?)
+            } else {
+                None
+            };
+
+        Ok(WithId::new(
+            id,
+            Self {
+                name,
+                color,
+                icon,
+                unit_price,
+                limit,
+            },
+        ))
+    }
+
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
+        let data = &with_id.data;
+
+        write!(
+            writer,
+            "{}\t{}\t{}\t{}\t{}\t",
+            with_id.id, data.name, data.color, data.icon, data.unit_price,
+        )
+        .map_err(Error::Io)?;
+
+        if let Some(limit) = data.limit {
+            writeln!(writer, "{}", limit)
+        } else {
+            writeln!(writer,)
+        }
+        .map_err(Error::Io)
     }
 }
 
-impl Named for Occurrence {
+impl Fileable for Quick {
+    fn name() -> &'static str {
+        "quick"
+    }
+
+    fn read(string: String) -> Result<WithId<Self>, Error> {
+        let mut split = string.split('\t');
+
+        let id = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `id` found for Quick")))
+            .and_then(|v| {
+                v.parse()
+                    .map_err(|e| Error::Serde(format!("Could not parse `id` for Quick: {}", e)))
+            })?;
+
+        let skull = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `skull` found for Quick")))
+            .and_then(|v| {
+                v.parse()
+                    .map_err(|e| Error::Serde(format!("Could not parse `skull` for Quick: {}", e)))
+            })?;
+
+        let amount = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `amount` found for Quick")))
+            .and_then(|v| {
+                v.parse()
+                    .map_err(|e| Error::Serde(format!("Could not parse `amount` for Quick: {}", e)))
+            })?;
+
+        if split.next().is_some() {
+            return Err(Error::Serde(String::from("Too many fields for Quick")));
+        }
+
+        Ok(WithId::new(id, Self { skull, amount }))
+    }
+
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
+        let data = &with_id.data;
+        writeln!(writer, "{}\t{}\t{}", with_id.id, data.skull, data.amount).map_err(Error::Io)
+    }
+}
+
+impl Fileable for Occurrence {
     fn name() -> &'static str {
         "occurrence"
+    }
+
+    fn read(string: String) -> Result<WithId<Self>, Error> {
+        let mut split = string.split('\t');
+
+        let id = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `id` found for Occurrence")))
+            .and_then(|v| {
+                v.parse().map_err(|e| {
+                    Error::Serde(format!("Could not parse `id` for Occurrence: {}", e))
+                })
+            })?;
+
+        let skull = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `skull` found for Occurrence")))
+            .and_then(|v| {
+                v.parse().map_err(|e| {
+                    Error::Serde(format!("Could not parse `skull` for Occurrence: {}", e))
+                })
+            })?;
+
+        let amount = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `amount` found for Occurrence")))
+            .and_then(|v| {
+                v.parse().map_err(|e| {
+                    Error::Serde(format!("Could not parse `amount` for Occurrence: {}", e))
+                })
+            })?;
+
+        let timestamp = split
+            .next()
+            .ok_or_else(|| Error::Serde(String::from("No `timestamp` found for Occurrence")))
+            .and_then(|v| {
+                v.parse().map_err(|e| {
+                    Error::Serde(format!("Could not parse `amount` for Occurrence: {}", e))
+                })
+            })
+            .and_then(|v| {
+                std::time::UNIX_EPOCH
+                    .checked_add(std::time::Duration::from_millis(v))
+                    .ok_or(Error::BadTimestamp)
+            })?;
+
+        if split.next().is_some() {
+            return Err(Error::Serde(String::from("Too many fields for Occurrence")));
+        }
+
+        Ok(WithId::new(
+            id,
+            Self {
+                skull,
+                amount,
+                timestamp,
+            },
+        ))
+    }
+
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
+        let data = &with_id.data;
+        writeln!(
+            writer,
+            "{}\t{}\t{}\t{}",
+            with_id.id,
+            data.skull,
+            data.amount,
+            data.timestamp
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| Error::BadTimestamp)?
+                .as_millis()
+        )
+        .map_err(Error::Io)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{Error, InFile, Skull, Store, WithId};
+    use super::{Error, Fileable, InFile, Skull, Store, WithId};
 
     const USER: &str = "bloink";
     const SKULLS: &str = r#"0	skull	0		0.1	
@@ -410,7 +588,7 @@ mod test {
     fn new_skull(name: &str, unit_price: f32) -> Skull {
         Skull {
             name: String::from(name),
-            color: String::new(),
+            color: String::from('0'),
             icon: String::new(),
             unit_price,
             limit: None,
@@ -544,7 +722,7 @@ mod test {
         store.verify_skull(
             r#"0	skull	0		0.1	
 4	bla	0		0.7	
-10	skrut	0		43.0	
+10	skrut	0		43	
 "#,
         );
     }
@@ -571,7 +749,7 @@ mod test {
         assert_eq!(store.skull().delete(USER, 4).unwrap(), old);
         store.verify_skull(
             r#"0	skull	0		0.1	
-10	skrut	0		43.0	
+10	skrut	0		43	
 "#,
         );
     }
@@ -592,15 +770,11 @@ mod test {
     fn find() {
         let mut store = TestStore::new();
         {
-            let mut writer = csv::WriterBuilder::new()
-                .delimiter(b'\t')
-                .has_headers(false)
-                .from_path(store.path.join(USER).join("skull"))
-                .unwrap();
+            let mut file = std::fs::File::create(store.path.join(USER).join("skull")).unwrap();
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| new_skull("skull", i as f32))
-                .for_each(|s| writer.serialize(s).unwrap());
+                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
+                .for_each(|s| Fileable::write(&s, &mut file).unwrap());
         }
 
         for i in 0..30 {
@@ -630,15 +804,12 @@ mod test {
         }
 
         let expected = {
-            let mut writer = csv::WriterBuilder::new()
-                .delimiter(b'\t')
-                .has_headers(false)
-                .from_writer(vec![]);
+            let mut expected = vec![];
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| new_skull("skull", i as f32))
-                .for_each(|s| writer.serialize(s).unwrap());
-            writer.into_inner().unwrap()
+                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
+                .for_each(|s| Fileable::write(&s, &mut expected).unwrap());
+            expected
         };
 
         let actual = std::fs::read(store.path.join(USER).join("skull")).unwrap();

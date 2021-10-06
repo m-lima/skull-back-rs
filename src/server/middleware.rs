@@ -19,7 +19,12 @@ impl Log {
             | Error::BadHeader
             | Error::ContentLengthMissing => log::Level::Info,
             Error::ReadTimeout => log::Level::Warn,
-            Error::Store(StoreError::StoreFull | StoreError::Io(_) | StoreError::Serde(_))
+            Error::Store(
+                StoreError::StoreFull
+                | StoreError::Io(_)
+                | StoreError::Serde(_)
+                | StoreError::BadTimestamp,
+            )
             | Error::FailedToAcquireLock
             | Error::Serialize(_)
             | Error::Http(_)
