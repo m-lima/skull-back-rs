@@ -817,3 +817,116 @@ mod test {
         assert_eq!(actual, expected);
     }
 }
+
+#[cfg(test)]
+mod bench {
+
+    mod handwritten {
+        extern crate test;
+        use super::super::{Fileable, Skull, WithId};
+
+        #[bench]
+        fn serialize(bench: &mut test::Bencher) {
+            let skull = Skull {
+                name: String::from("xnamex"),
+                color: String::from("xcolorx"),
+                icon: String::from("xiconx"),
+                unit_price: 0.1,
+                limit: None,
+            };
+
+            bench.iter(|| {
+                let mut buffer = vec![];
+
+                (0..100)
+                    .map(|i| WithId::new(i, skull.clone()))
+                    .for_each(|s| Fileable::write(&s, &mut buffer).unwrap());
+            });
+        }
+
+        #[bench]
+        fn deserialize(bench: &mut test::Bencher) {
+            let data = (0..100)
+                .map(|i| format!("{}\txnamex\txcolorx\txiconx\t1.2\t{}", i, i))
+                .collect::<Vec<_>>();
+
+            bench.iter(|| {
+                let data = data.clone();
+
+                for (i, string) in data.into_iter().enumerate() {
+                    let s = <Skull as Fileable>::read(string).unwrap();
+                    assert_eq!(s.id, i as u32);
+                    let s = s.data;
+                    assert_eq!(s.name, "xnamex");
+                    assert_eq!(s.color, "xcolorx");
+                    assert_eq!(s.icon, "xiconx");
+                    assert_eq!(s.unit_price, 1.2);
+                    assert_eq!(s.limit.unwrap(), i as f32);
+                }
+            });
+        }
+    }
+
+    mod csv {
+        extern crate test;
+        use super::super::Skull;
+
+        #[bench]
+        fn serialize(bench: &mut test::Bencher) {
+            let skull = Skull {
+                name: String::from("xnamex"),
+                color: String::from("xcolorx"),
+                icon: String::from("xiconx"),
+                unit_price: 0.1,
+                limit: None,
+            };
+
+            bench.iter(|| {
+                let buffer = vec![];
+
+                let mut writer = csv::WriterBuilder::new()
+                    .delimiter(b'\t')
+                    .has_headers(false)
+                    .from_writer(buffer);
+
+                (0..100)
+                    .map(|i| {
+                        let mut s = skull.clone();
+                        s.unit_price = i as f32;
+                        s
+                    })
+                    .for_each(|s| writer.serialize(s).unwrap());
+            });
+        }
+
+        #[bench]
+        fn deserialize(bench: &mut test::Bencher) {
+            let data = (0..100)
+                .map(|i| format!("xnamex\txcolorx\txiconx\t1.2\t{}\n", i))
+                .map(|s| s.into_bytes())
+                .flatten()
+                .collect::<Vec<_>>();
+
+            bench.iter(|| {
+                let data = data.clone();
+
+                let mut reader = csv::ReaderBuilder::new()
+                    .delimiter(b'\t')
+                    .has_headers(false)
+                    .from_reader(data.as_slice());
+
+                reader
+                    .deserialize::<Skull>()
+                    .enumerate()
+                    .for_each(|(i, s)| {
+                        let s = s.unwrap();
+                        assert_eq!(s.name, "xnamex");
+                        assert_eq!(s.color, "xcolorx");
+                        assert_eq!(s.icon, "xiconx");
+                        assert_eq!(s.unit_price, 1.2);
+                        assert_eq!(s.limit.unwrap(), i as f32);
+                    })
+            });
+        }
+    }
+}

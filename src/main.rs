@@ -1,5 +1,6 @@
 #![deny(warnings, clippy::pedantic, clippy::all)]
 #![warn(rust_2018_idioms)]
+#![feature(test)]
 
 mod options;
 mod server;
