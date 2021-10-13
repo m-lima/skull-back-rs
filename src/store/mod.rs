@@ -35,8 +35,6 @@ pub enum Error {
     Io(std::io::Error),
     #[error("Serde error: {0}")]
     Serde(String),
-    #[error("Bad timestamp")]
-    BadTimestamp,
 }
 
 impl From<std::io::Error> for Error {
@@ -107,18 +105,19 @@ pub trait Store: Send + 'static {
 }
 
 mod time {
-    use super::Error;
-
+    // Allowed because u64 millis is already many times the age of the universe
+    #[allow(clippy::cast_possible_truncation)]
     pub fn serialize<S>(time: &std::time::SystemTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
         let millis = time
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| serde::ser::Error::custom(Error::BadTimestamp))?
+            // Allowed because this number is unsigned and can never go back in time
+            .unwrap()
             .as_millis();
 
-        serializer.serialize_u128(millis)
+        serializer.serialize_u64(millis as u64)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<std::time::SystemTime, D::Error>
@@ -126,9 +125,10 @@ mod time {
         D: serde::de::Deserializer<'de>,
     {
         let millis = <u64 as serde::Deserialize>::deserialize(deserializer)?;
-        std::time::UNIX_EPOCH
+        Ok(std::time::UNIX_EPOCH
             .checked_add(std::time::Duration::from_millis(millis))
-            .ok_or_else(|| serde::de::Error::custom(Error::BadTimestamp))
+            // Allowed because a u64 millis duration may never overflow
+            .unwrap())
     }
 }
 

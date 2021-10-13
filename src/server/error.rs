@@ -43,7 +43,7 @@ impl Error {
             | Self::Serialize(_)
             | Self::Http(_)
             | Self::Hyper(_)
-            | Self::Store(StoreError::Io(_) | StoreError::Serde(_) | StoreError::BadTimestamp) => {
+            | Self::Store(StoreError::Io(_) | StoreError::Serde(_)) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         }
