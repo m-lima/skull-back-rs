@@ -1,5 +1,62 @@
 use super::{Crud, Error, Id, LastModified, Occurrence, Quick, Skull, Store, WithId};
 
+#[cfg(all(test, feature = "bench"))]
+mod serde;
+
+macro_rules! parse {
+    (string, $input:expr, $field:literal, $data:literal) => {
+        $input
+            .next()
+            .ok_or_else(|| parse!(not_found, $field, $data))
+            .map(String::from)
+    };
+
+    (number, $input:expr, $field:literal, $data:literal) => {
+        $input
+            .next()
+            .ok_or_else(|| parse!(not_found, $field, $data))
+            .and_then(|v| parse!(number_raw, v, $field, $data))
+    };
+
+    (end, $input:expr, $data:literal) => {
+        if $input.next().is_some() {
+            return Err(Error::Serde(String::from(concat!(
+                "Too many fields for ",
+                $data
+            ))));
+        }
+    };
+
+    (number_raw, $input:expr, $field:literal, $data:literal) => {
+        $input.parse().map_err(|e| {
+            Error::Serde(format!(
+                concat!("Could not parse `", $field, "` for ", $data, ": {}"),
+                e
+            ))
+        })
+    };
+
+    (not_found, $field:literal, $data:literal) => {
+        Error::Serde(String::from(concat!(
+            "Could not find `",
+            $field,
+            "` for ",
+            $data
+        )))
+    };
+}
+
+macro_rules! write_number {
+    ($serializer:path, $writer:expr, $type:ty, $value:expr, $field:literal, $data:literal) => {
+        $serializer($writer as &mut $type, $value).map_err(|e| {
+            Error::Serde(format!(
+                concat!("Could not serialize `", $field, "` for ", $data, ": {}"),
+                e
+            ))
+        })
+    };
+}
+
 pub struct InFile {
     path: std::path::PathBuf,
     users: std::collections::HashSet<String>,
@@ -98,7 +155,7 @@ impl Store for InFile {
     }
 }
 
-impl<D: Data> Crud<D> for InFile {
+impl<D: FileData> Crud<D> for InFile {
     fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
@@ -185,7 +242,7 @@ impl<D: Data> Crud<D> for InFile {
     }
 }
 
-fn find<D: Data>(id: Id, data: &[WithId<D>]) -> Option<usize> {
+fn find<D: FileData>(id: Id, data: &[WithId<D>]) -> Option<usize> {
     let index = if data.is_empty() {
         return None;
     } else {
@@ -201,8 +258,145 @@ fn find<D: Data>(id: Id, data: &[WithId<D>]) -> Option<usize> {
     None
 }
 
+pub trait FileData: super::Data {
+    fn name() -> &'static str;
+    fn read(string: String) -> Result<WithId<Self>, Error>;
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error>;
+}
+
+impl FileData for Skull {
+    fn name() -> &'static str {
+        "skull"
+    }
+
+    fn read(string: String) -> Result<WithId<Self>, Error> {
+        let mut split = string.split('\t');
+
+        let id = parse!(number, split, "id", "Skull")?;
+        let name = parse!(string, split, "name", "Skull")?;
+        let color = parse!(string, split, "color", "Skull")?;
+        let icon = parse!(string, split, "icon", "Skull")?;
+        let unit_price = parse!(number, split, "unit_price", "Skull")?;
+
+        let limit = if let Some(limit) = split.next().filter(|v| !v.is_empty()) {
+            Some(parse!(number_raw, limit, "limit", "Skull")?)
+        } else {
+            None
+        };
+        parse!(end, split, "Skull");
+
+        Ok(WithId::new(
+            id,
+            Self {
+                name,
+                color,
+                icon,
+                unit_price,
+                limit,
+            },
+        ))
+    }
+
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
+        let data = &with_id.data;
+        write_number!(itoa::write, writer, W, with_id.id, "id", "Skull")?;
+
+        writer.write_all(b"\t")?;
+        writer.write_all(data.name.as_bytes())?;
+        writer.write_all(b"\t")?;
+        writer.write_all(data.color.as_bytes())?;
+        writer.write_all(b"\t")?;
+        writer.write_all(data.icon.as_bytes())?;
+        writer.write_all(b"\t")?;
+
+        write_number!(
+            dtoa::write,
+            writer,
+            W,
+            data.unit_price,
+            "unit_price",
+            "Skull"
+        )?;
+        writer.write_all(b"\t")?;
+
+        if let Some(limit) = data.limit {
+            write_number!(dtoa::write, writer, W, limit, "limit", "Skull")?;
+        }
+
+        writer.write_all(b"\n").map_err(Error::Io)
+    }
+}
+
+impl FileData for Quick {
+    fn name() -> &'static str {
+        "quick"
+    }
+
+    fn read(string: String) -> Result<WithId<Self>, Error> {
+        let mut split = string.split('\t');
+
+        let id = parse!(number, split, "id", "Quick")?;
+        let skull = parse!(number, split, "skull", "Quick")?;
+        let amount = parse!(number, split, "amount", "Quick")?;
+        parse!(end, split, "Quick");
+
+        Ok(WithId::new(id, Self { skull, amount }))
+    }
+
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
+        let data = &with_id.data;
+
+        write_number!(itoa::write, writer, W, with_id.id, "id", "Quick")?;
+        writer.write_all(b"\t")?;
+        write_number!(itoa::write, writer, W, data.skull, "skull", "Quick")?;
+        writer.write_all(b"\t")?;
+        write_number!(dtoa::write, writer, W, data.amount, "amount", "Quick")?;
+        writer.write_all(b"\n").map_err(Error::Io)
+    }
+}
+
+impl FileData for Occurrence {
+    fn name() -> &'static str {
+        "occurrence"
+    }
+
+    fn read(string: String) -> Result<WithId<Self>, Error> {
+        let mut split = string.split('\t');
+
+        let id = parse!(number, split, "id", "Occurrence")?;
+        let skull = parse!(number, split, "skull", "Occurrence")?;
+        let amount = parse!(number, split, "amount", "Occurrence")?;
+        let millis = parse!(number, split, "millis", "Occurrence")?;
+        parse!(end, split, "Occurrence");
+
+        Ok(WithId::new(
+            id,
+            Self {
+                skull,
+                amount,
+                millis,
+            },
+        ))
+    }
+
+    // Allowed because u64 millis is already many times the age of the universe
+    #[allow(clippy::cast_possible_truncation)]
+    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
+        let data = &with_id.data;
+
+        write_number!(itoa::write, writer, W, with_id.id, "id", "Occurrence")?;
+        writer.write_all(b"\t")?;
+        write_number!(itoa::write, writer, W, data.skull, "skull", "Occurrence")?;
+        writer.write_all(b"\t")?;
+        write_number!(dtoa::write, writer, W, data.amount, "amount", "Occurrence")?;
+        writer.write_all(b"\t")?;
+        write_number!(itoa::write, writer, W, data.millis, "millis", "Occurrence")?;
+        writer.write_all(b"\n").map_err(Error::Io)
+    }
+}
+
 mod fs {
-    use super::{Data, Error, InFile, WithId};
+    use super::{Error, FileData, InFile, WithId};
 
     #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
     pub struct User(std::path::PathBuf);
@@ -216,7 +410,7 @@ mod fs {
             }
         }
 
-        pub fn to_path<D: Data>(&self) -> UserPath {
+        pub fn to_path<D: FileData>(&self) -> UserPath {
             UserPath(self.0.join(D::name()))
         }
     }
@@ -225,7 +419,7 @@ mod fs {
     pub struct UserPath(std::path::PathBuf);
 
     impl UserPath {
-        pub fn new<D: Data>(user: &str, store: &InFile) -> Result<Self, Error> {
+        pub fn new<D: FileData>(user: &str, store: &InFile) -> Result<Self, Error> {
             if store.users.contains(user) {
                 Ok(Self(store.path.join(user).join(D::name())))
             } else {
@@ -249,7 +443,7 @@ mod fs {
 
     pub fn modify<D, F>(user: UserPath, action: F) -> Result<WithId<D>, Error>
     where
-        D: Data,
+        D: FileData,
         F: FnOnce(&mut Vec<WithId<D>>) -> Result<WithId<D>, Error>,
     {
         let mut entries = load(&user)?;
@@ -258,7 +452,9 @@ mod fs {
         Ok(data)
     }
 
-    fn load<U: std::borrow::Borrow<UserPath>, D: Data>(user: U) -> Result<Vec<WithId<D>>, Error> {
+    fn load<U: std::borrow::Borrow<UserPath>, D: FileData>(
+        user: U,
+    ) -> Result<Vec<WithId<D>>, Error> {
         let mut entries = vec![];
         for entry in reader(user)?.map(|e| e.map_err(Error::Io).and_then(D::read)) {
             match entry {
@@ -272,7 +468,7 @@ mod fs {
         Ok(entries)
     }
 
-    fn write<D: Data>(user: UserPath, entries: Vec<WithId<D>>) -> Result<(), Error> {
+    fn write<D: FileData>(user: UserPath, entries: Vec<WithId<D>>) -> Result<(), Error> {
         use std::io::Write;
 
         let mut buffer = vec![];
@@ -288,275 +484,15 @@ mod fs {
             .map_err(Error::Io)
     }
 
-    pub fn append<D: Data>(user: UserPath, data: &WithId<D>) -> Result<(), Error> {
+    pub fn append<D: FileData>(user: UserPath, data: &WithId<D>) -> Result<(), Error> {
         let mut file = std::fs::OpenOptions::new().append(true).open(user)?;
         D::write(data, &mut file)
     }
 }
 
-pub trait Data: super::Data {
-    fn name() -> &'static str;
-    fn read(string: String) -> Result<WithId<Self>, Error>;
-    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error>;
-}
-
-impl Data for Skull {
-    fn name() -> &'static str {
-        "skull"
-    }
-
-    fn read(string: String) -> Result<WithId<Self>, Error> {
-        let mut split = string.split('\t');
-
-        let id = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `id` found for Skull")))
-            .and_then(|v| {
-                v.parse()
-                    .map_err(|e| Error::Serde(format!("Could not parse `id` for Skull: {}", e)))
-            })?;
-
-        let name = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `name` found for Skull")))
-            .map(String::from)?;
-
-        let color = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `color` found for Skull")))
-            .map(String::from)?;
-
-        let icon = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `icon` found for Skull")))
-            .map(String::from)?;
-
-        let unit_price = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `unit_price` found for Skull")))
-            .and_then(|v| {
-                v.parse().map_err(|e| {
-                    Error::Serde(format!("Could not parse `unit_price` for Skull: {}", e))
-                })
-            })?;
-
-        let limit =
-            if let Some(limit) = split.next().filter(|v| !v.is_empty()) {
-                if split.next().is_some() {
-                    return Err(Error::Serde(String::from("Too many fields for Skull")));
-                }
-                Some(limit.parse().map_err(|e| {
-                    Error::Serde(format!("Could not parse `limit` for Skull: {}", e))
-                })?)
-            } else {
-                None
-            };
-
-        Ok(WithId::new(
-            id,
-            Self {
-                name,
-                color,
-                icon,
-                unit_price,
-                limit,
-            },
-        ))
-    }
-
-    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-        itoa::write(writer as &mut W, with_id.id)
-            .map_err(|e| Error::Serde(format!("Could not serializer `id` for Skull: {}", e)))?;
-
-        writer.write_all(b"\t")?;
-        writer.write_all(data.name.as_bytes())?;
-        writer.write_all(b"\t")?;
-        writer.write_all(data.color.as_bytes())?;
-        writer.write_all(b"\t")?;
-        writer.write_all(data.icon.as_bytes())?;
-
-        dtoa::write(writer as &mut W, data.unit_price).map_err(|e| {
-            Error::Serde(format!(
-                "Could not serializer `unit_price` for Skull: {}",
-                e
-            ))
-        })?;
-
-        writer.write_all(b"\t")?;
-
-        if let Some(limit) = data.limit {
-            dtoa::write(writer as &mut W, limit).map_err(|e| {
-                Error::Serde(format!("Could not serializer `limie` for Skull: {}", e))
-            })?;
-        }
-
-        writer.write_all(b"\n").map_err(Error::Io)
-    }
-}
-
-impl Data for Quick {
-    fn name() -> &'static str {
-        "quick"
-    }
-
-    fn read(string: String) -> Result<WithId<Self>, Error> {
-        let mut split = string.split('\t');
-
-        let id = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `id` found for Quick")))
-            .and_then(|v| {
-                v.parse()
-                    .map_err(|e| Error::Serde(format!("Could not parse `id` for Quick: {}", e)))
-            })?;
-
-        let skull = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `skull` found for Quick")))
-            .and_then(|v| {
-                v.parse()
-                    .map_err(|e| Error::Serde(format!("Could not parse `skull` for Quick: {}", e)))
-            })?;
-
-        let amount = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `amount` found for Quick")))
-            .and_then(|v| {
-                v.parse()
-                    .map_err(|e| Error::Serde(format!("Could not parse `amount` for Quick: {}", e)))
-            })?;
-
-        if split.next().is_some() {
-            return Err(Error::Serde(String::from("Too many fields for Quick")));
-        }
-
-        Ok(WithId::new(id, Self { skull, amount }))
-    }
-
-    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-
-        itoa::write(writer as &mut W, with_id.id)
-            .map_err(|e| Error::Serde(format!("Could not serializer `id` for Quick: {}", e)))?;
-        writer.write_all(b"\t")?;
-        itoa::write(writer as &mut W, data.skull)
-            .map_err(|e| Error::Serde(format!("Could not serializer `skull` for Quick: {}", e)))?;
-        writer.write_all(b"\t")?;
-        dtoa::write(writer as &mut W, data.amount)
-            .map_err(|e| Error::Serde(format!("Could not serializer `amount` for Quick: {}", e)))?;
-        writer.write_all(b"\n").map_err(Error::Io)
-    }
-}
-
-impl Data for Occurrence {
-    fn name() -> &'static str {
-        "occurrence"
-    }
-
-    fn read(string: String) -> Result<WithId<Self>, Error> {
-        let mut split = string.split('\t');
-
-        let id = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `id` found for Occurrence")))
-            .and_then(|v| {
-                v.parse().map_err(|e| {
-                    Error::Serde(format!("Could not parse `id` for Occurrence: {}", e))
-                })
-            })?;
-
-        let skull = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `skull` found for Occurrence")))
-            .and_then(|v| {
-                v.parse().map_err(|e| {
-                    Error::Serde(format!("Could not parse `skull` for Occurrence: {}", e))
-                })
-            })?;
-
-        let amount = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `amount` found for Occurrence")))
-            .and_then(|v| {
-                v.parse().map_err(|e| {
-                    Error::Serde(format!("Could not parse `amount` for Occurrence: {}", e))
-                })
-            })?;
-
-        let timestamp = split
-            .next()
-            .ok_or_else(|| Error::Serde(String::from("No `timestamp` found for Occurrence")))
-            .and_then(|v| {
-                v.parse().map_err(|e| {
-                    Error::Serde(format!("Could not parse `amount` for Occurrence: {}", e))
-                })
-            })
-            .map(|v| {
-                // Allowed because a u64 millis duration may never overflow
-                std::time::UNIX_EPOCH
-                    .checked_add(std::time::Duration::from_millis(v))
-                    .unwrap()
-            })?;
-
-        if split.next().is_some() {
-            return Err(Error::Serde(String::from("Too many fields for Occurrence")));
-        }
-
-        Ok(WithId::new(
-            id,
-            Self {
-                skull,
-                amount,
-                timestamp,
-            },
-        ))
-    }
-
-    // Allowed because u64 millis is already many times the age of the universe
-    #[allow(clippy::cast_possible_truncation)]
-    fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-
-        itoa::write(writer as &mut W, with_id.id).map_err(|e| {
-            Error::Serde(format!("Could not serializer `id` for Occurrence: {}", e))
-        })?;
-        writer.write_all(b"\t")?;
-        itoa::write(writer as &mut W, data.skull).map_err(|e| {
-            Error::Serde(format!(
-                "Could not serializer `skull` for Occurrence: {}",
-                e
-            ))
-        })?;
-        writer.write_all(b"\t")?;
-        dtoa::write(writer as &mut W, data.amount).map_err(|e| {
-            Error::Serde(format!(
-                "Could not serializer `amount` for Occurrence: {}",
-                e
-            ))
-        })?;
-        writer.write_all(b"\t")?;
-        itoa::write(
-            writer as &mut W,
-            data.timestamp
-                .duration_since(std::time::UNIX_EPOCH)
-                // Allowed because this number is unsigned and can never go back in time
-                .unwrap()
-                .as_millis() as u64,
-        )
-        .map_err(|e| {
-            Error::Serde(format!(
-                "Could not serializer `timestamp` for Occurrence: {}",
-                e
-            ))
-        })?;
-        writer.write_all(b"\n").map_err(Error::Io)
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::{Data, Error, InFile, Skull, Store, WithId};
+    use super::{Error, FileData, InFile, Skull, Store, WithId};
 
     const USER: &str = "bloink";
     const SKULLS: &str = r#"0	skull	0		0.1	
@@ -818,7 +754,7 @@ mod test {
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
                 .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| Data::write(&s, &mut file).unwrap());
+                .for_each(|s| FileData::write(&s, &mut file).unwrap());
         }
 
         for i in 0..30 {
@@ -852,13 +788,68 @@ mod test {
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
                 .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| Data::write(&s, &mut expected).unwrap());
+                .for_each(|s| FileData::write(&s, &mut expected).unwrap());
             expected
         };
 
         let actual = std::fs::read(store.path.join(USER).join("skull")).unwrap();
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn error_message() {
+        struct FailedWriter;
+        impl std::io::Write for FailedWriter {
+            fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    Error::Serde(String::from("write")),
+                ))
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    Error::Serde(String::from("flush")),
+                ))
+            }
+        }
+
+        let field_not_present = "2";
+        assert_eq!(
+            Skull::read(String::from(field_not_present))
+                .unwrap_err()
+                .to_string(),
+            String::from("Serde error: Could not find `name` for Skull")
+        );
+
+        let field_unparseable = "a";
+        assert_eq!(
+            Skull::read(String::from(field_unparseable))
+                .unwrap_err()
+                .to_string(),
+            String::from(
+                "Serde error: Could not parse `id` for Skull: invalid digit found in string"
+            )
+        );
+
+        let too_many_fields = "2\t\t\t\t2\t\t";
+        assert_eq!(
+            Skull::read(String::from(too_many_fields))
+                .unwrap_err()
+                .to_string(),
+            String::from("Serde error: Too many fields for Skull")
+        );
+
+        let skull = WithId::new(0, new_skull("skull", 0.0));
+        let mut writer = FailedWriter;
+        assert_eq!(
+            FileData::write(&skull, &mut writer)
+                .unwrap_err()
+                .to_string(),
+            String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
+        );
     }
 }
 
@@ -884,7 +875,7 @@ mod bench {
 
                 (0..100)
                     .map(|i| WithId::new(i, skull.clone()))
-                    .for_each(|s| Data::write(&s, &mut buffer).unwrap());
+                    .for_each(|s| FileData::write(&s, &mut buffer).unwrap());
             });
         }
 
@@ -898,7 +889,7 @@ mod bench {
                 let data = data.clone();
 
                 for (i, string) in data.into_iter().enumerate() {
-                    let s = <Skull as Data>::read(string).unwrap();
+                    let s = <Skull as FileData>::read(string).unwrap();
                     assert_eq!(s.id, i as u32);
                     let s = s.data;
                     assert_eq!(s.name, "xnamex");
@@ -915,7 +906,10 @@ mod bench {
             let occurrence = Occurrence {
                 skull: 0,
                 amount: 1.2,
-                timestamp: std::time::SystemTime::now(),
+                millis: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
             };
 
             bench.iter(|| {
@@ -923,7 +917,7 @@ mod bench {
 
                 (0..100)
                     .map(|i| WithId::new(i, occurrence.clone()))
-                    .for_each(|s| Data::write(&s, &mut buffer).unwrap());
+                    .for_each(|s| FileData::write(&s, &mut buffer).unwrap());
             });
         }
 
@@ -933,20 +927,16 @@ mod bench {
                 .map(|i| format!("{}\t0\t1.2\t4", i))
                 .collect::<Vec<_>>();
 
-            let timestamp = std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_millis(4))
-                .unwrap();
-
             bench.iter(|| {
                 let data = data.clone();
 
                 for (i, string) in data.into_iter().enumerate() {
-                    let s = <Occurrence as Data>::read(string).unwrap();
+                    let s = <Occurrence as FileData>::read(string).unwrap();
                     assert_eq!(s.id, i as u32);
                     let s = s.data;
                     assert_eq!(s.skull, 0);
                     assert_eq!(s.amount, 1.2);
-                    assert_eq!(s.timestamp, timestamp);
+                    assert_eq!(s.millis, 4);
                 }
             });
         }
@@ -983,7 +973,10 @@ mod bench {
             let occurrence = Occurrence {
                 skull: 0,
                 amount: 1.2,
-                timestamp: std::time::SystemTime::now(),
+                millis: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
             };
 
             bench.iter(|| {
@@ -1066,7 +1059,10 @@ mod bench {
             let occurrence = Occurrence {
                 skull: 0,
                 amount: 1.2,
-                timestamp: std::time::SystemTime::now(),
+                millis: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
             };
 
             bench.iter(|| {
@@ -1091,10 +1087,6 @@ mod bench {
                 .flatten()
                 .collect::<Vec<_>>();
 
-            let timestamp = std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_millis(4))
-                .unwrap();
-
             bench.iter(|| {
                 let data = data.clone();
 
@@ -1110,7 +1102,7 @@ mod bench {
                         let s = s.unwrap();
                         assert_eq!(s.skull, 0);
                         assert_eq!(s.amount, 1.2);
-                        assert_eq!(s.timestamp, timestamp);
+                        assert_eq!(s.millis, 4);
                     })
             });
         }

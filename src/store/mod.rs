@@ -85,8 +85,7 @@ impl Data for Quick {}
 pub struct Occurrence {
     skull: Id,
     amount: f32,
-    #[serde(rename = "millis", with = "time")]
-    timestamp: std::time::SystemTime,
+    millis: u64,
 }
 
 impl Data for Occurrence {}
@@ -217,9 +216,7 @@ mod test {
         let occurrence = Occurrence {
             skull: 1,
             amount: 2.0,
-            timestamp: std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_millis(4))
-                .unwrap(),
+            millis: 4,
         };
         let occurrence_id = WithId::new(3, occurrence.clone());
 
@@ -280,9 +277,7 @@ mod test {
         let occurrence = Occurrence {
             skull: 1,
             amount: 2.0,
-            timestamp: std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_millis(4))
-                .unwrap(),
+            millis: 4,
         };
         let occurrence_id = WithId::new(3, occurrence.clone());
 
