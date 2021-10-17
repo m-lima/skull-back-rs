@@ -858,7 +858,7 @@ mod bench {
 
     mod handwritten {
         extern crate test;
-        use super::super::{Data, Occurrence, Skull, WithId};
+        use super::super::{FileData, Occurrence, Skull, WithId};
 
         #[bench]
         fn serialize_skull(bench: &mut test::Bencher) {

@@ -1,4 +1,5 @@
 use super::error::Error;
+use super::mapper::request::USER_HEADER;
 use crate::store;
 
 type HandlerFuture = std::pin::Pin<Box<gotham::handler::HandlerFuture>>;
@@ -76,7 +77,7 @@ impl Log {
             );
 
         let user = hyper::HeaderMap::borrow_from(state)
-            .get("x-user")
+            .get(USER_HEADER)
             .and_then(|fwd| fwd.to_str().ok())
             .unwrap_or("UNKNOWN");
 
@@ -201,7 +202,7 @@ impl gotham::middleware::Middleware for Cors {
                 );
                 headers.insert(
                     gotham::hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
-                    gotham::hyper::header::HeaderValue::from_static("x-user"),
+                    gotham::hyper::header::HeaderValue::from_static(USER_HEADER),
                 );
                 (state, response)
             })

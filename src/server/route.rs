@@ -31,7 +31,15 @@ fn with_cors(
         .build();
 
     let (chain, pipelines) = gotham::pipeline::single::single_pipeline(pipeline);
-    gotham::router::builder::build_router(chain, pipelines, |route| setup_resources(route, true))
+    gotham::router::builder::build_router(chain, pipelines, |route| {
+        use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
+
+        setup_resources(route);
+        route.options("/last-modified").to(|state| (state, ""));
+        route.options("/skull").to(|state| (state, ""));
+        route.options("/quick").to(|state| (state, ""));
+        route.options("/occurrence").to(|state| (state, ""));
+    })
 }
 
 fn without_cors(
@@ -55,29 +63,20 @@ fn without_cors(
             route
                 .get("/*")
                 .to_dir(gotham::handler::assets::FileOptions::new(web_path).build());
-            route.scope("/api", |route| setup_resources(route, false));
+            route.scope("/api", |route| setup_resources(route));
         } else {
-            setup_resources(route, false);
+            setup_resources(route);
         }
     })
 }
 
-pub fn setup_resources<C, P>(
-    route: &mut impl gotham::router::builder::DrawRoutes<C, P>,
-    with_cors: bool,
-) where
+pub fn setup_resources<C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
+where
     C: gotham::pipeline::chain::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
     P: std::panic::RefUnwindSafe + Send + Sync + 'static,
 {
     use gotham::router::builder::DefineSingleRoute;
 
-    // TODO: Cors implementation is primitive.. Make it debug only
-    if with_cors {
-        route.options("/last-modified").to(|state| (state, ""));
-        route.options("/skull").to(|state| (state, ""));
-        route.options("/quick").to(|state| (state, ""));
-        route.options("/occurrence").to(|state| (state, ""));
-    }
     route.get("/last-modified").to(handler::LastModified);
     route.scope("/skull", Resource::<store::Skull>::setup);
     route.scope("/quick", Resource::<store::Quick>::setup);

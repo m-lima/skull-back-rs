@@ -1,3 +1,6 @@
+// Allowed because of proc-macro
+#![allow(clippy::trait_duplication_in_bounds)]
+
 use super::Id;
 
 pub trait Data: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> {}

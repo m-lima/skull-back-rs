@@ -2,6 +2,8 @@ pub mod request {
     use super::super::error::Error;
     use crate::store;
 
+    pub(in crate::server) const USER_HEADER: &str = "x-user";
+
     #[derive(
         serde::Deserialize, gotham_derive::StateData, gotham_derive::StaticResponseExtender,
     )]
@@ -16,7 +18,7 @@ pub mod request {
             use gotham::state::FromState;
 
             gotham::hyper::HeaderMap::borrow_from(state)
-                .get("x-user")
+                .get(USER_HEADER)
                 .ok_or(Error::MissingUser)
                 .and_then(|header| header.to_str().map_err(|_| Error::BadHeader))
         }

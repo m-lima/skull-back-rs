@@ -1,6 +1,3 @@
-// Allowed because of proc-macro
-#![allow(clippy::trait_duplication_in_bounds)]
-
 mod crud;
 mod data;
 mod error;
