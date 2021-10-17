@@ -195,6 +195,14 @@ impl gotham::middleware::Middleware for Cors {
             chain(state).await.map(|(state, mut response)| {
                 let headers = response.headers_mut();
                 headers.insert(gotham::hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, self.0);
+                headers.insert(
+                    gotham::hyper::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+                    gotham::hyper::header::HeaderValue::from_static("true"),
+                );
+                headers.insert(
+                    gotham::hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
+                    gotham::hyper::header::HeaderValue::from_static("x-user"),
+                );
                 (state, response)
             })
         })

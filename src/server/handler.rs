@@ -18,7 +18,7 @@ macro_rules! impl_handler {
         }
         impl<$param> Copy for $handler {}
 
-        impl<$param: store::CrudSelector> gotham::handler::Handler for $handler
+        impl<$param: store::Selector> gotham::handler::Handler for $handler
         where
             $param: 'static + Send + Sync,
         {
@@ -83,7 +83,7 @@ impl gotham::handler::Handler for LastModified {
 
 pub struct List<D>(std::marker::PhantomData<D>);
 
-impl<D: store::CrudSelector> List<D> {
+impl<D: store::Selector> List<D> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -113,7 +113,7 @@ impl_handler!(List<D>, D);
 
 pub struct Create<D>(std::marker::PhantomData<D>);
 
-impl<D: store::CrudSelector> Create<D> {
+impl<D: store::Selector> Create<D> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -144,7 +144,7 @@ impl_handler!(Create<D>, D);
 
 pub struct Read<D>(std::marker::PhantomData<D>);
 
-impl<D: store::CrudSelector> Read<D> {
+impl<D: store::Selector> Read<D> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -176,7 +176,7 @@ impl_handler!(Read<D>, D);
 
 pub struct Update<D>(std::marker::PhantomData<D>);
 
-impl<D: store::CrudSelector> Update<D> {
+impl<D: store::Selector> Update<D> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -209,7 +209,7 @@ impl_handler!(Update<D>, D);
 
 pub struct Delete<D>(std::marker::PhantomData<D>);
 
-impl<D: store::CrudSelector> Delete<D> {
+impl<D: store::Selector> Delete<D> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
