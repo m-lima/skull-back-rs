@@ -43,8 +43,6 @@ pub mod request {
                 return Err(Error::PayloadTooLarge);
             }
 
-            // Hyper reads up to Content-Length. No need for chunk-wise verification
-            // TODO: Is this needed behind nginx?
             let body = tokio::time::timeout(
                 std::time::Duration::from_secs(5),
                 hyper::body::to_bytes(hyper::Body::take_from(state)),

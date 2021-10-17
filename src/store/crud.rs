@@ -9,6 +9,7 @@ pub trait Store: Send + 'static {
 
 // TODO: When using a RDB, will this interface still make sense?
 // TODO: Is it possible to avoid the Vec's?
+// TODO: OFfer a filter per day for Occurrence
 pub trait Crud<D: Data> {
     fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
     fn filter_list(
