@@ -210,6 +210,10 @@ impl gotham::middleware::Middleware for Cors {
                     hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
                     hyper::header::HeaderValue::from_static(USER_HEADER),
                 );
+                headers.insert(
+                    hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
+                    hyper::header::HeaderValue::from_static("x-user, if-unmodified-since"),
+                );
                 if let Some(method) = hyper::HeaderMap::borrow_from(&state)
                     .get(hyper::header::ACCESS_CONTROL_REQUEST_METHOD)
                 {
