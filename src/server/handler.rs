@@ -115,16 +115,11 @@ impl<D: store::Selector> Create<D> {
         use gotham::state::FromState;
 
         let user = mapper::request::User::borrow_from(state).map(String::from)?;
-        let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
         let data = mapper::request::Body::take_from(state).await?;
 
         let (last_modified, id) = {
             let mut lock = middleware::Store::borrow_from(state).get()?;
             let crud = D::select(&mut *lock);
-
-            if crud.last_modified(&user)? > unmodified_since {
-                return Err(Error::OutOfSync);
-            }
 
             let data = crud.create(&user, data)?;
             (crud.last_modified(&user)?, serde_json::to_vec(&data)?)
