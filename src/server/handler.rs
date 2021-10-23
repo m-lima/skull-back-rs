@@ -124,17 +124,18 @@ impl<D: store::Selector> Create<D> {
 
         let id = {
             let mut lock = middleware::Store::borrow_from(state).get()?;
-            D::select(&mut *lock).create(&user, data)?
+            let data = D::select(&mut *lock).create(&user, data)?;
+            serde_json::to_vec(&data)?
         };
 
         let response = gotham::hyper::Response::builder()
-            .header(gotham::hyper::header::LOCATION, id)
+            .header(gotham::hyper::header::CONTENT_TYPE, "text/plain")
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
                 gotham::state::request_id::request_id(state),
             )
             .status(gotham::hyper::StatusCode::CREATED)
-            .body(gotham::hyper::Body::empty())?;
+            .body(gotham::hyper::Body::from(id))?;
 
         Ok(response)
     }
