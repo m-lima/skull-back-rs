@@ -8,7 +8,6 @@ anyhow = "1.0.44"
 clap = "3.0.0-beta.4"
 colored = "2.0.0"
 dtoa = "0.4.8"
-# csv = "1.1.6"
 gotham = "0.6.0"
 gotham_derive = "0.6.0"
 itoa = "0.4.8"
@@ -20,13 +19,12 @@ thiserror = "1.0.29"
 tokio = "1.12.0"
 
 [dev-dependencies]
-# criterion = "0.3.5"
 csv = "1.1.6"
 rand = "0.8.4"
 
 [features]
 bench = []
 
-# [[bench]]
-# name = "tsv"
-# harness = false
+[profile.release]
+lto = true
+codegen-units = 1
