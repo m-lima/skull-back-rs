@@ -18,7 +18,7 @@ pub mod time {
     }
 
     pub fn deserialize(timestamp: &str) -> Result<std::time::SystemTime, Error> {
-        let millis = timestamp.parse::<u64>()?;
+        let millis = timestamp.parse::<u64>()? + 1;
         Ok(std::time::UNIX_EPOCH
             .checked_add(std::time::Duration::from_millis(millis))
             // Allowed because a u64 millis duration may never overflow
