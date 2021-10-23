@@ -34,11 +34,16 @@ fn with_cors(
     gotham::router::builder::build_router(chain, pipelines, |route| {
         use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
 
-        setup_resources(route);
         route.options("/last-modified").to(|state| (state, ""));
         route.options("/skull").to(|state| (state, ""));
+        route.options("/skull/:id:[0-9]+").to(|state| (state, ""));
         route.options("/quick").to(|state| (state, ""));
+        route.options("/quick/:id:[0-9]+").to(|state| (state, ""));
         route.options("/occurrence").to(|state| (state, ""));
+        route
+            .options("/occurrence/:id:[0-9]+")
+            .to(|state| (state, ""));
+        setup_resources(route);
     })
 }
 

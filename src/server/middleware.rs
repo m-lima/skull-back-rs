@@ -193,17 +193,25 @@ impl gotham::middleware::Middleware for Cors {
             + Send,
     {
         Box::pin(async {
+            use gotham::hyper;
+            use gotham::state::FromState;
+
             chain(state).await.map(|(state, mut response)| {
                 let headers = response.headers_mut();
-                headers.insert(gotham::hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, self.0);
+                headers.insert(hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN, self.0);
                 headers.insert(
-                    gotham::hyper::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
-                    gotham::hyper::header::HeaderValue::from_static("true"),
+                    hyper::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+                    hyper::header::HeaderValue::from_static("true"),
                 );
                 headers.insert(
-                    gotham::hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
-                    gotham::hyper::header::HeaderValue::from_static(USER_HEADER),
+                    hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
+                    hyper::header::HeaderValue::from_static(USER_HEADER),
                 );
+                if let Some(method) = hyper::HeaderMap::borrow_from(&state)
+                    .get(hyper::header::ACCESS_CONTROL_REQUEST_METHOD)
+                {
+                    headers.insert(hyper::header::ACCESS_CONTROL_ALLOW_METHODS, method.clone());
+                }
                 (state, response)
             })
         })
