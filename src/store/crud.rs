@@ -1,7 +1,6 @@
-use super::{Data, Error, Id, LastModified, Occurrence, Quick, Skull, WithId};
+use super::{Data, Error, Id, Occurrence, Quick, Skull, WithId};
 
 pub trait Store: Send + 'static {
-    fn last_modified(&self, user: &str) -> Result<LastModified, Error>;
     fn skull(&mut self) -> &mut dyn Crud<Skull>;
     fn quick(&mut self) -> &mut dyn Crud<Quick>;
     fn occurrence(&mut self) -> &mut dyn Crud<Occurrence>;
@@ -21,6 +20,7 @@ pub trait Crud<D: Data> {
     fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error>;
     fn update(&mut self, user: &str, id: Id, data: D) -> Result<WithId<D>, Error>;
     fn delete(&mut self, user: &str, id: Id) -> Result<WithId<D>, Error>;
+    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error>;
 }
 
 pub trait Selector: Data {

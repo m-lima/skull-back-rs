@@ -6,7 +6,7 @@ mod in_memory;
 
 pub type Id = u32;
 pub use crud::{Crud, Selector, Store};
-pub use data::{Data, LastModified, Occurrence, Quick, Skull, WithId};
+pub use data::{Data, Occurrence, Quick, Skull, WithId};
 pub use error::Error;
 
 pub fn in_memory<S, I>(users: I) -> impl Store

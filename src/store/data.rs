@@ -50,40 +50,6 @@ pub struct Occurrence {
 
 impl Data for Occurrence {}
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct LastModified {
-    #[serde(rename = "millis", with = "time")]
-    pub(super) timestamp: std::time::SystemTime,
-}
-
-mod time {
-    // Allowed because u64 millis is already many times the age of the universe
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn serialize<S>(time: &std::time::SystemTime, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        let millis = time
-            .duration_since(std::time::UNIX_EPOCH)
-            // Allowed because this number is unsigned and can never go back in time
-            .unwrap()
-            .as_millis();
-
-        serializer.serialize_u64(millis as u64)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<std::time::SystemTime, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        let millis = <u64 as serde::Deserialize>::deserialize(deserializer)?;
-        Ok(std::time::UNIX_EPOCH
-            .checked_add(std::time::Duration::from_millis(millis))
-            // Allowed because a u64 millis duration may never overflow
-            .unwrap())
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::{Occurrence, Quick, Skull, WithId};

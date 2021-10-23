@@ -8,8 +8,6 @@ pub enum Error {
     BadHeader,
     #[error("Missing user header")]
     MissingUser,
-    #[error("Failed to deserialize: {0}")]
-    Deserialize(serde_json::Error),
     #[error("Hyper error: {0}")]
     Hyper(gotham::hyper::Error),
     #[error("Content length missing")]
@@ -20,10 +18,18 @@ pub enum Error {
     ReadTimeout,
     #[error("Failed to acquire lock")]
     FailedToAcquireLock,
+    #[error("Failed to deserialize: {0}")]
+    JsonDeserialize(serde_json::Error),
     #[error("Failed to serialize: {0}")]
-    Serialize(serde_json::Error),
+    JsonSerialize(serde_json::Error),
+    #[error("Failed to deserialize timestamp: {0}")]
+    TimeDeserialize(std::num::ParseIntError),
+    #[error("Failed to serialize timestamp: {0}")]
+    TimeSerialize(std::io::Error),
     #[error("HTTP error: {0}")]
     Http(gotham::hyper::http::Error),
+    #[error("Client request is out of sync")]
+    OutOfSync,
 }
 
 impl Error {
@@ -35,12 +41,16 @@ impl Error {
             Self::Store(StoreError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Store(StoreError::StoreFull) => StatusCode::INSUFFICIENT_STORAGE,
             Self::MissingUser | Self::Store(StoreError::NoSuchUser(_)) => StatusCode::FORBIDDEN,
-            Self::Deserialize(_) | Self::BadHeader => StatusCode::BAD_REQUEST,
+            Self::JsonDeserialize(_) | Self::TimeDeserialize(_) | Self::BadHeader => {
+                StatusCode::BAD_REQUEST
+            }
+            Self::OutOfSync => StatusCode::CONFLICT,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ContentLengthMissing => StatusCode::LENGTH_REQUIRED,
             Self::ReadTimeout => StatusCode::REQUEST_TIMEOUT,
             Self::FailedToAcquireLock
-            | Self::Serialize(_)
+            | Self::JsonSerialize(_)
+            | Self::TimeSerialize(_)
             | Self::Http(_)
             | Self::Hyper(_)
             | Self::Store(StoreError::Io(_) | StoreError::Serde(_)) => {
@@ -75,6 +85,18 @@ impl From<gotham::hyper::http::Error> for Error {
 
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
-        Self::Serialize(e)
+        Self::JsonSerialize(e)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Self::TimeSerialize(e)
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(e: std::num::ParseIntError) -> Self {
+        Self::TimeDeserialize(e)
     }
 }

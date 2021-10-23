@@ -34,7 +34,6 @@ fn with_cors(
     gotham::router::builder::build_router(chain, pipelines, |route| {
         use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
 
-        route.options("/last-modified").to(|state| (state, ""));
         route.options("/skull").to(|state| (state, ""));
         route.options("/skull/:id:[0-9]+").to(|state| (state, ""));
         route.options("/quick").to(|state| (state, ""));
@@ -80,9 +79,6 @@ where
     C: gotham::pipeline::chain::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
     P: std::panic::RefUnwindSafe + Send + Sync + 'static,
 {
-    use gotham::router::builder::DefineSingleRoute;
-
-    route.get("/last-modified").to(handler::LastModified);
     route.scope("/skull", Resource::<store::Skull>::setup);
     route.scope("/quick", Resource::<store::Quick>::setup);
     route.scope("/occurrence", Resource::<store::Occurrence>::setup);
@@ -99,6 +95,7 @@ impl<D: store::Selector> Resource<D> {
     {
         use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
 
+        route.head("/").to(handler::LastModified::<D>::new());
         route.get("/").to(handler::List::<D>::new());
         route.post("/").to(handler::Create::<D>::new());
         route

@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, LastModified, Occurrence, Quick, Skull, Store, WithId};
+use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
 #[derive(Debug, Default)]
 pub struct InMemory {
@@ -33,30 +33,6 @@ impl InMemory {
 }
 
 impl Store for InMemory {
-    fn last_modified(&self, user: &str) -> Result<LastModified, Error> {
-        let timestamp = std::cmp::max(
-            std::cmp::max(
-                self.skull
-                    .data
-                    .get(user)
-                    .ok_or_else(|| Error::NoSuchUser(String::from(user)))?
-                    .last_modified,
-                self.quick
-                    .data
-                    .get(user)
-                    .ok_or_else(|| Error::NoSuchUser(String::from(user)))?
-                    .last_modified,
-            ),
-            self.occurrence
-                .data
-                .get(user)
-                .ok_or_else(|| Error::NoSuchUser(String::from(user)))?
-                .last_modified,
-        );
-
-        Ok(LastModified { timestamp })
-    }
-
     fn skull(&mut self) -> &mut dyn Crud<Skull> {
         &mut self.skull
     }
@@ -133,6 +109,13 @@ impl<D: Data> Crud<D> for Container<D> {
             .get_mut(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))
             .and_then(|store| store.delete(id))
+    }
+
+    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error> {
+        self.data
+            .get(user)
+            .ok_or_else(|| Error::NoSuchUser(String::from(user)))
+            .map(|store| store.last_modified)
     }
 }
 
@@ -299,48 +282,52 @@ mod test {
         let mut store = InMemory::new(&[USER]);
 
         assert_eq!(
-            store.last_modified("unknown").unwrap_err().to_string(),
+            store
+                .skull()
+                .last_modified("unknown")
+                .unwrap_err()
+                .to_string(),
             Error::NoSuchUser(String::from("unknown")).to_string()
         );
 
-        let mut last_modified = store.last_modified(USER).unwrap();
+        let mut last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull().list(USER).unwrap();
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store.skull().filter_list(USER, Box::new(|_| true)).unwrap();
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store.skull().create(USER, new_skull("bla", 1.0)).unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
-        last_modified = store.last_modified(USER).unwrap();
+        assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
+        last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull().read(USER, 0).unwrap();
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store
             .skull()
             .update(USER, 0, new_skull("bla", 2.0))
             .unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
-        last_modified = store.last_modified(USER).unwrap();
+        assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
+        last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull().delete(USER, 0).unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
-        last_modified = store.last_modified(USER).unwrap();
+        assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
+        last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull.data.get_mut(USER).unwrap().count = u32::MAX;
         assert!(store.skull().create(USER, new_skull("bla", 1.0)).is_err());
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         assert!(store
             .skull()
             .update(USER, 3, new_skull("bla", 1.0))
             .is_err());
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         assert!(store.skull().delete(USER, 5).is_err());
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store
             .quick()
@@ -352,7 +339,8 @@ mod test {
                 },
             )
             .unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
+        assert_ne!(store.quick().last_modified(USER).unwrap(), last_modified);
     }
 
     #[test]

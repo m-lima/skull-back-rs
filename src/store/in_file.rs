@@ -1,4 +1,4 @@
-use super::{Crud, Error, Id, LastModified, Occurrence, Quick, Skull, Store, WithId};
+use super::{Crud, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
 #[cfg(all(test, feature = "bench"))]
 mod serde;
@@ -131,16 +131,16 @@ impl InFile {
 }
 
 impl Store for InFile {
-    fn last_modified(&self, user: &str) -> Result<LastModified, Error> {
-        let user = fs::User::new(user, self)?;
-        let skull = std::fs::metadata(user.to_path::<Skull>()).and_then(|f| f.modified())?;
-        let quick = std::fs::metadata(user.to_path::<Quick>()).and_then(|f| f.modified())?;
-        let occurrence =
-            std::fs::metadata(user.to_path::<Occurrence>()).and_then(|f| f.modified())?;
+    // fn last_modified(&self, user: &str) -> Result<LastModified, Error> {
+    //     let user = fs::User::new(user, self)?;
+    //     let skull = std::fs::metadata(user.to_path::<Skull>()).and_then(|f| f.modified())?;
+    //     let quick = std::fs::metadata(user.to_path::<Quick>()).and_then(|f| f.modified())?;
+    //     let occurrence =
+    //         std::fs::metadata(user.to_path::<Occurrence>()).and_then(|f| f.modified())?;
 
-        let timestamp = std::cmp::max(skull, std::cmp::max(quick, occurrence));
-        Ok(LastModified { timestamp })
-    }
+    //     let timestamp = std::cmp::max(skull, std::cmp::max(quick, occurrence));
+    //     Ok(LastModified { timestamp })
+    // }
 
     fn skull(&mut self) -> &mut dyn Crud<Skull> {
         self
@@ -239,6 +239,13 @@ impl<D: FileData> Crud<D> for InFile {
             let index = find(id, entries).ok_or(Error::NotFound(id))?;
             Ok(entries.remove(index))
         })
+    }
+
+    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error> {
+        let user = fs::UserPath::new::<D>(user, self)?;
+        std::fs::metadata(user)
+            .and_then(|f| f.modified())
+            .map_err(Error::Io)
     }
 }
 
@@ -397,23 +404,6 @@ impl FileData for Occurrence {
 
 mod fs {
     use super::{Error, FileData, InFile, WithId};
-
-    #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
-    pub struct User(std::path::PathBuf);
-
-    impl User {
-        pub fn new(user: &str, store: &InFile) -> Result<Self, Error> {
-            if store.users.contains(user) {
-                Ok(Self(store.path.join(user)))
-            } else {
-                Err(Error::NoSuchUser(String::from(user)))
-            }
-        }
-
-        pub fn to_path<D: FileData>(&self) -> UserPath {
-            UserPath(self.0.join(D::name()))
-        }
-    }
 
     #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
     pub struct UserPath(std::path::PathBuf);
@@ -594,44 +584,48 @@ mod test {
         let mut store = TestStore::new().with_data();
 
         assert_eq!(
-            store.last_modified("unknown").unwrap_err().to_string(),
+            store
+                .skull()
+                .last_modified("unknown")
+                .unwrap_err()
+                .to_string(),
             Error::NoSuchUser(String::from("unknown")).to_string()
         );
 
-        let mut last_modified = store.last_modified(USER).unwrap();
+        let mut last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull().list(USER).unwrap();
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store.skull().filter_list(USER, Box::new(|_| true)).unwrap();
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store.skull().create(USER, new_skull("bla", 1.0)).unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
-        last_modified = store.last_modified(USER).unwrap();
+        assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
+        last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull().read(USER, 0).unwrap();
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store
             .skull()
             .update(USER, 0, new_skull("bla", 2.0))
             .unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
-        last_modified = store.last_modified(USER).unwrap();
+        assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
+        last_modified = store.skull().last_modified(USER).unwrap();
 
         store.skull().delete(USER, 0).unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
-        last_modified = store.last_modified(USER).unwrap();
+        assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
+        last_modified = store.skull().last_modified(USER).unwrap();
 
         assert!(store
             .skull()
             .update(USER, 3, new_skull("bla", 1.0))
             .is_err());
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         assert!(store.skull().delete(USER, 5).is_err());
-        assert_eq!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store
             .quick()
@@ -643,7 +637,8 @@ mod test {
                 },
             )
             .unwrap();
-        assert_ne!(store.last_modified(USER).unwrap(), last_modified);
+        assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
+        assert_ne!(store.quick().last_modified(USER).unwrap(), last_modified);
     }
 
     #[test]

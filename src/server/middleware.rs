@@ -14,15 +14,18 @@ impl Log {
 
         match error {
             Error::Store(StoreError::NotFound(_) | StoreError::NoSuchUser(_))
-            | Error::Deserialize(_)
+            | Error::JsonDeserialize(_)
+            | Error::TimeDeserialize(_)
             | Error::PayloadTooLarge
             | Error::MissingUser
+            | Error::OutOfSync
             | Error::BadHeader
             | Error::ContentLengthMissing => log::Level::Info,
             Error::ReadTimeout => log::Level::Warn,
             Error::Store(StoreError::StoreFull | StoreError::Io(_) | StoreError::Serde(_))
             | Error::FailedToAcquireLock
-            | Error::Serialize(_)
+            | Error::JsonSerialize(_)
+            | Error::TimeSerialize(_)
             | Error::Http(_)
             | Error::Hyper(_) => log::Level::Error,
         }
