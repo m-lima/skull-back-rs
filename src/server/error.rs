@@ -44,7 +44,7 @@ impl Error {
             Self::JsonDeserialize(_) | Self::TimeDeserialize(_) | Self::BadHeader => {
                 StatusCode::BAD_REQUEST
             }
-            Self::OutOfSync => StatusCode::CONFLICT,
+            Self::OutOfSync => StatusCode::PRECONDITION_FAILED,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ContentLengthMissing => StatusCode::LENGTH_REQUIRED,
             Self::ReadTimeout => StatusCode::REQUEST_TIMEOUT,
