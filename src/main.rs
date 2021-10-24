@@ -1,6 +1,6 @@
 #![deny(warnings, clippy::pedantic, clippy::all)]
 #![warn(rust_2018_idioms)]
-#![cfg_attr(feature = "bench", feature(test))]
+#![cfg_attr(all(test, nightly), feature(test))]
 
 mod options;
 mod server;

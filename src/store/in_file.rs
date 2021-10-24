@@ -1,6 +1,6 @@
 use super::{Crud, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
-#[cfg(all(test, feature = "bench"))]
+#[cfg(all(test, nightly))]
 mod serde;
 
 macro_rules! parse {
@@ -848,7 +848,7 @@ mod test {
     }
 }
 
-#[cfg(all(test, feature = "bench"))]
+#[cfg(all(test, nightly))]
 mod bench {
 
     mod handwritten {

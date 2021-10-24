@@ -2,6 +2,7 @@
 name = "skull"
 version = "0.1.0"
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.44"
@@ -22,9 +23,10 @@ tokio = "1.12.0"
 csv = "1.1.6"
 rand = "0.8.4"
 
-[features]
-bench = []
+[build-dependencies]
+rustc_version = "0.4.0"
 
 [profile.release]
 lto = true
 codegen-units = 1
+
