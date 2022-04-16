@@ -501,18 +501,17 @@ mod test {
 
             let name = format!("{:016x}", rand::thread_rng().gen::<u64>());
             let path = std::env::temp_dir().join("skull-test");
-            if !path.exists() {
+            if path.exists() {
+                assert!(path.is_dir(), "Cannot use {} as test path", path.display());
+            } else {
                 std::fs::create_dir(&path).unwrap();
-            } else if !path.is_dir() {
-                panic!("Cannot use {} as test path", path.display());
             }
             let path = path.join(name);
-            if path.exists() {
-                panic!(
-                    "Cannot use {} as test path as it already exists",
-                    path.display()
-                );
-            }
+            assert!(
+                !path.exists(),
+                "Cannot use {} as test path as it already exists",
+                path.display()
+            );
             std::fs::create_dir(&path).unwrap();
             let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
                 drop(std::fs::remove_dir_all(&path));

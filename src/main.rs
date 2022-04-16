@@ -15,7 +15,7 @@ fn init_logger() {
         .ok()
         .filter(|force| force != "0")
         .map(|_| simplelog::ColorChoice::Always)
-        .or({
+        .or_else(|| {
             std::env::var("CLICOLOR")
                 .ok()
                 .filter(|clicolor| clicolor == "0")
