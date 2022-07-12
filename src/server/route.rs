@@ -97,7 +97,7 @@ impl<D: store::Selector> Resource<D> {
         route.head("/").to(handler::LastModified::<D>::new());
         route
             .get("/")
-            .with_path_extractor::<mapper::request::Limit>()
+            .with_query_string_extractor::<mapper::request::Limit>()
             .to(handler::List::<D>::new());
         route.post("/").to(handler::Create::<D>::new());
         route
