@@ -1,5 +1,6 @@
 // Allowed because of proc-macro
 #![allow(clippy::trait_duplication_in_bounds)]
+#![allow(clippy::type_repetition_in_bounds)]
 
 use super::Id;
 

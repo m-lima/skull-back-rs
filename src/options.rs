@@ -1,10 +1,9 @@
-use clap::Clap;
-
 pub fn parse() -> Options {
+    use clap::Parser;
     Options::parse()
 }
 
-#[derive(Clap)]
+#[derive(clap::Parser)]
 pub struct Options {
     /// Selects the port to serve on
     #[clap(short, long, default_value = "80")]
@@ -20,7 +19,7 @@ pub struct Options {
 
     /// Sets storage location
     ///
-    /// Will store secrets in memory if no path is provided
+    /// Will store data in memory if no path is provided
     #[clap(short, long, parse(try_from_str = to_dir_path))]
     pub store_path: Option<std::path::PathBuf>,
 

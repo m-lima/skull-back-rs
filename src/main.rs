@@ -46,12 +46,15 @@ fn main() {
         std::process::exit(-1);
     });
 
-    if threads > 0 {
+    if let Err(e) = if threads > 0 {
         let threads = usize::from(threads);
         log::info!("Core threads set to {}", threads);
-        gotham::start_with_num_threads(format!("0.0.0.0:{}", port), route, threads);
+        gotham::start_with_num_threads(format!("0.0.0.0:{}", port), route, threads)
     } else {
         log::info!("Core threads set to automatic");
-        gotham::start(format!("0.0.0.0:{}", port), route);
+        gotham::start(format!("0.0.0.0:{}", port), route)
+    } {
+        log::error!("Could not start server: {}", e);
+        std::process::exit(-2);
     }
 }

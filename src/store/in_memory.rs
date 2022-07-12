@@ -58,12 +58,20 @@ impl<D: Data> Default for Container<D> {
 }
 
 impl<D: Data> Crud<D> for Container<D> {
-    fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+    fn list(
+        &self,
+        user: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         self.data
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))
             .map(UserContainer::list)
-            .map(|s| s.map(std::borrow::Cow::Borrowed).collect())
+            .map(|s| {
+                s.take(limit.unwrap_or(usize::MAX))
+                    .map(std::borrow::Cow::Borrowed)
+                    .collect()
+            })
     }
 
     fn filter_list(
@@ -292,7 +300,7 @@ mod test {
 
         let mut last_modified = store.skull().last_modified(USER).unwrap();
 
-        store.skull().list(USER).unwrap();
+        store.skull().list(USER, None).unwrap();
         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store.skull().filter_list(USER, Box::new(|_| true)).unwrap();
@@ -341,6 +349,35 @@ mod test {
             .unwrap();
         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
         assert_ne!(store.quick().last_modified(USER).unwrap(), last_modified);
+    }
+
+    #[test]
+    fn list() {
+        const USER: &str = "bloink";
+        let mut store = InMemory::new(&[USER]);
+
+        store.skull().create(USER, new_skull("skull", 0.1)).unwrap();
+        store
+            .skull()
+            .create(USER, new_skull("skull2", 0.2))
+            .unwrap();
+        store
+            .skull()
+            .create(USER, new_skull("skull3", 0.3))
+            .unwrap();
+
+        {
+            let skulls = store.skull().list(USER, None).unwrap();
+            assert_eq!(skulls.len(), 3);
+        }
+        {
+            let skulls = store.skull().list(USER, Some(1)).unwrap();
+            assert_eq!(skulls.len(), 1);
+        }
+        {
+            let skulls = store.skull().list(USER, Some(0)).unwrap();
+            assert_eq!(skulls.len(), 0);
+        }
     }
 
     #[test]

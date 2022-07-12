@@ -156,7 +156,11 @@ impl Store for InFile {
 }
 
 impl<D: FileData> Crud<D> for InFile {
-    fn list(&self, user: &str) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+    fn list(
+        &self,
+        user: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         fs::UserPath::new::<D>(user, self)
             .and_then(fs::reader)
             .map(|reader| {
@@ -164,6 +168,7 @@ impl<D: FileData> Crud<D> for InFile {
                     .filter_map(Result::ok)
                     .map(D::read)
                     .filter_map(Result::ok)
+                    .take(limit.unwrap_or(usize::MAX))
                     .map(std::borrow::Cow::Owned)
                     .collect()
             })
@@ -593,7 +598,7 @@ mod test {
 
         let mut last_modified = store.skull().last_modified(USER).unwrap();
 
-        store.skull().list(USER).unwrap();
+        store.skull().list(USER, None).unwrap();
         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
 
         store.skull().filter_list(USER, Box::new(|_| true)).unwrap();
@@ -638,6 +643,23 @@ mod test {
             .unwrap();
         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
         assert_ne!(store.quick().last_modified(USER).unwrap(), last_modified);
+    }
+
+    #[test]
+    fn list() {
+        let mut store = TestStore::new().with_data();
+        {
+            let skulls = store.skull().list(USER, None).unwrap();
+            assert_eq!(skulls.len(), 3);
+        }
+        {
+            let skulls = store.skull().list(USER, Some(1)).unwrap();
+            assert_eq!(skulls.len(), 1);
+        }
+        {
+            let skulls = store.skull().list(USER, Some(0)).unwrap();
+            assert_eq!(skulls.len(), 0);
+        }
     }
 
     #[test]

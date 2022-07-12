@@ -59,7 +59,7 @@ impl<D: store::Selector> LastModified<D> {
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
-                gotham::state::request_id::request_id(state),
+                gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
             .body(gotham::hyper::Body::empty())?;
@@ -78,12 +78,13 @@ impl<D: store::Selector> List<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
+        let limit = mapper::request::Limit::take_from(state);
         let user = mapper::request::User::borrow_from(state)?;
         let (last_modified, json) = {
             let mut lock = middleware::Store::borrow_from(state).get()?;
             let crud = D::select(&mut *lock);
 
-            let data = crud.list(user)?;
+            let data = crud.list(user, limit.limit)?;
             (crud.last_modified(user)?, serde_json::to_vec(&data)?)
         };
 
@@ -95,7 +96,7 @@ impl<D: store::Selector> List<D> {
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
-                gotham::state::request_id::request_id(state),
+                gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
             .body(gotham::hyper::Body::from(json))?;
@@ -133,7 +134,7 @@ impl<D: store::Selector> Create<D> {
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
-                gotham::state::request_id::request_id(state),
+                gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::CREATED)
             .body(gotham::hyper::Body::from(id))?;
@@ -171,7 +172,7 @@ impl<D: store::Selector> Read<D> {
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
-                gotham::state::request_id::request_id(state),
+                gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
             .body(gotham::hyper::Body::from(json))?;
@@ -215,7 +216,7 @@ impl<D: store::Selector> Update<D> {
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
-                gotham::state::request_id::request_id(state),
+                gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
             .body(gotham::hyper::Body::from(json))?;
@@ -258,7 +259,7 @@ impl<D: store::Selector> Delete<D> {
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
-                gotham::state::request_id::request_id(state),
+                gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
             .body(gotham::hyper::Body::from(json))?;
