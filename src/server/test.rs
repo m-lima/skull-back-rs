@@ -23,20 +23,24 @@ impl CopiablePath {
     }
 }
 
-struct TestServer(gotham::test::TestServer, std::path::PathBuf);
+struct TestServer(gotham::test::TestServer, Option<std::path::PathBuf>);
 
 impl TestServer {
-    fn new() -> Self {
-        let dir = std::env::temp_dir().join(rand::random::<u64>().to_string());
-        std::fs::create_dir(&dir).unwrap();
-        let transfer_dir = CopiablePath::new(&dir);
+    fn new(dir: impl Into<Option<std::path::PathBuf>>) -> Self {
+        let dir = dir
+            .into()
+            .map(|p| p.join(rand::random::<u64>().to_string()));
+        let transfer_dir = dir.as_ref().map(|dir| {
+            std::fs::create_dir(dir).unwrap();
+            CopiablePath::new(dir)
+        });
 
         let server = gotham::test::TestServer::new(move || {
             super::route(crate::options::Options {
                 port: 0,
                 threads: 0,
                 cors: None,
-                store_path: Some(transfer_dir.into_path()),
+                store_path: transfer_dir.map(CopiablePath::into_path),
                 web_path: None,
                 users: vec![String::from(USER)],
             })
@@ -52,11 +56,11 @@ impl TestServer {
                 .post(
                     "http://localhost/skull",
                     r#"{
-                    "name": "skull1",
-                    "color": "",
-                    "icon": "",
-                    "unitPrice": 0.1
-                }"#,
+                        "name": "skull1",
+                        "color": "",
+                        "icon": "",
+                        "unitPrice": 0.1
+                    }"#,
                     mime::APPLICATION_JSON,
                 )
                 .with_header(
@@ -138,7 +142,9 @@ impl TestServer {
 
 impl Drop for TestServer {
     fn drop(&mut self) {
-        drop(std::fs::remove_dir_all(&self.1));
+        if let Some(dir) = &self.1 {
+            drop(std::fs::remove_dir_all(dir));
+        }
     }
 }
 
@@ -150,91 +156,151 @@ impl std::ops::Deref for TestServer {
     }
 }
 
-#[test]
-fn forbidden() {
-    let server = TestServer::new();
+mod tests {
+    use super::{TestServer, USER};
 
-    assert_eq!(
-        server
+    pub fn forbidden(dir: impl Into<Option<std::path::PathBuf>>) {
+        let server = TestServer::new(dir);
+
+        let response = server
             .client()
             .get("http://localhost/skull")
             .with_header(
-                super::mapper::request::USER_HEADER,
+                crate::server::mapper::request::USER_HEADER,
                 gotham::hyper::header::HeaderValue::from_str("").unwrap(),
             )
             .perform()
-            .unwrap()
-            .status(),
-        403
-    );
-}
+            .unwrap();
+        assert_eq!(response.status(), 403);
+        let body = response.read_utf8_body().unwrap();
+        assert_eq!(body, String::new());
+    }
 
-#[test]
-fn unrecognized_skulls_are_allowed() {
-    let server = TestServer::new().populate();
+    pub fn unrecognized_skulls_are_allowed(dir: impl Into<Option<std::path::PathBuf>>) {
+        let server = TestServer::new(dir);
 
-    let response = server
-        .client()
-        .post(
-            "http://localhost/occurrence",
-            r#"{
+        let response = server
+            .client()
+            .post(
+                "http://localhost/occurrence",
+                r#"{
                 "skull": 666,
                 "amount": 1,
                 "millis": 4000
             }"#,
-            mime::APPLICATION_JSON,
-        )
-        .with_header(
-            super::mapper::request::USER_HEADER,
-            gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
-        )
-        .perform()
-        .unwrap();
-    assert_eq!(response.status(), 201);
-    let body = response.read_utf8_body().unwrap();
-    assert_eq!(body, String::from("0"));
+                mime::APPLICATION_JSON,
+            )
+            .with_header(
+                crate::server::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(response.status(), 201);
+        let body = response.read_utf8_body().unwrap();
+        assert_eq!(body, String::from("0"));
+    }
+
+    pub fn bad_request(dir: impl Into<Option<std::path::PathBuf>>) {
+        let server = TestServer::new(dir);
+
+        let response = server
+            .client()
+            .post(
+                "http://localhost/occurrence",
+                r#"{
+                "skul": 666,
+                "amount": 1,
+                "millis": 4000
+            }"#,
+                mime::APPLICATION_JSON,
+            )
+            .with_header(
+                crate::server::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(response.status(), 400);
+        let body = response.read_utf8_body().unwrap();
+        assert_eq!(body, String::new());
+    }
+
+    pub fn list(dir: impl Into<Option<std::path::PathBuf>>) {
+        let server = TestServer::new(dir).populate();
+
+        let response = server
+            .client()
+            .get("http://localhost/skull")
+            .with_header(
+                crate::server::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let body = response.read_utf8_body().unwrap();
+        assert_eq!(
+            body,
+            String::from(
+                r#"[{"id":0,"name":"skull1","color":"","icon":"","unitPrice":0.1},{"id":1,"name":"skull2","color":"","icon":"","unitPrice":0.2},{"id":2,"name":"skull3","color":"","icon":"","unitPrice":0.3}]"#
+            )
+        );
+    }
+
+    pub fn list_limited(dir: impl Into<Option<std::path::PathBuf>>) {
+        let server = TestServer::new(dir).populate();
+
+        let response = server
+            .client()
+            .get("http://localhost/skull?limit=1")
+            .with_header(
+                crate::server::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let body = response.read_utf8_body().unwrap();
+        assert_eq!(
+            body,
+            String::from(r#"[{"id":0,"name":"skull1","color":"","icon":"","unitPrice":0.1}]"#)
+        );
+    }
 }
 
-#[test]
-fn list() {
-    let server = TestServer::new().populate();
+macro_rules! impl_test {
+    ($dir:expr, $mod:ident) => {
+        mod $mod {
+            use super::tests;
 
-    let response = server
-        .client()
-        .get("http://localhost/skull")
-        .with_header(
-            super::mapper::request::USER_HEADER,
-            gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
-        )
-        .perform()
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let body = response.read_utf8_body().unwrap();
-    assert_eq!(
-        body,
-        String::from(
-            r#"[{"id":0,"name":"skull1","color":"","icon":"","unitPrice":0.1},{"id":1,"name":"skull2","color":"","icon":"","unitPrice":0.2},{"id":2,"name":"skull3","color":"","icon":"","unitPrice":0.3}]"#
-        )
-    );
+            #[test]
+            fn forbidden() {
+                tests::forbidden($dir);
+            }
+
+            #[test]
+            fn unrecognized_skulls_are_allowed() {
+                tests::unrecognized_skulls_are_allowed($dir);
+            }
+
+            #[test]
+            fn bad_request() {
+                tests::bad_request($dir);
+            }
+
+            #[test]
+            fn list() {
+                tests::list($dir);
+            }
+
+            #[test]
+            fn list_limited() {
+                tests::list_limited($dir);
+            }
+        }
+    };
 }
 
-#[test]
-fn list_limited() {
-    let server = TestServer::new().populate();
-
-    let response = server
-        .client()
-        .get("http://localhost/skull?limit=1")
-        .with_header(
-            super::mapper::request::USER_HEADER,
-            gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
-        )
-        .perform()
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let body = response.read_utf8_body().unwrap();
-    assert_eq!(
-        body,
-        String::from(r#"[{"id":0,"name":"skull1","color":"","icon":"","unitPrice":0.1}]"#)
-    );
-}
+impl_test!(None, in_memory);
+impl_test!(std::env::temp_dir(), in_file);
