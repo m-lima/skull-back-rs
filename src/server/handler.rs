@@ -55,7 +55,7 @@ impl<D: store::Selector> LastModified<D> {
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
             .header(
                 gotham::hyper::header::LAST_MODIFIED,
-                mapper::time::serialize(&last_modified)?,
+                mapper::time::serialize(&last_modified),
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
@@ -92,7 +92,7 @@ impl<D: store::Selector> List<D> {
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
             .header(
                 gotham::hyper::header::LAST_MODIFIED,
-                mapper::time::serialize(&last_modified)?,
+                mapper::time::serialize(&last_modified),
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
@@ -130,7 +130,7 @@ impl<D: store::Selector> Create<D> {
             .header(gotham::hyper::header::CONTENT_TYPE, "text/plain")
             .header(
                 gotham::hyper::header::LAST_MODIFIED,
-                mapper::time::serialize(&last_modified)?,
+                mapper::time::serialize(&last_modified),
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
@@ -168,7 +168,7 @@ impl<D: store::Selector> Read<D> {
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
             .header(
                 gotham::hyper::header::LAST_MODIFIED,
-                mapper::time::serialize(&last_modified)?,
+                mapper::time::serialize(&last_modified),
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
@@ -212,7 +212,7 @@ impl<D: store::Selector> Update<D> {
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
             .header(
                 gotham::hyper::header::LAST_MODIFIED,
-                mapper::time::serialize(&last_modified)?,
+                mapper::time::serialize(&last_modified),
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,
@@ -255,7 +255,7 @@ impl<D: store::Selector> Delete<D> {
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
             .header(
                 gotham::hyper::header::LAST_MODIFIED,
-                mapper::time::serialize(&last_modified)?,
+                mapper::time::serialize(&last_modified),
             )
             .header(
                 gotham::helpers::http::header::X_REQUEST_ID,

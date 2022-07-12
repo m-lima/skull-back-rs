@@ -5,16 +5,15 @@ pub mod time {
 
     // Allowed because u64 millis is already many times the age of the universe
     #[allow(clippy::cast_possible_truncation)]
-    pub fn serialize(time: &std::time::SystemTime) -> Result<Vec<u8>, Error> {
+    pub fn serialize(time: &std::time::SystemTime) -> String {
         let millis = time
             .duration_since(std::time::UNIX_EPOCH)
             // Allowed because this number is unsigned and can never go back in time
             .unwrap()
             .as_millis();
 
-        let mut buffer = Vec::with_capacity(13);
-        itoa::write(&mut buffer, millis as u64)?;
-        Ok(buffer)
+        let mut buffer = itoa::Buffer::new();
+        buffer.format(millis as u64).to_owned()
     }
 
     pub fn deserialize(timestamp: &str) -> Result<std::time::SystemTime, Error> {

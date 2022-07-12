@@ -116,12 +116,12 @@ impl<'w, W: std::io::Write> serde::Serializer for &mut Serde<'w, W> {
     }
 
     fn serialize_f32(self, value: f32) -> Result<Self::Ok, Self::Error> {
-        dtoa::write(self.writer as &mut W, value)?;
+        ryu::write(self.writer as &mut W, value)?;
         Ok(())
     }
 
     fn serialize_f64(self, value: f64) -> Result<Self::Ok, Self::Error> {
-        dtoa::write(self.writer as &mut W, value)?;
+        ryu::write(self.writer as &mut W, value)?;
         Ok(())
     }
 

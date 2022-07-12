@@ -47,14 +47,16 @@ macro_rules! parse {
 }
 
 macro_rules! write_number {
-    ($serializer:path, $writer:expr, $type:ty, $value:expr, $field:literal, $data:literal) => {
-        $serializer($writer as &mut $type, $value).map_err(|e| {
-            Error::Serde(format!(
-                concat!("Could not serialize `", $field, "` for ", $data, ": {}"),
-                e
-            ))
-        })
-    };
+    ($serializer:ident, $writer:expr, $value:expr, $field:literal, $data:literal) => {{
+        $writer
+            .write_all($serializer::Buffer::new().format($value).as_bytes())
+            .map_err(|e| {
+                Error::Serde(format!(
+                    concat!("Could not serialize `", $field, "` for ", $data, ": {}"),
+                    e
+                ))
+            })
+    }};
 }
 
 pub struct InFile {
@@ -311,7 +313,7 @@ impl FileData for Skull {
 
     fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
         let data = &with_id.data;
-        write_number!(itoa::write, writer, W, with_id.id, "id", "Skull")?;
+        write_number!(itoa, writer, with_id.id, "id", "Skull")?;
 
         writer.write_all(b"\t")?;
         writer.write_all(data.name.as_bytes())?;
@@ -321,18 +323,11 @@ impl FileData for Skull {
         writer.write_all(data.icon.as_bytes())?;
         writer.write_all(b"\t")?;
 
-        write_number!(
-            dtoa::write,
-            writer,
-            W,
-            data.unit_price,
-            "unit_price",
-            "Skull"
-        )?;
+        write_number!(ryu, writer, data.unit_price, "unit_price", "Skull")?;
         writer.write_all(b"\t")?;
 
         if let Some(limit) = data.limit {
-            write_number!(dtoa::write, writer, W, limit, "limit", "Skull")?;
+            write_number!(ryu, writer, limit, "limit", "Skull")?;
         }
 
         writer.write_all(b"\n").map_err(Error::Io)
@@ -358,11 +353,11 @@ impl FileData for Quick {
     fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
         let data = &with_id.data;
 
-        write_number!(itoa::write, writer, W, with_id.id, "id", "Quick")?;
+        write_number!(itoa, writer, with_id.id, "id", "Quick")?;
         writer.write_all(b"\t")?;
-        write_number!(itoa::write, writer, W, data.skull, "skull", "Quick")?;
+        write_number!(itoa, writer, data.skull, "skull", "Quick")?;
         writer.write_all(b"\t")?;
-        write_number!(dtoa::write, writer, W, data.amount, "amount", "Quick")?;
+        write_number!(ryu, writer, data.amount, "amount", "Quick")?;
         writer.write_all(b"\n").map_err(Error::Io)
     }
 }
@@ -396,13 +391,13 @@ impl FileData for Occurrence {
     fn write<W: std::io::Write>(with_id: &WithId<Self>, writer: &mut W) -> Result<(), Error> {
         let data = &with_id.data;
 
-        write_number!(itoa::write, writer, W, with_id.id, "id", "Occurrence")?;
+        write_number!(itoa, writer, with_id.id, "id", "Occurrence")?;
         writer.write_all(b"\t")?;
-        write_number!(itoa::write, writer, W, data.skull, "skull", "Occurrence")?;
+        write_number!(itoa, writer, data.skull, "skull", "Occurrence")?;
         writer.write_all(b"\t")?;
-        write_number!(dtoa::write, writer, W, data.amount, "amount", "Occurrence")?;
+        write_number!(ryu, writer, data.amount, "amount", "Occurrence")?;
         writer.write_all(b"\t")?;
-        write_number!(itoa::write, writer, W, data.millis, "millis", "Occurrence")?;
+        write_number!(itoa, writer, data.millis, "millis", "Occurrence")?;
         writer.write_all(b"\n").map_err(Error::Io)
     }
 }
