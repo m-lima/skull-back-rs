@@ -1,50 +1,65 @@
 use super::{Data, Error, Id, Occurrence, Quick, Skull, WithId};
 
-pub trait Store: Send + 'static {
-    fn skull(&mut self) -> &mut dyn Crud<Skull>;
-    fn quick(&mut self) -> &mut dyn Crud<Quick>;
-    fn occurrence(&mut self) -> &mut dyn Crud<Occurrence>;
+pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
+    fn skull(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Skull>>, Error>;
+    fn quick(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Quick>>, Error>;
+    fn occurrence(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Occurrence>>, Error>;
 }
 
 // TODO: When using a RDB, will this interface still make sense?
 // TODO: Is it possible to avoid the Vec's?
 // TODO: OFfer a filter per day for Occurrence
 pub trait Crud<D: Data> {
-    fn list(
-        &self,
-        user: &str,
-        limit: Option<usize>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
+    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
     fn filter_list(
         &self,
-        user: &str,
         filter: Box<dyn Fn(&WithId<D>) -> bool>,
     ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
-    fn create(&mut self, user: &str, data: D) -> Result<Id, Error>;
-    fn read(&self, user: &str, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error>;
-    fn update(&mut self, user: &str, id: Id, data: D) -> Result<WithId<D>, Error>;
-    fn delete(&mut self, user: &str, id: Id) -> Result<WithId<D>, Error>;
-    fn last_modified(&self, user: &str) -> Result<std::time::SystemTime, Error>;
+    fn create(&mut self, data: D) -> Result<Id, Error>;
+    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error>;
+    fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error>;
+    fn delete(&mut self, id: Id) -> Result<WithId<D>, Error>;
+    fn last_modified(&self) -> Result<std::time::SystemTime, Error>;
 }
 
 pub trait Selector: Data {
-    fn select(store: &mut dyn Store) -> &mut dyn Crud<Self>;
+    fn read<'a>(
+        store: &'a dyn Store,
+        user: &str,
+    ) -> Result<std::sync::RwLockReadGuard<'a, (dyn Crud<Self> + 'static)>, Error>;
+
+    fn write<'a>(
+        store: &'a dyn Store,
+        user: &str,
+    ) -> Result<std::sync::RwLockWriteGuard<'a, (dyn Crud<Self> + 'static)>, Error>;
 }
 
-impl Selector for Skull {
-    fn select(store: &mut dyn Store) -> &mut dyn Crud<Self> {
-        store.skull()
-    }
+macro_rules! impl_selector {
+    ($name:ty, $fn:ident) => {
+        impl Selector for $name {
+            fn read<'a>(
+                store: &'a dyn Store,
+                user: &str,
+            ) -> Result<std::sync::RwLockReadGuard<'a, (dyn Crud<Self> + 'static)>, Error> {
+                store
+                    .$fn(user)?
+                    .read()
+                    .map_err(|_| Error::FailedToAcquireLock)
+            }
+
+            fn write<'a>(
+                store: &'a dyn Store,
+                user: &str,
+            ) -> Result<std::sync::RwLockWriteGuard<'a, (dyn Crud<Self> + 'static)>, Error> {
+                store
+                    .$fn(user)?
+                    .write()
+                    .map_err(|_| Error::FailedToAcquireLock)
+            }
+        }
+    };
 }
 
-impl Selector for Quick {
-    fn select(store: &mut dyn Store) -> &mut dyn Crud<Self> {
-        store.quick()
-    }
-}
-
-impl Selector for Occurrence {
-    fn select(store: &mut dyn Store) -> &mut dyn Crud<Self> {
-        store.occurrence()
-    }
-}
+impl_selector!(Skull, skull);
+impl_selector!(Quick, quick);
+impl_selector!(Occurrence, occurrence);

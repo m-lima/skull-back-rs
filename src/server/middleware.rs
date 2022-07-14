@@ -22,8 +22,12 @@ impl Log {
             | Error::BadHeader
             | Error::ContentLengthMissing => log::Level::Info,
             Error::ReadTimeout => log::Level::Warn,
-            Error::Store(StoreError::StoreFull | StoreError::Io(_) | StoreError::Serde(_))
-            | Error::FailedToAcquireLock
+            Error::Store(
+                StoreError::StoreFull
+                | StoreError::Io(_)
+                | StoreError::Serde(_)
+                | StoreError::FailedToAcquireLock,
+            )
             | Error::JsonSerialize(_)
             | Error::TimeSerialize(_)
             | Error::Http(_)
@@ -144,20 +148,15 @@ impl gotham::middleware::Middleware for Log {
 
 // TODO: Got a big ol lock here, for all users, all data types
 #[derive(Clone, gotham_derive::StateData, gotham_derive::NewMiddleware)]
-pub struct Store(std::sync::Arc<std::sync::Mutex<dyn store::Store>>);
+pub struct Store(std::sync::Arc<dyn store::Store>);
 
 impl Store {
     pub fn new(store: impl store::Store) -> Self {
-        Self(std::sync::Arc::new(std::sync::Mutex::new(store)))
+        Self(std::sync::Arc::new(store))
     }
 
-    pub fn get(
-        &self,
-    ) -> Result<
-        std::sync::MutexGuard<'_, dyn store::Store>,
-        std::sync::PoisonError<std::sync::MutexGuard<'_, dyn store::Store>>,
-    > {
-        self.0.lock()
+    pub fn get(&self) -> &dyn store::Store {
+        &*self.0
     }
 }
 

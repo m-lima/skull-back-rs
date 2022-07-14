@@ -47,8 +47,8 @@ impl<D: store::Selector> LastModified<D> {
 
         let user = mapper::request::User::borrow_from(state)?;
         let last_modified = {
-            let mut lock = middleware::Store::borrow_from(state).get()?;
-            D::select(&mut *lock).last_modified(user)?
+            let store = middleware::Store::borrow_from(state).get();
+            D::read(store, user)?.last_modified()?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -81,11 +81,11 @@ impl<D: store::Selector> List<D> {
         let limit = mapper::request::Limit::take_from(state);
         let user = mapper::request::User::borrow_from(state)?;
         let (last_modified, json) = {
-            let mut lock = middleware::Store::borrow_from(state).get()?;
-            let crud = D::select(&mut *lock);
+            let store = middleware::Store::borrow_from(state).get();
+            let crud = D::read(store, user)?;
 
-            let data = crud.list(user, limit.limit)?;
-            (crud.last_modified(user)?, serde_json::to_vec(&data)?)
+            let data = crud.list(limit.limit)?;
+            (crud.last_modified()?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -115,15 +115,15 @@ impl<D: store::Selector> Create<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
-        let user = mapper::request::User::borrow_from(state).map(String::from)?;
         let data = mapper::request::Body::take_from(state).await?;
+        let user = mapper::request::User::borrow_from(state)?;
 
         let (last_modified, id) = {
-            let mut lock = middleware::Store::borrow_from(state).get()?;
-            let crud = D::select(&mut *lock);
+            let store = middleware::Store::borrow_from(state).get();
+            let mut crud = D::write(store, user)?;
 
-            let data = crud.create(&user, data)?;
-            (crud.last_modified(&user)?, serde_json::to_vec(&data)?)
+            let data = crud.create(data)?;
+            (crud.last_modified()?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -157,11 +157,11 @@ impl<D: store::Selector> Read<D> {
         let id = mapper::request::Id::borrow_from(state).id;
 
         let (last_modified, json) = {
-            let mut lock = middleware::Store::borrow_from(state).get()?;
-            let crud = D::select(&mut *lock);
+            let store = middleware::Store::borrow_from(state).get();
+            let crud = D::read(store, user)?;
 
-            let data = crud.read(user, id)?;
-            (crud.last_modified(user)?, serde_json::to_vec(&data)?)
+            let data = crud.read(id)?;
+            (crud.last_modified()?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -191,21 +191,21 @@ impl<D: store::Selector> Update<D> {
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
 
-        let user = mapper::request::User::borrow_from(state).map(String::from)?;
         let id = mapper::request::Id::borrow_from(state).id;
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
         let data = mapper::request::Body::take_from(state).await?;
+        let user = mapper::request::User::borrow_from(state)?;
 
         let (last_modified, json) = {
-            let mut lock = middleware::Store::borrow_from(state).get()?;
-            let crud = D::select(&mut *lock);
+            let store = middleware::Store::borrow_from(state).get();
+            let mut crud = D::write(store, user)?;
 
-            if crud.last_modified(&user)? > unmodified_since {
+            if crud.last_modified()? > unmodified_since {
                 return Err(Error::OutOfSync);
             }
 
-            let data = crud.update(&user, id, data)?;
-            (crud.last_modified(&user)?, serde_json::to_vec(&data)?)
+            let data = crud.update(id, data)?;
+            (crud.last_modified()?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -240,15 +240,15 @@ impl<D: store::Selector> Delete<D> {
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
 
         let (last_modified, json) = {
-            let mut lock = middleware::Store::borrow_from(state).get()?;
-            let crud = D::select(&mut *lock);
+            let store = middleware::Store::borrow_from(state).get();
+            let mut crud = D::write(store, user)?;
 
-            if crud.last_modified(user)? > unmodified_since {
+            if crud.last_modified()? > unmodified_since {
                 return Err(Error::OutOfSync);
             }
 
-            let data = crud.delete(user, id)?;
-            (crud.last_modified(user)?, serde_json::to_vec(&data)?)
+            let data = crud.delete(id)?;
+            (crud.last_modified()?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()

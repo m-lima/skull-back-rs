@@ -1,5 +1,6 @@
 use super::Id;
 
+#[allow(dead_code)]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("User not found `{0}`")]
@@ -9,13 +10,9 @@ pub enum Error {
     #[error("Store full")]
     StoreFull,
     #[error("{0}")]
-    Io(std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Serde error: {0}")]
     Serde(String),
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
+    #[error("Failed to acquire lock")]
+    FailedToAcquireLock,
 }

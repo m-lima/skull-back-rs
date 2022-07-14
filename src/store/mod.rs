@@ -1,7 +1,7 @@
 mod crud;
 mod data;
 mod error;
-mod in_file;
+// mod in_file;
 mod in_memory;
 
 pub type Id = u32;
@@ -17,11 +17,14 @@ where
     in_memory::InMemory::new(users)
 }
 
-pub fn in_file<S, I, P>(path: P, users: I) -> anyhow::Result<impl Store>
+#[allow(clippy::unnecessary_wraps)]
+// pub fn in_file<S, I, P>(path: P, users: I) -> anyhow::Result<impl Store>
+pub fn in_file<S, I, P>(_path: P, users: I) -> anyhow::Result<impl Store>
 where
-    S: AsRef<str>,
+    // S: AsRef<str>,
+    S: ToString,
     I: std::iter::IntoIterator<Item = S>,
     P: AsRef<std::path::Path>,
 {
-    in_file::InFile::new(path, users)
+    Ok(in_memory::InMemory::new(users))
 }

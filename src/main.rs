@@ -8,7 +8,9 @@ mod store;
 
 fn init_logger() {
     let config = simplelog::ConfigBuilder::new()
-        .set_time_format_str("%Y-%m-%dT%H:%M:%SZ")
+        .set_time_format_custom(simplelog::format_description!(
+            "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
+        ))
         .build();
 
     let color_choice = std::env::var("CLICOLOR_FORCE")
