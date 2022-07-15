@@ -1,6 +1,5 @@
 use super::Id;
 
-#[allow(dead_code)]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("User not found `{0}`")]
