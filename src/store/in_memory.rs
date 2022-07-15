@@ -116,7 +116,7 @@ impl<D: Data> Crud<D> for UserContainer<D> {
         Ok(self
             .data
             .iter()
-            .take(limit.unwrap_or(usize::MAX))
+            .skip(self.data.len() - limit.unwrap_or(self.data.len()))
             .map(std::borrow::Cow::Borrowed)
             .collect())
     }

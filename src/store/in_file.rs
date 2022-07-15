@@ -254,14 +254,19 @@ impl<D: FileData> UserFile<D> {
 
 impl<D: FileData> Crud<D> for UserFile<D> {
     fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
-        Ok(self
+        let entries = self
             .lines()?
             .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line(line))
-            .take(limit.unwrap_or(usize::MAX))
             .map(std::borrow::Cow::Owned)
-            .collect())
+            .collect::<Vec<_>>();
+        if let Some(limit) = limit {
+            let len = entries.len();
+            Ok(entries.into_iter().skip(len - limit).collect())
+        } else {
+            Ok(entries)
+        }
     }
 
     fn filter_list(
