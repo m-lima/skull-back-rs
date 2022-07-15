@@ -210,7 +210,7 @@ impl<D: FileData> UserFile<D> {
 
         let mut buffer = vec![];
         for entry in entries {
-            D::write(entry, &mut buffer)?;
+            D::write_tsv(entry, &mut buffer)?;
         }
 
         std::fs::File::options()
@@ -256,7 +256,7 @@ impl<D: FileData> Crud<D> for UserFile<D> {
     fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         Ok(self
             .lines()?
-            .map(D::read)
+            .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line(line))
             .take(limit.unwrap_or(usize::MAX))
@@ -270,7 +270,7 @@ impl<D: FileData> Crud<D> for UserFile<D> {
     ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
         Ok(self
             .lines()?
-            .map(D::read)
+            .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line(line))
             .filter(|d| filter(d))
@@ -288,14 +288,14 @@ impl<D: FileData> Crud<D> for UserFile<D> {
             .map_or(0, |id| id + 1);
 
         let mut file = std::fs::File::options().append(true).open(&self.file)?;
-        D::write(WithId::new(id, data), &mut file)?;
+        D::write_tsv(WithId::new(id, data), &mut file)?;
 
         Ok(id)
     }
 
     fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
         self.lines()?
-            .map(D::read)
+            .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line(line))
             .find(|d| d.id == id)
@@ -307,7 +307,7 @@ impl<D: FileData> Crud<D> for UserFile<D> {
         let mut index = None;
         let mut entries = self
             .lines()?
-            .map(D::read)
+            .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line_with_index(line, id, &mut index))
             .collect::<Vec<_>>();
@@ -326,7 +326,7 @@ impl<D: FileData> Crud<D> for UserFile<D> {
         let mut index = None;
         let mut entries = self
             .lines()?
-            .map(D::read)
+            .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line_with_index(line, id, &mut index))
             .collect::<Vec<_>>();
@@ -348,8 +348,8 @@ impl<D: FileData> Crud<D> for UserFile<D> {
 pub trait FileData: super::Data {
     fn name() -> &'static str;
     fn id(string: std::io::Result<String>) -> Result<Id, Error>;
-    fn read(string: std::io::Result<String>) -> Result<WithId<Self>, Error>;
-    fn write<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error>;
+    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error>;
+    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error>;
 }
 
 impl FileData for Skull {
@@ -362,7 +362,7 @@ impl FileData for Skull {
         parse!(number, string.split('\t'), "id", "Skull")
     }
 
-    fn read(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -391,7 +391,7 @@ impl FileData for Skull {
         ))
     }
 
-    fn write<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
+    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
         let data = &with_id.data;
         write_number!(itoa, writer, with_id.id, "id", "Skull")?;
 
@@ -424,7 +424,7 @@ impl FileData for Quick {
         parse!(number, string.split('\t'), "id", "Quick")
     }
 
-    fn read(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -436,7 +436,7 @@ impl FileData for Quick {
         Ok(WithId::new(id, Self { skull, amount }))
     }
 
-    fn write<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
+    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
         let data = &with_id.data;
 
         write_number!(itoa, writer, with_id.id, "id", "Quick")?;
@@ -458,7 +458,7 @@ impl FileData for Occurrence {
         parse!(number, string.split('\t'), "id", "Occurrence")
     }
 
-    fn read(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -480,7 +480,7 @@ impl FileData for Occurrence {
 
     // Allowed because u64 millis is already many times the age of the universe
     #[allow(clippy::cast_possible_truncation)]
-    fn write<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
+    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
         let data = &with_id.data;
 
         write_number!(itoa, writer, with_id.id, "id", "Occurrence")?;
@@ -494,466 +494,472 @@ impl FileData for Occurrence {
     }
 }
 
-// mod fs {
-//     use super::{Error, FileData, InFile, WithId};
-//
-//     #[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
-//     pub struct UserPath(std::path::PathBuf);
-//
-//     impl UserPath {
-//         pub fn new<D: FileData>(user: &str, store: &InFile) -> Result<Self, Error> {
-//             if store.users.contains(user) {
-//                 Ok(Self(store.path.join(user).join(D::name())))
-//             } else {
-//                 Err(Error::NoSuchUser(String::from(user)))
-//             }
-//         }
-//     }
-//
-//     impl AsRef<std::path::Path> for UserPath {
-//         fn as_ref(&self) -> &std::path::Path {
-//             &self.0
-//         }
-//     }
-//
-//     pub fn reader<U: std::borrow::Borrow<UserPath>>(
-//         user: U,
-//     ) -> Result<std::io::Lines<std::io::BufReader<std::fs::File>>, Error> {
-//         use std::io::BufRead;
-//         Ok(std::io::BufReader::new(std::fs::File::open(user.borrow())?).lines())
-//     }
-//
-//     pub fn modify<D, F>(user: UserPath, action: F) -> Result<WithId<D>, Error>
-//     where
-//         D: FileData,
-//         F: FnOnce(&mut Vec<WithId<D>>) -> Result<WithId<D>, Error>,
-//     {
-//         let mut entries = load(&user)?;
-//         let data = action(&mut entries)?;
-//         write(user, entries)?;
-//         Ok(data)
-//     }
-//
-//     fn load<U: std::borrow::Borrow<UserPath>, D: FileData>(
-//         user: U,
-//     ) -> Result<Vec<WithId<D>>, Error> {
-//         let mut entries = vec![];
-//         for entry in reader(user)?.map(|e| e.map_err(Error::Io).and_then(D::read)) {
-//             match entry {
-//                 Ok(entry) => entries.push(entry),
-//                 Err(e) => {
-//                     return Err(Error::Serde(e.to_string()));
-//                 }
-//             }
-//         }
-//
-//         Ok(entries)
-//     }
-//
-//     fn write<D: FileData>(user: UserPath, entries: Vec<WithId<D>>) -> Result<(), Error> {
-//         use std::io::Write;
-//
-//         let mut buffer = vec![];
-//         for entry in entries {
-//             D::write(&entry, &mut buffer)?;
-//         }
-//
-//         std::fs::OpenOptions::new()
-//             .truncate(true)
-//             .write(true)
-//             .open(user)?
-//             .write_all(buffer.as_slice())
-//             .map_err(Error::Io)
-//     }
-//
-//     pub fn append<D: FileData>(user: UserPath, data: &WithId<D>) -> Result<(), Error> {
-//         let mut file = std::fs::OpenOptions::new().append(true).open(user)?;
-//         D::write(data, &mut file)
-//     }
-// }
-
 #[cfg(test)]
 mod test {
-    //     use super::{Error, FileData, InFile, Skull, Store, WithId};
-    //
-    //     const USER: &str = "bloink";
-    //     const SKULLS: &str = r#"0	skull	0		0.1
-    // 4	skool	0		0.3
-    // 10	skrut	0		43
-    // "#;
-    //
-    //     struct TestStore {
-    //         store: InFile,
-    //         path: std::path::PathBuf,
-    //     }
-    //
-    //     impl TestStore {
-    //         pub fn new() -> Self {
-    //             use rand::Rng;
-    //
-    //             let name = format!("{:016x}", rand::thread_rng().gen::<u64>());
-    //             let path = std::env::temp_dir().join("skull-test");
-    //             if path.exists() {
-    //                 assert!(path.is_dir(), "Cannot use {} as test path", path.display());
-    //             } else {
-    //                 std::fs::create_dir(&path).unwrap();
-    //             }
-    //             let path = path.join(name);
-    //             assert!(
-    //                 !path.exists(),
-    //                 "Cannot use {} as test path as it already exists",
-    //                 path.display()
-    //             );
-    //             std::fs::create_dir(&path).unwrap();
-    //             let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
-    //                 drop(std::fs::remove_dir_all(&path));
-    //                 panic!("{}", e);
-    //             });
-    //
-    //             Self { store, path }
-    //         }
-    //
-    //         pub fn with_data(self) -> Self {
-    //             std::fs::write(self.path.join(USER).join("skull"), SKULLS).unwrap();
-    //             self
-    //         }
-    //
-    //         pub fn verify_skull(&self, payload: &str) {
-    //             let data =
-    //                 String::from_utf8(std::fs::read(self.path.join(USER).join("skull")).unwrap())
-    //                     .unwrap();
-    //             assert_eq!(data.as_str(), payload);
-    //         }
-    //     }
-    //
-    //     impl std::ops::Deref for TestStore {
-    //         type Target = InFile;
-    //
-    //         fn deref(&self) -> &Self::Target {
-    //             &self.store
-    //         }
-    //     }
-    //
-    //     impl std::ops::DerefMut for TestStore {
-    //         fn deref_mut(&mut self) -> &mut Self::Target {
-    //             &mut self.store
-    //         }
-    //     }
-    //
-    //     impl Drop for TestStore {
-    //         fn drop(&mut self) {
-    //             drop(std::fs::remove_dir_all(&self.path));
-    //         }
-    //     }
-    //
-    //     fn new_skull(name: &str, unit_price: f32) -> Skull {
-    //         Skull {
-    //             name: String::from(name),
-    //             color: String::from('0'),
-    //             icon: String::new(),
-    //             unit_price,
-    //             limit: None,
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     fn reject_unknown_user() {
-    //         let mut store = TestStore::new();
-    //         let skull = new_skull("skull", 0.4);
-    //         assert_eq!(
-    //             store
-    //                 .skull()
-    //                 .create("unknown", skull)
-    //                 .unwrap_err()
-    //                 .to_string(),
-    //             Error::NoSuchUser(String::from("unknown")).to_string()
-    //         );
-    //     }
-    //
-    //     #[test]
-    //     fn last_modified() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         assert_eq!(
-    //             store
-    //                 .skull()
-    //                 .last_modified("unknown")
-    //                 .unwrap_err()
-    //                 .to_string(),
-    //             Error::NoSuchUser(String::from("unknown")).to_string()
-    //         );
-    //
-    //         let mut last_modified = store.skull().last_modified(USER).unwrap();
-    //
-    //         store.skull().list(USER, None).unwrap();
-    //         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //
-    //         store.skull().filter_list(USER, Box::new(|_| true)).unwrap();
-    //         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //
-    //         store.skull().create(USER, new_skull("bla", 1.0)).unwrap();
-    //         assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //         last_modified = store.skull().last_modified(USER).unwrap();
-    //
-    //         store.skull().read(USER, 0).unwrap();
-    //         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //
-    //         store
-    //             .skull()
-    //             .update(USER, 0, new_skull("bla", 2.0))
-    //             .unwrap();
-    //         assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //         last_modified = store.skull().last_modified(USER).unwrap();
-    //
-    //         store.skull().delete(USER, 0).unwrap();
-    //         assert_ne!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //         last_modified = store.skull().last_modified(USER).unwrap();
-    //
-    //         assert!(store
-    //             .skull()
-    //             .update(USER, 3, new_skull("bla", 1.0))
-    //             .is_err());
-    //         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //
-    //         assert!(store.skull().delete(USER, 5).is_err());
-    //         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //
-    //         store
-    //             .quick()
-    //             .create(
-    //                 USER,
-    //                 super::Quick {
-    //                     skull: 0,
-    //                     amount: 3.0,
-    //                 },
-    //             )
-    //             .unwrap();
-    //         assert_eq!(store.skull().last_modified(USER).unwrap(), last_modified);
-    //         assert_ne!(store.quick().last_modified(USER).unwrap(), last_modified);
-    //     }
-    //
-    //     #[test]
-    //     fn list() {
-    //         let mut store = TestStore::new().with_data();
-    //         {
-    //             let skulls = store.skull().list(USER, None).unwrap();
-    //             assert_eq!(skulls.len(), 3);
-    //         }
-    //         {
-    //             let skulls = store.skull().list(USER, Some(1)).unwrap();
-    //             assert_eq!(skulls.len(), 1);
-    //         }
-    //         {
-    //             let skulls = store.skull().list(USER, Some(0)).unwrap();
-    //             assert_eq!(skulls.len(), 0);
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     fn create() {
-    //         let mut store = TestStore::new().with_data();
-    //         {
-    //             let skull = new_skull("skull", 0.1);
-    //             let id = store.skull().create(USER, skull).unwrap();
-    //             assert!(id == 11);
-    //         }
-    //         {
-    //             let skull = new_skull("skull", 0.3);
-    //             let id = store.skull().create(USER, skull).unwrap();
-    //             assert!(id == 12);
-    //         }
-    //
-    //         store.verify_skull(
-    //             r#"0	skull	0		0.1
-    // 4	skool	0		0.3
-    // 10	skrut	0		43
-    // 11	skull	0		0.1
-    // 12	skull	0		0.3
-    // "#,
-    //         );
-    //     }
-    //
-    //     #[test]
-    //     fn read() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         let expected = WithId::new(4, new_skull("skool", 0.3));
-    //         assert_eq!(store.skull().read(USER, 4).unwrap().into_owned(), expected);
-    //         store.verify_skull(SKULLS);
-    //     }
-    //
-    //     #[test]
-    //     fn read_not_found() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         assert_eq!(
-    //             store.skull().read(USER, 1).unwrap_err().to_string(),
-    //             Error::NotFound(1).to_string()
-    //         );
-    //         store.verify_skull(SKULLS);
-    //     }
-    //
-    //     #[test]
-    //     fn update() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         let old = WithId::new(4, new_skull("skool", 0.3));
-    //         let new = new_skull("bla", 0.7);
-    //
-    //         assert_eq!(store.skull().update(USER, 4, new).unwrap(), old);
-    //
-    //         store.verify_skull(
-    //             r#"0	skull	0		0.1
-    // 4	bla	0		0.7
-    // 10	skrut	0		43.0
-    // "#,
-    //         );
-    //     }
-    //
-    //     #[test]
-    //     fn update_not_found() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         let new = new_skull("bla", 0.7);
-    //
-    //         assert_eq!(
-    //             store.skull().update(USER, 1, new).unwrap_err().to_string(),
-    //             Error::NotFound(1).to_string()
-    //         );
-    //         store.verify_skull(SKULLS);
-    //     }
-    //
-    //     #[test]
-    //     fn delete() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         let old = WithId::new(4, new_skull("skool", 0.3));
-    //
-    //         assert_eq!(store.skull().delete(USER, 4).unwrap(), old);
-    //         store.verify_skull(
-    //             r#"0	skull	0		0.1
-    // 10	skrut	0		43.0
-    // "#,
-    //         );
-    //     }
-    //
-    //     #[test]
-    //     fn delete_not_found() {
-    //         let mut store = TestStore::new().with_data();
-    //
-    //         assert_eq!(
-    //             store.skull().delete(USER, 1).unwrap_err().to_string(),
-    //             Error::NotFound(1).to_string()
-    //         );
-    //         store.verify_skull(SKULLS);
-    //     }
-    //
-    //     #[test]
-    //     #[allow(clippy::cast_precision_loss)]
-    //     fn find() {
-    //         let mut store = TestStore::new();
-    //         {
-    //             let mut file = std::fs::File::create(store.path.join(USER).join("skull")).unwrap();
-    //             (0..30)
-    //                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-    //                 .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-    //                 .for_each(|s| FileData::write(&s, &mut file).unwrap());
-    //         }
-    //
-    //         for i in 0..30 {
-    //             assert_eq!(
-    //                 store.skull().read(USER, i).is_ok(),
-    //                 i % 3 != 0 && i % 4 != 0
-    //             );
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     #[allow(clippy::cast_precision_loss)]
-    //     fn delete_from_list() {
-    //         let mut store = TestStore::new();
-    //
-    //         for i in 0..30 {
-    //             store
-    //                 .skull()
-    //                 .create(USER, new_skull("skull", i as f32))
-    //                 .unwrap();
-    //         }
-    //
-    //         for i in 0..30 {
-    //             if i % 3 == 0 || i % 4 == 0 {
-    //                 store.skull().delete(USER, i).unwrap();
-    //             }
-    //         }
-    //
-    //         let expected = {
-    //             let mut expected = vec![];
-    //             (0..30)
-    //                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-    //                 .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-    //                 .for_each(|s| FileData::write(&s, &mut expected).unwrap());
-    //             expected
-    //         };
-    //
-    //         let actual = std::fs::read(store.path.join(USER).join("skull")).unwrap();
-    //
-    //         assert_eq!(actual, expected);
-    //     }
-    //
-    //     #[test]
-    //     fn error_message() {
-    //         struct FailedWriter;
-    //         impl std::io::Write for FailedWriter {
-    //             fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
-    //                 Err(std::io::Error::new(
-    //                     std::io::ErrorKind::Other,
-    //                     Error::Serde(String::from("write")),
-    //                 ))
-    //             }
-    //
-    //             fn flush(&mut self) -> std::io::Result<()> {
-    //                 Err(std::io::Error::new(
-    //                     std::io::ErrorKind::Other,
-    //                     Error::Serde(String::from("flush")),
-    //                 ))
-    //             }
-    //         }
-    //
-    //         let field_not_present = "2";
-    //         assert_eq!(
-    //             Skull::read(String::from(field_not_present))
-    //                 .unwrap_err()
-    //                 .to_string(),
-    //             String::from("Serde error: Could not find `name` for Skull")
-    //         );
-    //
-    //         let field_unparseable = "a";
-    //         assert_eq!(
-    //             Skull::read(String::from(field_unparseable))
-    //                 .unwrap_err()
-    //                 .to_string(),
-    //             String::from(
-    //                 "Serde error: Could not parse `id` for Skull: invalid digit found in string"
-    //             )
-    //         );
-    //
-    //         let too_many_fields = "2\t\t\t\t2\t\t";
-    //         assert_eq!(
-    //             Skull::read(String::from(too_many_fields))
-    //                 .unwrap_err()
-    //                 .to_string(),
-    //             String::from("Serde error: Too many fields for Skull")
-    //         );
-    //
-    //         let skull = WithId::new(0, new_skull("skull", 0.0));
-    //         let mut writer = FailedWriter;
-    //         assert_eq!(
-    //             FileData::write(&skull, &mut writer)
-    //                 .unwrap_err()
-    //                 .to_string(),
-    //             String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
-    //         );
-    //     }
+    use crate::store::{Quick, Selector};
+
+    use super::{Error, FileData, InFile, Skull, Store, WithId};
+
+    const USER: &str = "bloink";
+    const SKULLS: &str = r#"0	skull	0		0.1	
+4	skool	0		0.3	
+10	skrut	0		43	
+"#;
+
+    struct TestStore {
+        store: InFile,
+        path: std::path::PathBuf,
+    }
+
+    impl TestStore {
+        pub fn new() -> Self {
+            use rand::Rng;
+
+            let name = format!("{:016x}", rand::thread_rng().gen::<u64>());
+            let path = std::env::temp_dir().join("skull-test");
+            if path.exists() {
+                assert!(path.is_dir(), "Cannot use {} as test path", path.display());
+            } else {
+                std::fs::create_dir(&path).unwrap();
+            }
+            let path = path.join(name);
+            assert!(
+                !path.exists(),
+                "Cannot use {} as test path as it already exists",
+                path.display()
+            );
+            std::fs::create_dir(&path).unwrap();
+            let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
+                drop(std::fs::remove_dir_all(&path));
+                panic!("{}", e);
+            });
+
+            Self { store, path }
+        }
+
+        pub fn with_data(self) -> Self {
+            std::fs::write(self.path.join(USER).join("skull"), SKULLS).unwrap();
+            self
+        }
+
+        pub fn verify_skull(&self, payload: &str) {
+            let data =
+                String::from_utf8(std::fs::read(self.path.join(USER).join("skull")).unwrap())
+                    .unwrap();
+            assert_eq!(data.as_str(), payload);
+        }
+    }
+
+    impl std::ops::Deref for TestStore {
+        type Target = InFile;
+
+        fn deref(&self) -> &Self::Target {
+            &self.store
+        }
+    }
+
+    impl std::ops::DerefMut for TestStore {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.store
+        }
+    }
+
+    impl Store for TestStore {
+        fn skull(
+            &self,
+            user: &str,
+        ) -> Result<&std::sync::RwLock<dyn crate::store::Crud<Skull>>, Error> {
+            self.store.skull(user)
+        }
+
+        fn quick(
+            &self,
+            user: &str,
+        ) -> Result<&std::sync::RwLock<dyn crate::store::Crud<crate::store::Quick>>, Error>
+        {
+            self.store.quick(user)
+        }
+
+        fn occurrence(
+            &self,
+            user: &str,
+        ) -> Result<&std::sync::RwLock<dyn crate::store::Crud<crate::store::Occurrence>>, Error>
+        {
+            self.store.occurrence(user)
+        }
+    }
+
+    impl Drop for TestStore {
+        fn drop(&mut self) {
+            drop(std::fs::remove_dir_all(&self.path));
+        }
+    }
+
+    fn new_skull(name: &str, unit_price: f32) -> Skull {
+        Skull {
+            name: String::from(name),
+            color: String::from('0'),
+            icon: String::new(),
+            unit_price,
+            limit: None,
+        }
+    }
+
+    #[test]
+    fn reject_unknown_user() {
+        let store = TestStore::new();
+        assert_eq!(
+            Skull::read(&store, "unknown")
+                .map(|_| ())
+                .unwrap_err()
+                .to_string(),
+            Error::NoSuchUser(String::from("unknown")).to_string()
+        );
+    }
+
+    #[test]
+    fn last_modified() {
+        let store = TestStore::new().with_data();
+
+        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+
+        // List [no change]
+        Skull::read(&store, USER).unwrap().list(None).unwrap();
+        assert_eq!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+
+        // Filter list [no change]
+        Skull::read(&store, USER)
+            .unwrap()
+            .filter_list(Box::new(|_| true))
+            .unwrap();
+        assert_eq!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+
+        // Create [change]
+        Skull::write(&store, USER)
+            .unwrap()
+            .create(new_skull("bla", 1.0))
+            .unwrap();
+        assert_ne!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+
+        // Read [no change]
+        Skull::read(&store, USER).unwrap().read(0).unwrap();
+        assert_eq!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+
+        // Update [change]
+        Skull::write(&store, USER)
+            .unwrap()
+            .update(0, new_skull("bla", 2.0))
+            .unwrap();
+        assert_ne!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+
+        // Delete [change]
+        Skull::write(&store, USER).unwrap().delete(0).unwrap();
+        assert_ne!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+
+        // Update failure [no change]
+        assert!(Skull::write(&store, USER)
+            .unwrap()
+            .update(3, new_skull("bla", 1.0))
+            .is_err());
+        assert_eq!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+
+        // Delete failure [no change]
+        assert!(Skull::write(&store, USER).unwrap().delete(5).is_err());
+        assert_eq!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+
+        // Stores don't affect each other
+        Quick::write(&store, USER)
+            .unwrap()
+            .create(Quick {
+                skull: 0,
+                amount: 3.0,
+            })
+            .unwrap();
+        assert_eq!(
+            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+        assert_ne!(
+            Quick::read(&store, USER).unwrap().last_modified().unwrap(),
+            last_modified
+        );
+    }
+
+    #[test]
+    fn list() {
+        let store = TestStore::new().with_data();
+        let skulls = Skull::read(&store, USER).unwrap().list(None).unwrap().len();
+        assert_eq!(skulls, 3);
+
+        let skulls = Skull::read(&store, USER)
+            .unwrap()
+            .list(Some(1))
+            .unwrap()
+            .len();
+        assert_eq!(skulls, 1);
+
+        let skulls = Skull::read(&store, USER)
+            .unwrap()
+            .list(Some(0))
+            .unwrap()
+            .len();
+        assert_eq!(skulls, 0);
+    }
+
+    #[test]
+    fn create() {
+        let store = TestStore::new().with_data();
+        {
+            let skull = new_skull("skull", 0.1);
+            let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
+            assert!(id == 11);
+        }
+        {
+            let skull = new_skull("skull", 0.3);
+            let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
+            assert!(id == 12);
+        }
+
+        store.verify_skull(
+            r#"0	skull	0		0.1	
+4	skool	0		0.3	
+10	skrut	0		43	
+11	skull	0		0.1	
+12	skull	0		0.3	
+"#,
+        );
+    }
+
+    #[test]
+    fn read() {
+        let store = TestStore::new().with_data();
+
+        let expected = WithId::new(4, new_skull("skool", 0.3));
+        let read = Skull::read(&store, USER)
+            .unwrap()
+            .read(4)
+            .unwrap()
+            .into_owned();
+        assert_eq!(read, expected);
+        store.verify_skull(SKULLS);
+    }
+
+    #[test]
+    fn read_not_found() {
+        let store = TestStore::new().with_data();
+
+        assert_eq!(
+            Skull::read(&store, USER)
+                .unwrap()
+                .read(1)
+                .unwrap_err()
+                .to_string(),
+            Error::NotFound(1).to_string()
+        );
+        store.verify_skull(SKULLS);
+    }
+
+    #[test]
+    fn update() {
+        let store = TestStore::new().with_data();
+
+        let old = WithId::new(4, new_skull("skool", 0.3));
+        let new = new_skull("bla", 0.7);
+
+        assert_eq!(
+            Skull::write(&store, USER).unwrap().update(4, new).unwrap(),
+            old
+        );
+
+        store.verify_skull(
+            r#"0	skull	0		0.1	
+4	bla	0		0.7	
+10	skrut	0		43.0	
+"#,
+        );
+    }
+
+    #[test]
+    fn update_not_found() {
+        let store = TestStore::new().with_data();
+
+        let new = new_skull("bla", 0.7);
+
+        assert_eq!(
+            Skull::write(&store, USER)
+                .unwrap()
+                .update(1, new)
+                .unwrap_err()
+                .to_string(),
+            Error::NotFound(1).to_string()
+        );
+        store.verify_skull(SKULLS);
+    }
+
+    #[test]
+    fn delete() {
+        let store = TestStore::new().with_data();
+
+        let old = WithId::new(4, new_skull("skool", 0.3));
+
+        assert_eq!(Skull::write(&store, USER).unwrap().delete(4).unwrap(), old);
+
+        store.verify_skull(
+            r#"0	skull	0		0.1	
+10	skrut	0		43.0	
+"#,
+        );
+    }
+
+    #[test]
+    fn delete_not_found() {
+        let store = TestStore::new().with_data();
+
+        assert_eq!(
+            Skull::write(&store, USER)
+                .unwrap()
+                .delete(1)
+                .unwrap_err()
+                .to_string(),
+            Error::NotFound(1).to_string()
+        );
+
+        store.verify_skull(SKULLS);
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn find() {
+        let store = TestStore::new();
+        {
+            let mut file = std::fs::File::create(store.path.join(USER).join("skull")).unwrap();
+            (0..30)
+                .filter(|i| i % 3 != 0 && i % 4 != 0)
+                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
+                .for_each(|s| FileData::write_tsv(s, &mut file).unwrap());
+        }
+
+        for i in 0..30 {
+            assert_eq!(
+                Skull::read(&store, USER).unwrap().read(i).is_ok(),
+                i % 3 != 0 && i % 4 != 0
+            );
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn delete_from_list() {
+        let store = TestStore::new();
+
+        for i in 0..30 {
+            Skull::write(&store, USER)
+                .unwrap()
+                .create(new_skull("skull", i as f32))
+                .unwrap();
+        }
+
+        for i in 0..30 {
+            if i % 3 == 0 || i % 4 == 0 {
+                Skull::write(&store, USER).unwrap().delete(i).unwrap();
+            }
+        }
+
+        let expected = {
+            let mut expected = vec![];
+            (0..30)
+                .filter(|i| i % 3 != 0 && i % 4 != 0)
+                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
+                .for_each(|s| FileData::write_tsv(s, &mut expected).unwrap());
+            expected
+        };
+
+        let actual = std::fs::read(store.path.join(USER).join("skull")).unwrap();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn error_message() {
+        struct FailedWriter;
+        impl std::io::Write for FailedWriter {
+            fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    Error::Serde(String::from("write")),
+                ))
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    Error::Serde(String::from("flush")),
+                ))
+            }
+        }
+
+        let field_not_present = "2";
+        assert_eq!(
+            Skull::read_tsv(Ok(String::from(field_not_present)))
+                .unwrap_err()
+                .to_string(),
+            String::from("Serde error: Could not find `name` for Skull")
+        );
+
+        let field_unparseable = "a";
+        assert_eq!(
+            Skull::read_tsv(Ok(String::from(field_unparseable)))
+                .unwrap_err()
+                .to_string(),
+            String::from(
+                "Serde error: Could not parse `id` for Skull: invalid digit found in string"
+            )
+        );
+
+        let too_many_fields = "2\t\t\t\t2\t\t";
+        assert_eq!(
+            Skull::read_tsv(Ok(String::from(too_many_fields)))
+                .unwrap_err()
+                .to_string(),
+            String::from("Serde error: Too many fields for Skull")
+        );
+
+        let skull = WithId::new(0, new_skull("skull", 0.0));
+        let mut writer = FailedWriter;
+        assert_eq!(
+            FileData::write_tsv(skull, &mut writer)
+                .unwrap_err()
+                .to_string(),
+            String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
+        );
+    }
 }
 
 #[cfg(all(test, nightly))]
