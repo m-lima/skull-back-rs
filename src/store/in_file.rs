@@ -727,8 +727,10 @@ mod test {
             .unwrap()
             .list(Some(1))
             .unwrap()
-            .len();
-        assert_eq!(skulls, 1);
+            .into_iter()
+            .map(std::borrow::Cow::into_owned)
+            .collect::<Vec<_>>();
+        assert_eq!(skulls, vec![WithId::new(10, new_skull("skrut", 43.0))]);
 
         let skulls = Skull::read(&store, USER)
             .unwrap()

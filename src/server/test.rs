@@ -345,7 +345,7 @@ fn list_limited() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":0,"name":"skull1","color":"","icon":"","unitPrice":0.1}]"#,
+        r#"[{"id":2,"name":"skull3","color":"","icon":"","unitPrice":0.3}]"#,
     );
 }
 
