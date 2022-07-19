@@ -991,21 +991,21 @@ mod bench {
 
                 (0..100)
                     .map(|i| WithId::new(i, skull.clone()))
-                    .for_each(|s| FileData::write(&s, &mut buffer).unwrap());
+                    .for_each(|s| FileData::write_tsv(s, &mut buffer).unwrap());
             });
         }
 
         #[bench]
         fn deserialize_skull(bench: &mut test::Bencher) {
             let data = (0..100)
-                .map(|i| format!("{}\txnamex\txcolorx\txiconx\t1.2\t{}", i, i))
+                .map(|i| format!("{i}\txnamex\txcolorx\txiconx\t1.2\t{i}"))
                 .collect::<Vec<_>>();
 
             bench.iter(|| {
                 let data = data.clone();
 
                 for (i, string) in data.into_iter().enumerate() {
-                    let s = <Skull as FileData>::read(string).unwrap();
+                    let s = <Skull as FileData>::read_tsv(Ok(string)).unwrap();
                     assert_eq!(s.id, i as u32);
                     let s = s.data;
                     assert_eq!(s.name, "xnamex");
@@ -1033,7 +1033,7 @@ mod bench {
 
                 (0..100)
                     .map(|i| WithId::new(i, occurrence.clone()))
-                    .for_each(|s| FileData::write(&s, &mut buffer).unwrap());
+                    .for_each(|s| FileData::write_tsv(s, &mut buffer).unwrap());
             });
         }
 
@@ -1047,7 +1047,7 @@ mod bench {
                 let data = data.clone();
 
                 for (i, string) in data.into_iter().enumerate() {
-                    let s = <Occurrence as FileData>::read(string).unwrap();
+                    let s = <Occurrence as FileData>::read_tsv(Ok(string)).unwrap();
                     assert_eq!(s.id, i as u32);
                     let s = s.data;
                     assert_eq!(s.skull, 0);
