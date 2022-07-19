@@ -88,7 +88,7 @@ impl InFile {
 
         let dir_reader = path
             .read_dir()
-            .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))?;
 
         let users = users
             .into_iter()
@@ -111,7 +111,7 @@ impl InFile {
             if !path.exists() {
                 log::debug!("Creating {}", path.display());
                 std::fs::create_dir(&path).map_err(|e| {
-                    anyhow::anyhow!("Could not create user directory {}: {}", path.display(), e)
+                    anyhow::anyhow!("Could not create user directory {}: {e}", path.display())
                 })?;
             } else if !path.is_dir() {
                 anyhow::bail!("User path is not a directory {}", path.display());
@@ -122,14 +122,13 @@ impl InFile {
             {
                 if !file.exists() {
                     log::debug!("Creating {}", path.display());
-                    std::fs::File::create(&file).map_err(|e| {
-                        anyhow::anyhow!("Could not create {}: {}", file.display(), e)
-                    })?;
+                    std::fs::File::create(&file)
+                        .map_err(|e| anyhow::anyhow!("Could not create {}: {e}", file.display()))?;
                 } else if file.is_dir() {
                     anyhow::bail!("Path {} is not a file", file.display());
                 }
             }
-            log::info!("Allowing {}", user);
+            log::info!("Allowing {user}");
         }
 
         let users = users
@@ -536,7 +535,7 @@ mod test {
             std::fs::create_dir(&path).unwrap();
             let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
                 drop(std::fs::remove_dir_all(&path));
-                panic!("{}", e);
+                panic!("{e}");
             });
 
             Self { store, path }
@@ -1040,7 +1039,7 @@ mod bench {
         #[bench]
         fn deserialize_occurrence(bench: &mut test::Bencher) {
             let data = (0..100)
-                .map(|i| format!("{}\t0\t1.2\t4", i))
+                .map(|i| format!("{i}\t0\t1.2\t4"))
                 .collect::<Vec<_>>();
 
             bench.iter(|| {
@@ -1143,7 +1142,7 @@ mod bench {
         #[bench]
         fn deserialize_skull(bench: &mut test::Bencher) {
             let data = (0..100)
-                .map(|i| format!("xnamex\txcolorx\txiconx\t1.2\t{}\n", i))
+                .map(|i| format!("xnamex\txcolorx\txiconx\t1.2\t{i}\n"))
                 .map(|s| s.into_bytes())
                 .flatten()
                 .collect::<Vec<_>>();
@@ -1198,7 +1197,7 @@ mod bench {
         #[bench]
         fn deserialize_occurrence(bench: &mut test::Bencher) {
             let data = (0..100)
-                .map(|_| format!("0\t1.2\t4\n"))
+                .map(|_| String::from("0\t1.2\t4\n"))
                 .map(|s| s.into_bytes())
                 .flatten()
                 .collect::<Vec<_>>();
