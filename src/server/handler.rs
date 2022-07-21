@@ -48,7 +48,7 @@ impl<D: store::Selector> LastModified<D> {
         let user = mapper::request::User::borrow_from(state)?;
         let last_modified = {
             let store = middleware::Store::borrow_from(state).get();
-            D::read(store, user)?.last_modified()?
+            D::select(store, user)?.last_modified().await?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -82,10 +82,10 @@ impl<D: store::Selector> List<D> {
         let user = mapper::request::User::borrow_from(state)?;
         let (last_modified, json) = {
             let store = middleware::Store::borrow_from(state).get();
-            let crud = D::read(store, user)?;
+            let crud = D::select(store, user)?;
 
-            let data = crud.list(limit.limit)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
+            let data = crud.list(limit.limit).await?;
+            (crud.last_modified().await?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -120,10 +120,10 @@ impl<D: store::Selector> Create<D> {
 
         let (last_modified, id) = {
             let store = middleware::Store::borrow_from(state).get();
-            let mut crud = D::write(store, user)?;
+            let crud = D::select(store, user)?;
 
-            let data = crud.create(data)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
+            let data = crud.create(data).await?;
+            (crud.last_modified().await?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -158,10 +158,10 @@ impl<D: store::Selector> Read<D> {
 
         let (last_modified, json) = {
             let store = middleware::Store::borrow_from(state).get();
-            let crud = D::read(store, user)?;
+            let crud = D::select(store, user)?;
 
-            let data = crud.read(id)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
+            let data = crud.read(id).await?;
+            (crud.last_modified().await?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -198,14 +198,14 @@ impl<D: store::Selector> Update<D> {
 
         let (last_modified, json) = {
             let store = middleware::Store::borrow_from(state).get();
-            let mut crud = D::write(store, user)?;
+            let crud = D::select(store, user)?;
 
-            if crud.last_modified()? > unmodified_since {
+            if crud.last_modified().await? > unmodified_since {
                 return Err(Error::OutOfSync);
             }
 
-            let data = crud.update(id, data)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
+            let data = crud.update(id, data).await?;
+            (crud.last_modified().await?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()
@@ -241,14 +241,14 @@ impl<D: store::Selector> Delete<D> {
 
         let (last_modified, json) = {
             let store = middleware::Store::borrow_from(state).get();
-            let mut crud = D::write(store, user)?;
+            let crud = D::select(store, user)?;
 
-            if crud.last_modified()? > unmodified_since {
+            if crud.last_modified().await? > unmodified_since {
                 return Err(Error::OutOfSync);
             }
 
-            let data = crud.delete(id)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
+            let data = crud.delete(id).await?;
+            (crud.last_modified().await?, serde_json::to_vec(&data)?)
         };
 
         let response = gotham::hyper::Response::builder()

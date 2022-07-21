@@ -1,6 +1,8 @@
 use super::Id;
 
-pub trait Data: Clone + for<'de> serde::Deserialize<'de> {
+pub trait Data:
+    Clone + Send + Sync + Unpin + PartialEq + std::fmt::Debug + for<'de> serde::Deserialize<'de>
+{
     type Id: WithId<Self>;
 }
 
