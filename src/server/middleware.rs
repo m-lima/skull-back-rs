@@ -26,7 +26,9 @@ impl Log {
                 StoreError::StoreFull
                 | StoreError::Io(_)
                 | StoreError::Serde(_)
-                | StoreError::FailedToAcquireLock,
+                | StoreError::FailedToAcquireLock
+                | StoreError::BadMillis(_)
+                | StoreError::Sql(_),
             )
             | Error::JsonSerialize(_)
             | Error::TimeSerialize(_)

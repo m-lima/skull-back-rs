@@ -1,6 +1,7 @@
 mod crud;
 mod data;
 mod error;
+mod in_db;
 mod in_file;
 mod in_memory;
 

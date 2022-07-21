@@ -204,7 +204,7 @@ impl<D: FileData> UserFile<D> {
         Ok(iter)
     }
 
-    fn replace(&mut self, entries: Vec<WithId<D>>) -> Result<(), Error> {
+    fn replace(&mut self, entries: Vec<D::Id>) -> Result<(), Error> {
         use std::io::Write;
 
         let mut buffer = vec![];
@@ -232,13 +232,13 @@ impl<D: FileData> UserFile<D> {
 
     fn good_line_with_index(
         &self,
-        line: (usize, Result<WithId<D>, Error>),
+        line: (usize, Result<D::Id, Error>),
         id: Id,
         index: &mut Option<usize>,
-    ) -> Option<WithId<D>> {
+    ) -> Option<D::Id> {
         match line.1 {
             Ok(entry) => {
-                if entry.id == id {
+                if entry.id() == id {
                     *index = Some(line.0);
                 }
                 Some(entry)
@@ -252,7 +252,7 @@ impl<D: FileData> UserFile<D> {
 }
 
 impl<D: FileData> Crud<D> for UserFile<D> {
-    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error> {
         let entries = self
             .lines()?
             .map(D::read_tsv)
@@ -270,8 +270,8 @@ impl<D: FileData> Crud<D> for UserFile<D> {
 
     fn filter_list(
         &self,
-        filter: Box<dyn Fn(&WithId<D>) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+        filter: Box<dyn Fn(&D::Id) -> bool>,
+    ) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error> {
         Ok(self
             .lines()?
             .map(D::read_tsv)
@@ -292,22 +292,22 @@ impl<D: FileData> Crud<D> for UserFile<D> {
             .map_or(0, |id| id + 1);
 
         let mut file = std::fs::File::options().append(true).open(&self.file)?;
-        D::write_tsv(WithId::new(id, data), &mut file)?;
+        D::write_tsv(D::Id::new(id, data), &mut file)?;
 
         Ok(id)
     }
 
-    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
+    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, D::Id>, Error> {
         self.lines()?
             .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| self.good_line(line))
-            .find(|d| d.id == id)
+            .find(|d| d.id() == id)
             .map(std::borrow::Cow::Owned)
             .ok_or(Error::NotFound(id))
     }
 
-    fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error> {
+    fn update(&mut self, id: Id, data: D) -> Result<D::Id, Error> {
         let mut index = None;
         let mut entries = self
             .lines()?
@@ -319,14 +319,14 @@ impl<D: FileData> Crud<D> for UserFile<D> {
         let index = index.ok_or(Error::NotFound(id))?;
 
         let old = &mut entries[index];
-        let mut new = WithId::new(id, data);
+        let mut new = D::Id::new(id, data);
         std::mem::swap(old, &mut new);
 
         self.replace(entries)?;
         Ok(new)
     }
 
-    fn delete(&mut self, id: Id) -> Result<WithId<D>, Error> {
+    fn delete(&mut self, id: Id) -> Result<D::Id, Error> {
         let mut index = None;
         let mut entries = self
             .lines()?
@@ -352,8 +352,8 @@ impl<D: FileData> Crud<D> for UserFile<D> {
 pub trait FileData: super::Data {
     fn name() -> &'static str;
     fn id(string: std::io::Result<String>) -> Result<Id, Error>;
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error>;
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error>;
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error>;
+    fn write_tsv<W: std::io::Write>(with_id: Self::Id, writer: &mut W) -> Result<(), Error>;
 }
 
 impl FileData for Skull {
@@ -366,7 +366,7 @@ impl FileData for Skull {
         parse!(number, string.split('\t'), "id", "Skull")
     }
 
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -383,7 +383,7 @@ impl FileData for Skull {
         };
         parse!(end, split, "Skull");
 
-        Ok(WithId::new(
+        Ok(Self::Id::new(
             id,
             Self {
                 name,
@@ -395,9 +395,8 @@ impl FileData for Skull {
         ))
     }
 
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-        write_number!(itoa, writer, with_id.id, "id", "Skull")?;
+    fn write_tsv<W: std::io::Write>(data: Self::Id, writer: &mut W) -> Result<(), Error> {
+        write_number!(itoa, writer, data.id(), "id", "Skull")?;
 
         writer.write_all(b"\t")?;
         writer.write_all(data.name.as_bytes())?;
@@ -428,7 +427,7 @@ impl FileData for Quick {
         parse!(number, string.split('\t'), "id", "Quick")
     }
 
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -437,13 +436,11 @@ impl FileData for Quick {
         let amount = parse!(number, split, "amount", "Quick")?;
         parse!(end, split, "Quick");
 
-        Ok(WithId::new(id, Self { skull, amount }))
+        Ok(Self::Id::new(id, Self { skull, amount }))
     }
 
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-
-        write_number!(itoa, writer, with_id.id, "id", "Quick")?;
+    fn write_tsv<W: std::io::Write>(data: Self::Id, writer: &mut W) -> Result<(), Error> {
+        write_number!(itoa, writer, data.id(), "id", "Quick")?;
         writer.write_all(b"\t")?;
         write_number!(itoa, writer, data.skull, "skull", "Quick")?;
         writer.write_all(b"\t")?;
@@ -462,7 +459,7 @@ impl FileData for Occurrence {
         parse!(number, string.split('\t'), "id", "Occurrence")
     }
 
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -472,7 +469,7 @@ impl FileData for Occurrence {
         let millis = parse!(number, split, "millis", "Occurrence")?;
         parse!(end, split, "Occurrence");
 
-        Ok(WithId::new(
+        Ok(Self::Id::new(
             id,
             Self {
                 skull,
@@ -484,10 +481,8 @@ impl FileData for Occurrence {
 
     // Allowed because u64 millis is already many times the age of the universe
     #[allow(clippy::cast_possible_truncation)]
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-
-        write_number!(itoa, writer, with_id.id, "id", "Occurrence")?;
+    fn write_tsv<W: std::io::Write>(data: Self::Id, writer: &mut W) -> Result<(), Error> {
+        write_number!(itoa, writer, data.id(), "id", "Occurrence")?;
         writer.write_all(b"\t")?;
         write_number!(itoa, writer, data.skull, "skull", "Occurrence")?;
         writer.write_all(b"\t")?;
@@ -503,6 +498,8 @@ mod test {
     use crate::store::{Quick, Selector};
 
     use super::{Error, FileData, InFile, Skull, Store, WithId};
+
+    type SkullId = <Skull as super::Data>::Id;
 
     const USER: &str = "bloink";
     const SKULLS: &str = r#"0	skull	0		0.1	
@@ -729,7 +726,7 @@ mod test {
             .into_iter()
             .map(std::borrow::Cow::into_owned)
             .collect::<Vec<_>>();
-        assert_eq!(skulls, vec![WithId::new(10, new_skull("skrut", 43.0))]);
+        assert_eq!(skulls, vec![SkullId::new(10, new_skull("skrut", 43.0))]);
 
         let skulls = Skull::read(&store, USER)
             .unwrap()
@@ -767,7 +764,7 @@ mod test {
     fn read() {
         let store = TestStore::new().with_data();
 
-        let expected = WithId::new(4, new_skull("skool", 0.3));
+        let expected = SkullId::new(4, new_skull("skool", 0.3));
         let read = Skull::read(&store, USER)
             .unwrap()
             .read(4)
@@ -796,7 +793,7 @@ mod test {
     fn update() {
         let store = TestStore::new().with_data();
 
-        let old = WithId::new(4, new_skull("skool", 0.3));
+        let old = SkullId::new(4, new_skull("skool", 0.3));
         let new = new_skull("bla", 0.7);
 
         assert_eq!(
@@ -833,7 +830,7 @@ mod test {
     fn delete() {
         let store = TestStore::new().with_data();
 
-        let old = WithId::new(4, new_skull("skool", 0.3));
+        let old = SkullId::new(4, new_skull("skool", 0.3));
 
         assert_eq!(Skull::write(&store, USER).unwrap().delete(4).unwrap(), old);
 
@@ -868,8 +865,8 @@ mod test {
             let mut file = std::fs::File::create(store.path.join(USER).join("skull")).unwrap();
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| FileData::write_tsv(s, &mut file).unwrap());
+                .map(|i| SkullId::new(i, new_skull("skull", i as f32)))
+                .for_each(|s| Skull::write_tsv(s, &mut file).unwrap());
         }
 
         for i in 0..30 {
@@ -902,8 +899,8 @@ mod test {
             let mut expected = vec![];
             (0..30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| FileData::write_tsv(s, &mut expected).unwrap());
+                .map(|i| SkullId::new(i, new_skull("skull", i as f32)))
+                .for_each(|s| Skull::write_tsv(s, &mut expected).unwrap());
             expected
         };
 
@@ -957,10 +954,10 @@ mod test {
             String::from("Serde error: Too many fields for Skull")
         );
 
-        let skull = WithId::new(0, new_skull("skull", 0.0));
+        let skull = SkullId::new(0, new_skull("skull", 0.0));
         let mut writer = FailedWriter;
         assert_eq!(
-            FileData::write_tsv(skull, &mut writer)
+            Skull::write_tsv(skull, &mut writer)
                 .unwrap_err()
                 .to_string(),
             String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
@@ -974,6 +971,9 @@ mod bench {
     mod handwritten {
         extern crate test;
         use super::super::{FileData, Occurrence, Skull, WithId};
+
+        type SkullId = <Skull as super::super::Data>::Id;
+        type OccurrenceId = <Occurrence as super::super::Data>::Id;
 
         #[bench]
         fn serialize_skull(bench: &mut test::Bencher) {
@@ -989,8 +989,8 @@ mod bench {
                 let mut buffer = vec![];
 
                 (0..100)
-                    .map(|i| WithId::new(i, skull.clone()))
-                    .for_each(|s| FileData::write_tsv(s, &mut buffer).unwrap());
+                    .map(|i| SkullId::new(i, skull.clone()))
+                    .for_each(|s| Skull::write_tsv(s, &mut buffer).unwrap());
             });
         }
 
@@ -1004,9 +1004,8 @@ mod bench {
                 let data = data.clone();
 
                 for (i, string) in data.into_iter().enumerate() {
-                    let s = <Skull as FileData>::read_tsv(Ok(string)).unwrap();
+                    let s = Skull::read_tsv(Ok(string)).unwrap();
                     assert_eq!(s.id, i as u32);
-                    let s = s.data;
                     assert_eq!(s.name, "xnamex");
                     assert_eq!(s.color, "xcolorx");
                     assert_eq!(s.icon, "xiconx");
@@ -1024,15 +1023,15 @@ mod bench {
                 millis: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
-                    .as_millis() as u64,
+                    .as_millis() as i64,
             };
 
             bench.iter(|| {
                 let mut buffer = vec![];
 
                 (0..100)
-                    .map(|i| WithId::new(i, occurrence.clone()))
-                    .for_each(|s| FileData::write_tsv(s, &mut buffer).unwrap());
+                    .map(|i| OccurrenceId::new(i, occurrence.clone()))
+                    .for_each(|s| Occurrence::write_tsv(s, &mut buffer).unwrap());
             });
         }
 
@@ -1046,9 +1045,8 @@ mod bench {
                 let data = data.clone();
 
                 for (i, string) in data.into_iter().enumerate() {
-                    let s = <Occurrence as FileData>::read_tsv(Ok(string)).unwrap();
+                    let s = Occurrence::read_tsv(Ok(string)).unwrap();
                     assert_eq!(s.id, i as u32);
-                    let s = s.data;
                     assert_eq!(s.skull, 0);
                     assert_eq!(s.amount, 1.2);
                     assert_eq!(s.millis, 4);
@@ -1060,6 +1058,9 @@ mod bench {
     mod serde {
         extern crate test;
         use super::super::{serde::Serde, Occurrence, Skull, WithId};
+
+        type SkullId = <Skull as super::super::Data>::Id;
+        type OccurrenceId = <Occurrence as super::super::Data>::Id;
 
         #[bench]
         fn serialize_skull(bench: &mut test::Bencher) {
@@ -1076,7 +1077,7 @@ mod bench {
                 let mut serder = Serde::new(&mut buffer);
 
                 (0..100)
-                    .map(|i| WithId::new(i, skull.clone()))
+                    .map(|i| SkullId::new(i, skull.clone()))
                     .for_each(|s| {
                         serde::Serialize::serialize(&s, &mut serder).unwrap();
                     });
@@ -1091,7 +1092,7 @@ mod bench {
                 millis: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
-                    .as_millis() as u64,
+                    .as_millis() as i64,
             };
 
             bench.iter(|| {
@@ -1099,7 +1100,7 @@ mod bench {
                 let mut serder = super::super::serde::Serde::new(&mut buffer);
 
                 (0..100)
-                    .map(|i| WithId::new(i, occurrence.clone()))
+                    .map(|i| OccurrenceId::new(i, occurrence.clone()))
                     .for_each(|s| {
                         serde::Serialize::serialize(&s, &mut serder).unwrap();
                     });
@@ -1109,11 +1110,15 @@ mod bench {
 
     mod csv {
         extern crate test;
-        use super::super::{Occurrence, Skull};
+        use super::super::{Occurrence, Skull, WithId};
+
+        type SkullId = <Skull as super::super::Data>::Id;
+        type OccurrenceId = <Occurrence as super::super::Data>::Id;
 
         #[bench]
         fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = Skull {
+            let skull = SkullId {
+                id: 0,
                 name: String::from("xnamex"),
                 color: String::from("xcolorx"),
                 icon: String::from("xiconx"),
@@ -1132,7 +1137,7 @@ mod bench {
                 (0..100)
                     .map(|i| {
                         let mut s = skull.clone();
-                        s.unit_price = i as f32;
+                        s.id = i;
                         s
                     })
                     .for_each(|s| writer.serialize(s).unwrap());
@@ -1177,7 +1182,7 @@ mod bench {
                 millis: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
-                    .as_millis() as u64,
+                    .as_millis() as i64,
             };
 
             bench.iter(|| {
@@ -1189,7 +1194,7 @@ mod bench {
                     .from_writer(buffer);
 
                 (0..100)
-                    .map(|_| occurrence.clone())
+                    .map(|i| OccurrenceId::new(i, occurrence.clone()))
                     .for_each(|s| writer.serialize(s).unwrap());
             });
         }

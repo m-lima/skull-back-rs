@@ -14,4 +14,8 @@ pub enum Error {
     Serde(String),
     #[error("Failed to acquire lock")]
     FailedToAcquireLock,
+    #[error("{0}")]
+    Sql(#[from] sqlx::Error),
+    #[error("Failed to parse timestamp:{0}")]
+    BadMillis(#[from] std::num::TryFromIntError),
 }

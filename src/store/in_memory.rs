@@ -77,7 +77,7 @@ impl<D: Data> Default for Container<D> {
 #[derive(Debug)]
 pub(super) struct UserContainer<D: Data> {
     count: u32,
-    data: Vec<WithId<D>>,
+    data: Vec<D::Id>,
     last_modified: std::time::SystemTime,
 }
 
@@ -103,7 +103,7 @@ impl<D: Data> UserContainer<D> {
 
     fn find(&self, id: Id) -> Option<usize> {
         for i in (0..=self.id_to_index(id)?).rev() {
-            if self.data[i].id == id {
+            if self.data[i].id() == id {
                 return Some(i);
             }
         }
@@ -112,7 +112,7 @@ impl<D: Data> UserContainer<D> {
 }
 
 impl<D: Data> Crud<D> for UserContainer<D> {
-    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error> {
         Ok(self
             .data
             .iter()
@@ -123,8 +123,8 @@ impl<D: Data> Crud<D> for UserContainer<D> {
 
     fn filter_list(
         &self,
-        filter: Box<dyn Fn(&WithId<D>) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+        filter: Box<dyn Fn(&D::Id) -> bool>,
+    ) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error> {
         Ok(self
             .data
             .iter()
@@ -139,30 +139,30 @@ impl<D: Data> Crud<D> for UserContainer<D> {
         }
         self.last_modified = std::time::SystemTime::now();
         let id = self.count;
-        let with_id = WithId::new(id, data);
+        let with_id = D::Id::new(id, data);
         self.data.push(with_id);
         self.count += 1;
         Ok(id)
     }
 
-    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
+    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, D::Id>, Error> {
         self.find(id)
             .ok_or(Error::NotFound(id))
             .map(|i| &self.data[i])
             .map(std::borrow::Cow::Borrowed)
     }
 
-    fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error> {
+    fn update(&mut self, id: Id, data: D) -> Result<D::Id, Error> {
         self.find(id).ok_or(Error::NotFound(id)).map(|i| {
             self.last_modified = std::time::SystemTime::now();
             let old = &mut self.data[i];
-            let mut with_id = WithId::new(old.id, data);
+            let mut with_id = D::Id::new(old.id(), data);
             std::mem::swap(old, &mut with_id);
             with_id
         })
     }
 
-    fn delete(&mut self, id: Id) -> Result<WithId<D>, Error> {
+    fn delete(&mut self, id: Id) -> Result<D::Id, Error> {
         self.find(id).ok_or(Error::NotFound(id)).map(|i| {
             self.last_modified = std::time::SystemTime::now();
             self.data.remove(i)
@@ -179,6 +179,8 @@ mod test {
     use crate::store::{Quick, Selector};
 
     use super::{Crud, Error, InMemory, Skull, UserContainer, WithId};
+
+    type SkullId = <Skull as super::Data>::Id;
 
     const USER: &str = "bloink";
 
@@ -411,7 +413,7 @@ mod test {
                 .into_iter()
                 .map(std::borrow::Cow::into_owned)
                 .collect::<Vec<_>>();
-            assert_eq!(skulls, vec![WithId::new(2, new_skull("skull", 0.3))]);
+            assert_eq!(skulls, vec![SkullId::new(2, new_skull("skull", 0.3))]);
         }
         {
             let skulls = Skull::read(&store, USER)
@@ -450,8 +452,8 @@ mod test {
 
     #[test]
     fn read() {
-        let mut container = UserContainer::default();
-        let skull = WithId::new(3, new_skull("skull", 0.4));
+        let mut container = UserContainer::<Skull>::default();
+        let skull = SkullId::new(3, new_skull("skull", 0.4));
         let expected = skull.clone();
         container.data.push(skull);
 
@@ -471,9 +473,9 @@ mod test {
     #[test]
     fn update() {
         let mut container = UserContainer::default();
-        let old = WithId::new(3, new_skull("skull", 0.4));
+        let old = SkullId::new(3, new_skull("skull", 0.4));
         let new = new_skull("bla", 0.7);
-        let expected = WithId::new(3, new.clone());
+        let expected = SkullId::new(3, new.clone());
         container.data.push(old.clone());
 
         assert_eq!(container.update(3, new).unwrap(), old);
@@ -489,8 +491,8 @@ mod test {
 
     #[test]
     fn delete() {
-        let mut container = UserContainer::default();
-        let skull = WithId::new(3, new_skull("skull", 0.4));
+        let mut container = UserContainer::<Skull>::default();
+        let skull = SkullId::new(3, new_skull("skull", 0.4));
         container.data.push(skull.clone());
 
         assert_eq!(container.delete(3).unwrap(), skull);
@@ -525,7 +527,9 @@ mod test {
             container.create(new_skull("skull", i as f32)).unwrap();
         }
 
-        container.data.retain(|d| d.id % 3 != 0 && d.id % 4 != 0);
+        container
+            .data
+            .retain(|d| d.id() % 3 != 0 && d.id() % 4 != 0);
 
         for i in 0..30 {
             assert_eq!(container.read(i).is_ok(), i % 3 != 0 && i % 4 != 0);
@@ -542,7 +546,7 @@ mod test {
 
         let mut reference = container.data.clone();
 
-        reference.retain(|d| d.id % 3 != 0 && d.id % 4 != 0);
+        reference.retain(|d| d.id() % 3 != 0 && d.id() % 4 != 0);
 
         for i in 0..30 {
             if i % 3 == 0 || i % 4 == 0 {
