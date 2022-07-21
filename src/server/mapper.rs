@@ -55,7 +55,7 @@ pub mod request {
         gotham_derive::StateData, serde::Deserialize, gotham_derive::StaticResponseExtender,
     )]
     pub struct Limit {
-        pub limit: Option<usize>,
+        pub limit: Option<u32>,
     }
 
     pub struct UnmodifiedSince;

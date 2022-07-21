@@ -253,7 +253,7 @@ impl<D: FileData> UserFile<D> {
 
 #[async_trait::async_trait]
 impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
-    async fn list(&self, limit: Option<usize>) -> Result<Vec<D::Id>, Error> {
+    async fn list(&self, limit: Option<u32>) -> Result<Vec<D::Id>, Error> {
         let lock = self.read()?;
         let entries = lock
             .lines()?
@@ -261,7 +261,7 @@ impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
             .enumerate()
             .filter_map(|line| lock.good_line(line))
             .collect::<Vec<_>>();
-        if let Some(limit) = limit {
+        if let Some(limit) = limit.map(usize::try_from).and_then(Result::ok) {
             let len = entries.len();
             Ok(entries.into_iter().skip(len - limit).collect())
         } else {

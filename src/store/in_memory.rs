@@ -113,12 +113,18 @@ impl<D: Data> UserContainer<D> {
 
 #[async_trait::async_trait]
 impl<D: Data> Crud<D> for std::sync::RwLock<UserContainer<D>> {
-    async fn list(&self, limit: Option<usize>) -> Result<Vec<D::Id>, Error> {
+    async fn list(&self, limit: Option<u32>) -> Result<Vec<D::Id>, Error> {
         let lock = self.read()?;
         Ok(lock
             .data
             .iter()
-            .skip(lock.data.len() - limit.unwrap_or(lock.data.len()))
+            .skip(
+                lock.data.len()
+                    - limit
+                        .map(usize::try_from)
+                        .and_then(Result::ok)
+                        .unwrap_or(lock.data.len()),
+            )
             .map(Clone::clone)
             .collect())
     }
@@ -270,6 +276,7 @@ mod test {
         );
     }
 
+    #[allow(clippy::too_many_lines)]
     #[tokio::test(flavor = "multi_thread")]
     async fn last_modified() {
         let mut store = InMemory::new(&[USER]);
