@@ -1,4 +1,4 @@
-use super::{Data, Error, Id, Occurrence, Quick, Skull, WithId};
+use super::{Data, Error, Id, Occurrence, Quick, Skull};
 
 pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
     fn skull(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Skull>>, Error>;
@@ -10,15 +10,15 @@ pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
 // TODO: Is it possible to avoid the Vec's?
 // TODO: OFfer a filter per day for Occurrence
 pub trait Crud<D: Data> {
-    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
+    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error>;
     fn filter_list(
         &self,
-        filter: Box<dyn Fn(&WithId<D>) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
+        filter: Box<dyn Fn(&D::Id) -> bool>,
+    ) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error>;
     fn create(&mut self, data: D) -> Result<Id, Error>;
-    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error>;
-    fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error>;
-    fn delete(&mut self, id: Id) -> Result<WithId<D>, Error>;
+    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, D::Id>, Error>;
+    fn update(&mut self, id: Id, data: D) -> Result<D::Id, Error>;
+    fn delete(&mut self, id: Id) -> Result<D::Id, Error>;
     fn last_modified(&self) -> Result<std::time::SystemTime, Error>;
 }
 

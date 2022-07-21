@@ -51,7 +51,11 @@ impl Error {
             | Self::Http(_)
             | Self::Hyper(_)
             | Self::Store(
-                StoreError::Io(_) | StoreError::Serde(_) | StoreError::FailedToAcquireLock,
+                StoreError::Io(_)
+                | StoreError::Serde(_)
+                | StoreError::FailedToAcquireLock
+                | StoreError::BadMillis(_)
+                | StoreError::Sql(_),
             ) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

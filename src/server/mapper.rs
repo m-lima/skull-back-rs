@@ -102,14 +102,3 @@ pub mod request {
         }
     }
 }
-
-pub mod respose {
-    use crate::store;
-
-    #[derive(serde::Serialize, Clone, Debug, PartialEq)]
-    pub struct DataWithId<'a, D: store::Data> {
-        id: store::Id,
-        #[serde(flatten)]
-        data: &'a D,
-    }
-}

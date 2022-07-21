@@ -418,9 +418,11 @@ mod test {
     use super::super::{Skull, WithId};
     use super::Serde;
 
+    type SkullId = <Skull as super::super::Data>::Id;
+
     #[test]
     fn serialize_flat() {
-        let skull = WithId::new(
+        let skull = SkullId::new(
             2,
             Skull {
                 name: String::from("xnamex"),
