@@ -8,7 +8,7 @@ pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
 
 #[async_trait::async_trait]
 pub trait Crud<D: Data>: Send + Sync {
-    async fn list(&self, limit: Option<usize>) -> Result<Vec<D::Id>, Error>;
+    async fn list(&self, limit: Option<u32>) -> Result<Vec<D::Id>, Error>;
     async fn create(&self, data: D) -> Result<Id, Error>;
     async fn read(&self, id: Id) -> Result<D::Id, Error>;
     async fn update(&self, id: Id, data: D) -> Result<D::Id, Error>;
