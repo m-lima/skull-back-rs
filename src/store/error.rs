@@ -19,3 +19,15 @@ pub enum Error {
     #[error("Failed to parse timestamp:{0}")]
     BadMillis(#[from] std::num::TryFromIntError),
 }
+
+impl<T> From<std::sync::PoisonError<std::sync::RwLockReadGuard<'_, T>>> for Error {
+    fn from(_: std::sync::PoisonError<std::sync::RwLockReadGuard<'_, T>>) -> Self {
+        Self::FailedToAcquireLock
+    }
+}
+
+impl<T> From<std::sync::PoisonError<std::sync::RwLockWriteGuard<'_, T>>> for Error {
+    fn from(_: std::sync::PoisonError<std::sync::RwLockWriteGuard<'_, T>>) -> Self {
+        Self::FailedToAcquireLock
+    }
+}

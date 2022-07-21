@@ -33,7 +33,7 @@ impl InMemory {
 }
 
 impl Store for InMemory {
-    fn skull(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Skull>>, Error> {
+    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error> {
         let user_container = self
             .skull
             .data
@@ -42,7 +42,7 @@ impl Store for InMemory {
         Ok(user_container)
     }
 
-    fn quick(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Quick>>, Error> {
+    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error> {
         let user_container = self
             .quick
             .data
@@ -51,7 +51,7 @@ impl Store for InMemory {
         Ok(user_container)
     }
 
-    fn occurrence(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Occurrence>>, Error> {
+    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error> {
         let user_container = self
             .occurrence
             .data
@@ -111,66 +111,61 @@ impl<D: Data> UserContainer<D> {
     }
 }
 
-impl<D: Data> Crud<D> for UserContainer<D> {
-    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error> {
-        Ok(self
+#[async_trait::async_trait]
+impl<D: Data> Crud<D> for std::sync::RwLock<UserContainer<D>> {
+    async fn list(&self, limit: Option<usize>) -> Result<Vec<D::Id>, Error> {
+        let lock = self.read()?;
+        Ok(lock
             .data
             .iter()
-            .skip(self.data.len() - limit.unwrap_or(self.data.len()))
-            .map(std::borrow::Cow::Borrowed)
+            .skip(lock.data.len() - limit.unwrap_or(lock.data.len()))
+            .map(Clone::clone)
             .collect())
     }
 
-    fn filter_list(
-        &self,
-        filter: Box<dyn Fn(&D::Id) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, D::Id>>, Error> {
-        Ok(self
-            .data
-            .iter()
-            .filter(|d| filter(d))
-            .map(std::borrow::Cow::Borrowed)
-            .collect())
-    }
-
-    fn create(&mut self, data: D) -> Result<Id, Error> {
-        if self.count == u32::MAX {
+    async fn create(&self, data: D) -> Result<Id, Error> {
+        let mut lock = self.write()?;
+        if lock.count == u32::MAX {
             return Err(Error::StoreFull);
         }
-        self.last_modified = std::time::SystemTime::now();
-        let id = self.count;
+        lock.last_modified = std::time::SystemTime::now();
+        let id = lock.count;
         let with_id = D::Id::new(id, data);
-        self.data.push(with_id);
-        self.count += 1;
+        lock.data.push(with_id);
+        lock.count += 1;
         Ok(id)
     }
 
-    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, D::Id>, Error> {
-        self.find(id)
+    async fn read(&self, id: Id) -> Result<D::Id, Error> {
+        let lock = self.read()?;
+        lock.find(id)
             .ok_or(Error::NotFound(id))
-            .map(|i| &self.data[i])
-            .map(std::borrow::Cow::Borrowed)
+            .map(|i| &lock.data[i])
+            .map(Clone::clone)
     }
 
-    fn update(&mut self, id: Id, data: D) -> Result<D::Id, Error> {
-        self.find(id).ok_or(Error::NotFound(id)).map(|i| {
-            self.last_modified = std::time::SystemTime::now();
-            let old = &mut self.data[i];
+    async fn update(&self, id: Id, data: D) -> Result<D::Id, Error> {
+        let mut lock = self.write()?;
+        lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
+            lock.last_modified = std::time::SystemTime::now();
+            let old = &mut lock.data[i];
             let mut with_id = D::Id::new(old.id(), data);
             std::mem::swap(old, &mut with_id);
             with_id
         })
     }
 
-    fn delete(&mut self, id: Id) -> Result<D::Id, Error> {
-        self.find(id).ok_or(Error::NotFound(id)).map(|i| {
-            self.last_modified = std::time::SystemTime::now();
-            self.data.remove(i)
+    async fn delete(&self, id: Id) -> Result<D::Id, Error> {
+        let mut lock = self.write()?;
+        lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
+            lock.last_modified = std::time::SystemTime::now();
+            lock.data.remove(i)
         })
     }
 
-    fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
-        Ok(self.last_modified)
+    async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
+        let lock = self.read()?;
+        Ok(lock.last_modified)
     }
 }
 
@@ -237,11 +232,15 @@ mod test {
         }
     }
 
-    #[test]
-    fn fetches_user_container() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn fetches_user_container() {
         let mut store = InMemory::new(&[USER]);
         let skull = new_skull("skull", 0.4);
-        let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
+        let id = Skull::select(&store, USER)
+            .unwrap()
+            .create(skull)
+            .await
+            .unwrap();
 
         assert!(store.skull.data.len() == 1);
         assert!(
@@ -263,7 +262,7 @@ mod test {
     fn reject_unknown_user() {
         let store = InMemory::new(&[USER]);
         assert_eq!(
-            Skull::read(&store, "unknown")
+            Skull::select(&store, "unknown")
                 .map(|_| ())
                 .unwrap_err()
                 .to_string(),
@@ -271,65 +270,101 @@ mod test {
         );
     }
 
-    #[test]
-    fn last_modified() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn last_modified() {
         let mut store = InMemory::new(&[USER]);
 
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+        let last_modified = Skull::select(&store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap();
 
         // List [no change]
-        Skull::read(&store, USER).unwrap().list(None).unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Filter list [no change]
-        Skull::read(&store, USER)
+        Skull::select(&store, USER)
             .unwrap()
-            .filter_list(Box::new(|_| true))
+            .list(None)
+            .await
             .unwrap();
         assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
 
         // Create [change]
-        Skull::write(&store, USER)
+        Skull::select(&store, USER)
             .unwrap()
             .create(new_skull("bla", 1.0))
+            .await
             .unwrap();
         assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+        let last_modified = Skull::select(&store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap();
 
         // Read [no change]
-        Skull::read(&store, USER).unwrap().read(0).unwrap();
+        Skull::select(&store, USER).unwrap().read(0).await.unwrap();
         assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
 
         // Update [change]
-        Skull::write(&store, USER)
+        Skull::select(&store, USER)
             .unwrap()
             .update(0, new_skull("bla", 2.0))
+            .await
             .unwrap();
         assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+        let last_modified = Skull::select(&store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap();
 
         // Delete [change]
-        Skull::write(&store, USER).unwrap().delete(0).unwrap();
+        Skull::select(&store, USER)
+            .unwrap()
+            .delete(0)
+            .await
+            .unwrap();
         assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
+        let last_modified = Skull::select(&store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap();
 
         // Create failure [no change]
         store
@@ -340,220 +375,273 @@ mod test {
             .write()
             .unwrap()
             .count = u32::MAX;
-        assert!(Skull::write(&store, USER)
+        assert!(Skull::select(&store, USER)
             .unwrap()
             .create(new_skull("bla", 1.0))
+            .await
             .is_err());
         assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
 
         // Update failure [no change]
-        assert!(Skull::write(&store, USER)
+        assert!(Skull::select(&store, USER)
             .unwrap()
             .update(3, new_skull("bla", 1.0))
+            .await
             .is_err());
         assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
 
         // Delete failure [no change]
-        assert!(Skull::write(&store, USER).unwrap().delete(5).is_err());
+        assert!(Skull::select(&store, USER)
+            .unwrap()
+            .delete(5)
+            .await
+            .is_err());
         assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
 
         // Stores don't affect each other
-        Quick::write(&store, USER)
+        Quick::select(&store, USER)
             .unwrap()
             .create(Quick {
                 skull: 0,
                 amount: 3.0,
             })
+            .await
             .unwrap();
         assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
+            Skull::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
         assert_ne!(
-            Quick::read(&store, USER).unwrap().last_modified().unwrap(),
+            Quick::select(&store, USER)
+                .unwrap()
+                .last_modified()
+                .await
+                .unwrap(),
             last_modified
         );
     }
 
-    #[test]
-    fn list() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn list() {
         let store = InMemory::new(&[USER]);
 
-        Skull::write(&store, USER)
+        Skull::select(&store, USER)
             .unwrap()
             .create(new_skull("skull", 0.1))
+            .await
             .unwrap();
-        Skull::write(&store, USER)
+        Skull::select(&store, USER)
             .unwrap()
             .create(new_skull("skull", 0.2))
+            .await
             .unwrap();
-        Skull::write(&store, USER)
+        Skull::select(&store, USER)
             .unwrap()
             .create(new_skull("skull", 0.3))
+            .await
             .unwrap();
 
         {
-            let skulls = Skull::read(&store, USER).unwrap().list(None).unwrap().len();
+            let skulls = Skull::select(&store, USER)
+                .unwrap()
+                .list(None)
+                .await
+                .unwrap()
+                .len();
             assert_eq!(skulls, 3);
         }
         {
-            let skulls = Skull::read(&store, USER)
+            let skulls = Skull::select(&store, USER)
                 .unwrap()
                 .list(Some(1))
+                .await
                 .unwrap()
                 .into_iter()
-                .map(std::borrow::Cow::into_owned)
                 .collect::<Vec<_>>();
             assert_eq!(skulls, vec![SkullId::new(2, new_skull("skull", 0.3))]);
         }
         {
-            let skulls = Skull::read(&store, USER)
+            let skulls = Skull::select(&store, USER)
                 .unwrap()
                 .list(Some(0))
+                .await
                 .unwrap()
                 .len();
             assert_eq!(skulls, 0);
         }
     }
 
-    #[test]
-    fn create() {
-        let mut container = UserContainer::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn create() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         let skull = new_skull("skull", 0.4);
-        let id = container.create(skull).unwrap();
+        let id = container.create(skull).await.unwrap();
 
+        let container = container.read().unwrap();
         assert!(container.data.len() == 1);
         assert!(id == 0);
     }
 
-    #[test]
-    fn create_store_full() {
-        let mut container = UserContainer {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn create_store_full() {
+        let container = std::sync::RwLock::new(UserContainer {
             count: u32::MAX,
             data: Vec::new(),
             last_modified: std::time::SystemTime::now(),
-        };
+        });
         let skull = new_skull("skull", 0.4);
 
         assert_eq!(
-            container.create(skull).unwrap_err().to_string(),
+            container.create(skull).await.unwrap_err().to_string(),
             Error::StoreFull.to_string()
         );
     }
 
-    #[test]
-    fn read() {
-        let mut container = UserContainer::<Skull>::default();
-        let skull = SkullId::new(3, new_skull("skull", 0.4));
-        let expected = skull.clone();
-        container.data.push(skull);
+    #[tokio::test(flavor = "multi_thread")]
+    async fn read() {
+        let container = std::sync::RwLock::new(UserContainer::default());
+        let expected = SkullId::new(3, new_skull("skull", 0.4));
+        container.write().unwrap().data.push(expected.clone());
 
-        assert_eq!(container.read(3).unwrap().as_ref(), &expected);
+        assert_eq!(Crud::<Skull>::read(&container, 3).await.unwrap(), expected);
     }
 
-    #[test]
-    fn read_not_found() {
-        let container = UserContainer::<Skull>::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn read_not_found() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         let id = 3;
         assert_eq!(
-            container.read(id).unwrap_err().to_string(),
+            Crud::<Skull>::read(&container, id)
+                .await
+                .unwrap_err()
+                .to_string(),
             Error::NotFound(id).to_string()
         );
     }
 
-    #[test]
-    fn update() {
-        let mut container = UserContainer::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn update() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         let old = SkullId::new(3, new_skull("skull", 0.4));
         let new = new_skull("bla", 0.7);
         let expected = SkullId::new(3, new.clone());
-        container.data.push(old.clone());
+        container.write().unwrap().data.push(old.clone());
 
-        assert_eq!(container.update(3, new).unwrap(), old);
-        assert_eq!(container.data[0], expected);
+        assert_eq!(container.update(3, new).await.unwrap(), old);
+        assert_eq!(container.read().unwrap().data[0], expected);
     }
 
-    #[test]
-    fn update_not_found() {
-        let mut container = UserContainer::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn update_not_found() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         let new = new_skull("bla", 0.7);
-        assert!(matches!(container.update(3, new), Err(Error::NotFound(3))));
+        assert!(matches!(
+            container.update(3, new).await,
+            Err(Error::NotFound(3))
+        ));
     }
 
-    #[test]
-    fn delete() {
-        let mut container = UserContainer::<Skull>::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn delete() {
+        let container = std::sync::RwLock::new(UserContainer::<Skull>::default());
         let skull = SkullId::new(3, new_skull("skull", 0.4));
-        container.data.push(skull.clone());
+        container.write().unwrap().data.push(skull.clone());
 
-        assert_eq!(container.delete(3).unwrap(), skull);
-        assert!(container.data.is_empty());
+        assert_eq!(container.delete(3).await.unwrap(), skull);
+        assert!(container.read().unwrap().data.is_empty());
     }
 
-    #[test]
-    fn delete_not_found() {
-        let mut container = UserContainer::<Skull>::default();
-        assert!(matches!(container.delete(3), Err(Error::NotFound(3))));
+    #[tokio::test(flavor = "multi_thread")]
+    async fn delete_not_found() {
+        let container = std::sync::RwLock::new(UserContainer::<Skull>::default());
+        assert!(matches!(container.delete(3).await, Err(Error::NotFound(3))));
     }
 
-    #[test]
-    fn id_always_grows() {
-        let mut container = UserContainer::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn id_always_grows() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         let skull = new_skull("skull", 0.4);
 
-        let mut id = container.create(skull.clone()).unwrap();
+        let id = container.create(skull.clone()).await.unwrap();
         assert_eq!(id, 0);
-        assert!(container.delete(id).is_ok());
-        assert!(container.data.is_empty());
+        assert!(container.delete(id).await.is_ok());
+        assert!(container.read().unwrap().data.is_empty());
 
-        id = container.create(skull).unwrap();
+        let id = container.create(skull).await.unwrap();
         assert_eq!(id, 1);
     }
 
-    #[test]
     #[allow(clippy::cast_precision_loss)]
-    fn find() {
-        let mut container = UserContainer::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn find() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         for i in 0..30 {
-            container.create(new_skull("skull", i as f32)).unwrap();
+            container
+                .create(new_skull("skull", i as f32))
+                .await
+                .unwrap();
         }
 
         container
+            .write()
+            .unwrap()
             .data
             .retain(|d| d.id() % 3 != 0 && d.id() % 4 != 0);
 
         for i in 0..30 {
-            assert_eq!(container.read(i).is_ok(), i % 3 != 0 && i % 4 != 0);
+            assert_eq!(
+                Crud::<Skull>::read(&container, i).await.is_ok(),
+                i % 3 != 0 && i % 4 != 0
+            );
         }
     }
 
-    #[test]
     #[allow(clippy::cast_precision_loss)]
-    fn delete_from_list() {
-        let mut container = UserContainer::default();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn delete_from_list() {
+        let container = std::sync::RwLock::new(UserContainer::default());
         for i in 0..30 {
-            container.create(new_skull("skull", i as f32)).unwrap();
+            container
+                .create(new_skull("skull", i as f32))
+                .await
+                .unwrap();
         }
 
-        let mut reference = container.data.clone();
+        let mut reference = container.read().unwrap().data.clone();
 
         reference.retain(|d| d.id() % 3 != 0 && d.id() % 4 != 0);
 
         for i in 0..30 {
             if i % 3 == 0 || i % 4 == 0 {
-                container.delete(i).unwrap();
+                container.delete(i).await.unwrap();
             }
         }
 
-        assert_eq!(container.data, reference);
+        assert_eq!(container.read().unwrap().data, reference);
     }
 }
