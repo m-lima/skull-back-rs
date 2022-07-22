@@ -6,21 +6,28 @@ extern crate test;
 
 const USER: &str = "bloink";
 
-#[derive(Copy, Clone)]
-struct Sender(usize);
+struct Sender<T>(usize, std::marker::PhantomData<T>);
 
-impl Sender {
-    fn new<T: Store>(store: &T) -> Self {
-        Self(store as *const T as usize)
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
+    }
+}
+
+impl<T> Copy for Sender<T> {}
+
+impl<T> Sender<T> {
+    fn new(store: &T) -> Self {
+        Self(store as *const T as usize, std::marker::PhantomData)
     }
 
-    fn get<T: Store>(&self) -> &T {
+    fn get(&self) -> &T {
         unsafe { &*(self.0 as *const T) }
     }
 }
 
-unsafe impl Send for Sender {}
-unsafe impl Sync for Sender {}
+unsafe impl<T> Send for Sender<T> {}
+unsafe impl<T> Sync for Sender<T> {}
 
 const OCCURRENCE: Occurrence = Occurrence {
     skull: 1,
@@ -51,20 +58,22 @@ async fn setup_skull<S: Store>(store: S) -> S {
     store
 }
 
-fn spawn<T: Store>(sender: Sender) -> Vec<tokio::task::JoinHandle<()>> {
-    let mut tasks = Vec::with_capacity(20);
+async fn spawn<T: Store>(sender: Sender<T>) {
+    let mut tasks = Vec::with_capacity(30);
 
-    for _ in 0..10 {
+    for i in 0..20 {
+        if i >= 5 && i < 15 {
+            tasks.push(tokio::spawn(async move {
+                let store = sender.get();
+                Occurrence::select(store, USER)
+                    .unwrap()
+                    .create(OCCURRENCE)
+                    .await
+                    .unwrap();
+            }));
+        }
         tasks.push(tokio::spawn(async move {
-            let store = sender.get::<T>();
-            Occurrence::select(store, USER)
-                .unwrap()
-                .create(OCCURRENCE)
-                .await
-                .unwrap();
-        }));
-        tasks.push(tokio::spawn(async move {
-            let store = sender.get::<T>();
+            let store = sender.get();
             Occurrence::select(store, USER)
                 .unwrap()
                 .list(Some(10))
@@ -73,20 +82,9 @@ fn spawn<T: Store>(sender: Sender) -> Vec<tokio::task::JoinHandle<()>> {
         }));
     }
 
-    tasks
-}
-
-fn launch<T: Store>(sender: Sender) {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
-            let threads = spawn::<T>(sender);
-            for t in threads {
-                t.await.unwrap();
-            }
-        });
+    for t in tasks {
+        t.await.unwrap();
+    }
 }
 
 fn build_runtime() -> tokio::runtime::Runtime {
@@ -106,7 +104,7 @@ fn in_memory(bench: &mut test::Bencher) {
 
     let sender = Sender::new(&store);
     bench.iter(|| {
-        launch::<super::in_memory::InMemory>(sender);
+        build_runtime().block_on(spawn(sender));
     });
 }
 
@@ -126,7 +124,7 @@ fn in_file(bench: &mut test::Bencher) {
 
     let sender = Sender::new(&store);
     bench.iter(|| {
-        launch::<super::in_file::InFile>(sender);
+        build_runtime().block_on(spawn(sender));
     });
 }
 
@@ -147,6 +145,6 @@ fn in_db(bench: &mut test::Bencher) {
 
     let sender = Sender::new(&store);
     bench.iter(|| {
-        launch::<super::in_file::InFile>(sender);
+        build_runtime().block_on(spawn(sender));
     });
 }
