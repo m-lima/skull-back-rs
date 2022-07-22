@@ -11,7 +11,7 @@ BEGIN
     "millis"
   ) VALUES (
     0,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 CREATE TRIGGER "skulls_last_modified_update" AFTER UPDATE ON skulls
@@ -21,7 +21,7 @@ BEGIN
     "millis"
   ) VALUES (
     0,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 CREATE TRIGGER "skulls_last_modified_delete" AFTER DELETE ON skulls
@@ -31,7 +31,7 @@ BEGIN
     "millis"
   ) VALUES (
     0,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 
@@ -43,7 +43,7 @@ BEGIN
     "millis"
   ) VALUES (
     1,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 CREATE TRIGGER "quicks_last_modified_update" AFTER UPDATE ON quicks
@@ -53,7 +53,7 @@ BEGIN
     "millis"
   ) VALUES (
     1,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 CREATE TRIGGER "quicks_last_modified_delete" AFTER DELETE ON quicks
@@ -63,7 +63,7 @@ BEGIN
     "millis"
   ) VALUES (
     1,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 
@@ -75,7 +75,7 @@ BEGIN
     "millis"
   ) VALUES (
     2,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 CREATE TRIGGER "occurrences_last_modified_update" AFTER UPDATE ON occurrences
@@ -85,7 +85,7 @@ BEGIN
     "millis"
   ) VALUES (
     2,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;
 CREATE TRIGGER "occurrences_last_modified_delete" AFTER DELETE ON occurrences
@@ -95,6 +95,6 @@ BEGIN
     "millis"
   ) VALUES (
     2,
-    strftime("%s", "now") || substr(strftime("%f", "now"),4)
+    strftime("%s", "now") || substr(strftime("%f", "now") ,4)
   );
 END;

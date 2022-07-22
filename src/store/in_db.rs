@@ -92,33 +92,37 @@ impl Store for InDb {
 impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
     async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
         let pool = self.read()?.clone();
-        Ok((D::list(limit, &pool).await?, D::last_modified(&pool).await?))
+        let data = D::list(limit, &pool).await?;
+        let last_modified = D::last_modified(&pool).await?;
+        Ok((data, last_modified))
     }
 
     async fn create(&self, data: D) -> Response<Id> {
         let pool = self.read()?.clone();
-        Ok((
-            D::create(data, &pool).await?,
-            D::last_modified(&pool).await?,
-        ))
+        let data = D::create(data, &pool).await?;
+        let last_modified = D::last_modified(&pool).await?;
+        Ok((data, last_modified))
     }
 
     async fn read(&self, id: Id) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        Ok((D::read(id, &pool).await?, D::last_modified(&pool).await?))
+        let data = D::read(id, &pool).await?;
+        let last_modified = D::last_modified(&pool).await?;
+        Ok((data, last_modified))
     }
 
     async fn update(&self, id: Id, data: D) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        Ok((
-            D::update(data, id, &pool).await?,
-            D::last_modified(&pool).await?,
-        ))
+        let data = D::update(data, id, &pool).await?;
+        let last_modified = D::last_modified(&pool).await?;
+        Ok((data, last_modified))
     }
 
     async fn delete(&self, id: Id) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        Ok((D::delete(id, &pool).await?, D::last_modified(&pool).await?))
+        let data = D::delete(id, &pool).await?;
+        let last_modified = D::last_modified(&pool).await?;
+        Ok((data, last_modified))
     }
 
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
