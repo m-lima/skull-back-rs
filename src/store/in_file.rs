@@ -1,4 +1,4 @@
-use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
+use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
 #[cfg(all(test, nightly))]
 mod serde;
@@ -213,23 +213,28 @@ impl<D: FileData> UserFile<D> {
 
 #[async_trait::async_trait]
 impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
-    async fn list(&self, limit: Option<u32>) -> Result<Vec<D::Id>, Error> {
+    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
         let lock = self.read()?;
+
         let entries = lock
             .lines()?
             .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| lock.good_line(line))
             .collect::<Vec<_>>();
+
         if let Some(limit) = limit.map(usize::try_from).and_then(Result::ok) {
             let len = entries.len();
-            Ok(entries.into_iter().skip(len - limit).collect())
+            Ok((
+                entries.into_iter().skip(len - limit).collect(),
+                last_modified(&lock.file)?,
+            ))
         } else {
-            Ok(entries)
+            Ok((entries, last_modified(&lock.file)?))
         }
     }
 
-    async fn create(&self, data: D) -> Result<Id, Error> {
+    async fn create(&self, data: D) -> Response<Id> {
         let lock = self.write()?;
         let id = lock
             .lines()?
@@ -237,25 +242,27 @@ impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
             .enumerate()
             .filter_map(|line| lock.good_line(line))
             .max()
-            .map_or(0, |id| id + 1);
+            .map_or(1, |id| id + 1);
 
         let mut file = std::fs::File::options().append(true).open(&lock.file)?;
         D::write_tsv(D::Id::new(id, data), &mut file)?;
 
-        Ok(id)
+        Ok((id, last_modified(&lock.file)?))
     }
 
-    async fn read(&self, id: Id) -> Result<D::Id, Error> {
+    async fn read(&self, id: Id) -> Response<D::Id> {
         let lock = self.read()?;
-        lock.lines()?
+        let data = lock
+            .lines()?
             .map(D::read_tsv)
             .enumerate()
             .filter_map(|line| lock.good_line(line))
             .find(|d| d.id() == id)
-            .ok_or(Error::NotFound(id))
+            .ok_or(Error::NotFound(id))?;
+        Ok((data, last_modified(&lock.file)?))
     }
 
-    async fn update(&self, id: Id, data: D) -> Result<D::Id, Error> {
+    async fn update(&self, id: Id, data: D) -> Response<D::Id> {
         let mut lock = self.write()?;
         let mut index = None;
         let mut entries = lock
@@ -272,10 +279,10 @@ impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
         std::mem::swap(old, &mut new);
 
         lock.replace(entries)?;
-        Ok(new)
+        Ok((new, last_modified(&lock.file)?))
     }
 
-    async fn delete(&self, id: Id) -> Result<D::Id, Error> {
+    async fn delete(&self, id: Id) -> Response<D::Id> {
         let mut lock = self.write()?;
         let mut index = None;
         let mut entries = lock
@@ -289,7 +296,7 @@ impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
         let old = entries.remove(index);
 
         lock.replace(entries)?;
-        Ok(old)
+        Ok((old, last_modified(&lock.file)?))
     }
 
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
@@ -298,6 +305,12 @@ impl<D: FileData> Crud<D> for std::sync::RwLock<UserFile<D>> {
             .and_then(|f| f.modified())
             .map_err(Error::Io)
     }
+}
+
+fn last_modified(path: &std::path::Path) -> Result<std::time::SystemTime, Error> {
+    std::fs::metadata(path)
+        .and_then(|f| f.modified())
+        .map_err(Error::Io)
 }
 
 pub trait FileData: super::Data {
@@ -446,9 +459,15 @@ impl FileData for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::store::{Quick, Selector};
+    use crate::{
+        check,
+        store::{
+            test_util::{last_modified_eq, last_modified_ne},
+            Quick, Selector,
+        },
+    };
 
-    use super::{Error, FileData, InFile, Skull, Store, WithId};
+    use super::{Crud, Error, FileData, InFile, Skull, Store, WithId};
 
     type SkullId = <Skull as super::Data>::Id;
 
@@ -464,7 +483,7 @@ mod test {
     }
 
     impl TestStore {
-        pub fn new() -> Self {
+        fn new() -> Self {
             let name = format!("{:016x}", rand::random::<u64>());
             let path = std::env::temp_dir().join("skull-test");
             if path.exists() {
@@ -492,16 +511,20 @@ mod test {
             Self { store, path }
         }
 
-        pub fn with_data(self) -> Self {
+        fn with_data(self) -> Self {
             std::fs::write(self.path.join(USER).join("skull"), SKULLS).unwrap();
             self
         }
 
-        pub fn verify_skull(&self, payload: &str) {
+        fn verify_skull(&self, payload: &str) {
             let data =
                 String::from_utf8(std::fs::read(self.path.join(USER).join("skull")).unwrap())
                     .unwrap();
             assert_eq!(data.as_str(), payload);
+        }
+
+        fn test(&self) -> &std::sync::RwLock<super::UserFile<Skull>> {
+            &self.store.users.get(USER).unwrap().skull
         }
     }
 
@@ -569,127 +592,40 @@ mod test {
     async fn last_modified() {
         let store = TestStore::new().with_data();
 
-        let last_modified = Skull::select(&store, USER)
-            .unwrap()
-            .last_modified()
-            .await
-            .unwrap();
+        let last_modified = store.test().last_modified().await.unwrap();
 
         // List [no change]
-        Skull::select(&store, USER)
-            .unwrap()
-            .list(None)
-            .await
-            .unwrap();
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
+        let op_time = store.test().list(None).await.unwrap().1;
+        let last_modified = check!(last_modified_eq(store.test(), last_modified, op_time).await);
 
         // Create [change]
-        Skull::select(&store, USER)
-            .unwrap()
-            .create(new_skull("bla", 1.0))
-            .await
-            .unwrap();
-        assert_ne!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::select(&store, USER)
-            .unwrap()
-            .last_modified()
-            .await
-            .unwrap();
+        let op_time = store.test().create(new_skull("bla", 1.0)).await.unwrap().1;
+        let last_modified = check!(last_modified_ne(store.test(), last_modified, op_time).await);
 
         // Read [no change]
-        Skull::select(&store, USER).unwrap().read(0).await.unwrap();
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
+        let op_time = Crud::read(store.test(), 0).await.unwrap().1;
+        let last_modified = check!(last_modified_eq(store.test(), last_modified, op_time).await);
 
         // Update [change]
-        Skull::select(&store, USER)
-            .unwrap()
+        let op_time = store
+            .test()
             .update(0, new_skull("bla", 2.0))
             .await
-            .unwrap();
-        assert_ne!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::select(&store, USER)
             .unwrap()
-            .last_modified()
-            .await
-            .unwrap();
+            .1;
+        let last_modified = check!(last_modified_ne(store.test(), last_modified, op_time).await);
 
         // Delete [change]
-        Skull::select(&store, USER)
-            .unwrap()
-            .delete(0)
-            .await
-            .unwrap();
-        assert_ne!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::select(&store, USER)
-            .unwrap()
-            .last_modified()
-            .await
-            .unwrap();
+        let op_time = store.test().delete(0).await.unwrap().1;
+        let last_modified = check!(last_modified_ne(store.test(), last_modified, op_time).await);
 
         // Update failure [no change]
-        assert!(Skull::select(&store, USER)
-            .unwrap()
-            .update(3, new_skull("bla", 1.0))
-            .await
-            .is_err());
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
+        assert!(store.test().update(3, new_skull("bla", 1.0)).await.is_err());
+        let last_modified = check!(last_modified_eq(store.test(), last_modified, None).await);
 
         // Delete failure [no change]
-        assert!(Skull::select(&store, USER)
-            .unwrap()
-            .delete(5)
-            .await
-            .is_err());
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
+        assert!(store.test().delete(5).await.is_err());
+        let last_modified = check!(last_modified_eq(store.test(), last_modified, None).await);
 
         // Stores don't affect each other
         Quick::select(&store, USER)
@@ -700,14 +636,7 @@ mod test {
             })
             .await
             .unwrap();
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
+        let last_modified = check!(last_modified_eq(store.test(), last_modified, None).await);
         assert_ne!(
             Quick::select(&store, USER)
                 .unwrap()
@@ -721,29 +650,20 @@ mod test {
     #[tokio::test(flavor = "multi_thread")]
     async fn list() {
         let store = TestStore::new().with_data();
-        let skulls = Skull::select(&store, USER)
-            .unwrap()
-            .list(None)
-            .await
-            .unwrap()
-            .len();
+        let skulls = store.test().list(None).await.unwrap().0.len();
         assert_eq!(skulls, 3);
 
-        let skulls = Skull::select(&store, USER)
-            .unwrap()
+        let skulls = store
+            .test()
             .list(Some(1))
             .await
             .unwrap()
+            .0
             .into_iter()
             .collect::<Vec<_>>();
         assert_eq!(skulls, vec![SkullId::new(10, new_skull("skrut", 43.0))]);
 
-        let skulls = Skull::select(&store, USER)
-            .unwrap()
-            .list(Some(0))
-            .await
-            .unwrap()
-            .len();
+        let skulls = store.test().list(Some(0)).await.unwrap().0.len();
         assert_eq!(skulls, 0);
     }
 
@@ -752,20 +672,12 @@ mod test {
         let store = TestStore::new().with_data();
         {
             let skull = new_skull("skull", 0.1);
-            let id = Skull::select(&store, USER)
-                .unwrap()
-                .create(skull)
-                .await
-                .unwrap();
+            let id = store.test().create(skull).await.unwrap().0;
             assert!(id == 11);
         }
         {
             let skull = new_skull("skull", 0.3);
-            let id = Skull::select(&store, USER)
-                .unwrap()
-                .create(skull)
-                .await
-                .unwrap();
+            let id = store.test().create(skull).await.unwrap().0;
             assert!(id == 12);
         }
 
@@ -784,7 +696,7 @@ mod test {
         let store = TestStore::new().with_data();
 
         let expected = SkullId::new(4, new_skull("skool", 0.3));
-        let read = Skull::select(&store, USER).unwrap().read(4).await.unwrap();
+        let read = Crud::read(store.test(), 4).await.unwrap().0;
         assert_eq!(read, expected);
         store.verify_skull(SKULLS);
     }
@@ -794,12 +706,7 @@ mod test {
         let store = TestStore::new().with_data();
 
         assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .read(1)
-                .await
-                .unwrap_err()
-                .to_string(),
+            Crud::read(store.test(), 1).await.unwrap_err().to_string(),
             Error::NotFound(1).to_string()
         );
         store.verify_skull(SKULLS);
@@ -812,14 +719,7 @@ mod test {
         let old = SkullId::new(4, new_skull("skool", 0.3));
         let new = new_skull("bla", 0.7);
 
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .update(4, new)
-                .await
-                .unwrap(),
-            old
-        );
+        assert_eq!(store.test().update(4, new).await.unwrap().0, old);
 
         store.verify_skull(
             r#"0	skull	0		0.1	
@@ -836,12 +736,7 @@ mod test {
         let new = new_skull("bla", 0.7);
 
         assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .update(1, new)
-                .await
-                .unwrap_err()
-                .to_string(),
+            store.test().update(1, new).await.unwrap_err().to_string(),
             Error::NotFound(1).to_string()
         );
         store.verify_skull(SKULLS);
@@ -853,14 +748,7 @@ mod test {
 
         let old = SkullId::new(4, new_skull("skool", 0.3));
 
-        assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .delete(4)
-                .await
-                .unwrap(),
-            old
-        );
+        assert_eq!(store.test().delete(4).await.unwrap().0, old);
 
         store.verify_skull(
             r#"0	skull	0		0.1	
@@ -874,12 +762,7 @@ mod test {
         let store = TestStore::new().with_data();
 
         assert_eq!(
-            Skull::select(&store, USER)
-                .unwrap()
-                .delete(1)
-                .await
-                .unwrap_err()
-                .to_string(),
+            store.test().delete(1).await.unwrap_err().to_string(),
             Error::NotFound(1).to_string()
         );
 
@@ -900,7 +783,7 @@ mod test {
 
         for i in 0..30 {
             assert_eq!(
-                Skull::select(&store, USER).unwrap().read(i).await.is_ok(),
+                Crud::read(store.test(), i).await.is_ok(),
                 i % 3 != 0 && i % 4 != 0
             );
         }
@@ -911,27 +794,23 @@ mod test {
     async fn delete_from_list() {
         let store = TestStore::new();
 
-        for i in 0..30 {
-            Skull::select(&store, USER)
-                .unwrap()
+        for i in 1..=30 {
+            store
+                .test()
                 .create(new_skull("skull", i as f32))
                 .await
                 .unwrap();
         }
 
-        for i in 0..30 {
+        for i in 1..=30 {
             if i % 3 == 0 || i % 4 == 0 {
-                Skull::select(&store, USER)
-                    .unwrap()
-                    .delete(i)
-                    .await
-                    .unwrap();
+                store.test().delete(i).await.unwrap();
             }
         }
 
         let expected = {
             let mut expected = vec![];
-            (0..30)
+            (1..=30)
                 .filter(|i| i % 3 != 0 && i % 4 != 0)
                 .map(|i| SkullId::new(i, new_skull("skull", i as f32)))
                 .for_each(|s| Skull::write_tsv(s, &mut expected).unwrap());

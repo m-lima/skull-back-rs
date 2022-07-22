@@ -6,13 +6,16 @@ pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
     fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error>;
 }
 
+pub type Response<T> = Result<(T, std::time::SystemTime), Error>;
+
 #[async_trait::async_trait]
 pub trait Crud<D: Data>: Send + Sync {
-    async fn list(&self, limit: Option<u32>) -> Result<Vec<D::Id>, Error>;
-    async fn create(&self, data: D) -> Result<Id, Error>;
-    async fn read(&self, id: Id) -> Result<D::Id, Error>;
-    async fn update(&self, id: Id, data: D) -> Result<D::Id, Error>;
-    async fn delete(&self, id: Id) -> Result<D::Id, Error>;
+    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>>;
+    async fn create(&self, data: D) -> Response<Id>;
+    async fn read(&self, id: Id) -> Response<D::Id>;
+    async fn update(&self, id: Id, data: D) -> Response<D::Id>;
+    async fn delete(&self, id: Id) -> Response<D::Id>;
+    // TODO: Return no header if not modified
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error>;
 }
 

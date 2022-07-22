@@ -85,3 +85,62 @@ where
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test_util {
+    use crate::test_util::Assertion;
+
+    use super::{Crud, Skull};
+
+    pub async fn last_modified_eq<C: Crud<Skull>>(
+        crud: &C,
+        previous: std::time::SystemTime,
+        op_time: impl Into<Option<std::time::SystemTime>>,
+    ) -> Assertion<std::time::SystemTime> {
+        let check_time = crud.last_modified().await.unwrap();
+
+        if let Some(op_time) = op_time.into() {
+            if check_time != op_time {
+                return Assertion::err_ne(
+                    "Returned last_modified vs API last_modified mismatch",
+                    check_time,
+                    op_time,
+                );
+            }
+        }
+
+        if check_time == previous {
+            Assertion::Ok(check_time)
+        } else {
+            Assertion::err_ne(
+                "Unwated modification to last_modified",
+                check_time,
+                previous,
+            )
+        }
+    }
+
+    pub async fn last_modified_ne<C: Crud<Skull>>(
+        crud: &C,
+        previous: std::time::SystemTime,
+        op_time: impl Into<Option<std::time::SystemTime>>,
+    ) -> Assertion<std::time::SystemTime> {
+        let check_time = crud.last_modified().await.unwrap();
+
+        if let Some(op_time) = op_time.into() {
+            if check_time != op_time {
+                return Assertion::err_ne(
+                    "Returned last_modified vs API last_modified mismatch",
+                    check_time,
+                    op_time,
+                );
+            }
+        }
+
+        if check_time == previous {
+            Assertion::err_eq("Expected modification to last_modified", check_time)
+        } else {
+            Assertion::Ok(check_time)
+        }
+    }
+}
