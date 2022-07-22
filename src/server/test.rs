@@ -212,24 +212,74 @@ impl std::ops::Deref for TestServer {
     }
 }
 
+enum Assertion<T> {
+    Ok(T),
+    Err(&'static str, String, String, &'static str),
+}
+
+impl<T> Assertion<T> {
+    fn err(
+        message: &'static str,
+        got: impl std::fmt::Debug,
+        wanted: impl std::fmt::Debug,
+        location: &'static str,
+    ) -> Self {
+        Self::Err(message, format!("{got:?}"), format!("{wanted:?}"), location)
+    }
+
+    fn assert(self) -> T {
+        match self {
+            Self::Ok(r) => r,
+            Self::Err(message, got, wanted, location) => {
+                eprintln!("{message}");
+                eprintln!("Got:    {got}");
+                eprintln!("Wanted: {wanted}");
+                panic!("{location}");
+            }
+        }
+    }
+}
+
+#[must_use]
 fn assert_response(
     response: gotham::test::TestResponse,
     expected_status: u16,
     expected_last_modified: LastModified,
     expected_body: &str,
-) -> Option<u64> {
-    assert_eq!(response.status(), expected_status);
+) -> Assertion<Option<u64>> {
+    if response.status() != expected_status {
+        return Assertion::err(
+            "Status code mismatch",
+            response.status(),
+            expected_status,
+            concat!(file!(), ":", line!(), ":", column!()),
+        );
+    }
 
     let last_modified = response
         .headers()
         .get(gotham::hyper::header::LAST_MODIFIED)
         .map(|h| h.to_str().unwrap().parse().unwrap());
-    assert_eq!(last_modified, expected_last_modified);
+    if last_modified != expected_last_modified {
+        return Assertion::err(
+            "Last modified mismatch",
+            last_modified,
+            expected_last_modified,
+            concat!(file!(), ":", line!(), ":", column!()),
+        );
+    }
 
     let body = response.read_utf8_body().unwrap();
-    assert_eq!(body, expected_body);
+    if body != expected_body {
+        return Assertion::err(
+            "Body mismatch",
+            body,
+            expected_body,
+            concat!(file!(), ":", line!(), ":", column!()),
+        );
+    }
 
-    last_modified
+    Assertion::Ok(last_modified)
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -263,7 +313,7 @@ fn forbidden() {
         .perform()
         .unwrap();
 
-    assert_response(response, 403, LastModified::None, "");
+    assert_response(response, 403, LastModified::None, "").assert();
 }
 
 #[test]
@@ -281,7 +331,7 @@ fn empty() {
         .perform()
         .unwrap();
 
-    assert_response(response, 200, LastModified::Eq(last_modified), "[]");
+    assert_response(response, 200, LastModified::Eq(last_modified), "[]").assert();
 }
 
 #[test]
@@ -306,7 +356,7 @@ fn bad_request() {
         .perform()
         .unwrap();
 
-    assert_response(response, 400, LastModified::None, "");
+    assert_response(response, 400, LastModified::None, "").assert();
 }
 
 #[test]
@@ -329,7 +379,7 @@ fn list() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -352,7 +402,8 @@ fn list_limited() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3}]"#,
-    );
+    )
+    .assert();
 
     let response = server
         .client()
@@ -364,7 +415,7 @@ fn list_limited() {
         .perform()
         .unwrap();
 
-    assert_response(response, 200, LastModified::Eq(last_modified), r#"[]"#);
+    assert_response(response, 200, LastModified::Eq(last_modified), r#"[]"#).assert();
 }
 
 #[test]
@@ -387,7 +438,8 @@ fn read() {
         200,
         LastModified::Eq(last_modified),
         r#"{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2}"#,
-    );
+    )
+    .assert();
 }
 
 #[test]
@@ -405,7 +457,7 @@ fn read_not_found() {
         .perform()
         .unwrap();
 
-    assert_response(response, 404, LastModified::None, "");
+    assert_response(response, 404, LastModified::None, "").assert();
 }
 
 #[test]
@@ -450,6 +502,7 @@ fn update() {
         LastModified::Gt(last_modified),
         r#"{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2}"#,
     )
+    .assert()
     .unwrap();
 
     let response = server
@@ -467,7 +520,7 @@ fn update() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull4","color":"","icon":"","unitPrice":0.4},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -506,7 +559,7 @@ fn update_not_found() {
         .perform()
         .unwrap();
 
-    assert_response(response, 404, LastModified::None, "");
+    assert_response(response, 404, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -523,7 +576,7 @@ fn update_not_found() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -559,6 +612,7 @@ fn delete() {
         LastModified::Gt(last_modified),
         r#"{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2}"#,
     )
+    .assert()
     .unwrap();
 
     let response = server
@@ -576,7 +630,7 @@ fn delete() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -606,7 +660,7 @@ fn delete_not_found() {
         .perform()
         .unwrap();
 
-    assert_response(response, 404, LastModified::None, "");
+    assert_response(response, 404, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -623,7 +677,7 @@ fn delete_not_found() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -650,7 +704,7 @@ fn no_modified_since() {
         .perform()
         .unwrap();
 
-    assert_response(response, 412, LastModified::None, "");
+    assert_response(response, 412, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -662,7 +716,7 @@ fn no_modified_since() {
         .perform()
         .unwrap();
 
-    assert_response(response, 412, LastModified::None, "");
+    assert_response(response, 412, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -679,7 +733,7 @@ fn no_modified_since() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -710,7 +764,7 @@ fn out_of_sync() {
         .perform()
         .unwrap();
 
-    assert_response(response, 412, LastModified::None, "");
+    assert_response(response, 412, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -726,7 +780,7 @@ fn out_of_sync() {
         .perform()
         .unwrap();
 
-    assert_response(response, 412, LastModified::None, "");
+    assert_response(response, 412, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -743,7 +797,7 @@ fn out_of_sync() {
         200,
         LastModified::Eq(last_modified),
         r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
-    );
+    ).assert();
 }
 
 #[test]
@@ -768,7 +822,7 @@ fn constraint() {
         .perform()
         .unwrap();
 
-    assert_response(response, 400, LastModified::None, "");
+    assert_response(response, 400, LastModified::None, "").assert();
 
     let response = server
         .client()
@@ -787,7 +841,7 @@ fn constraint() {
         .perform()
         .unwrap();
 
-    assert_response(response, 400, LastModified::None, "");
+    assert_response(response, 400, LastModified::None, "").assert();
 }
 
 #[test]
@@ -812,8 +866,9 @@ fn delete_cascade() {
         .perform()
         .unwrap();
 
-    let quick_last_modified =
-        assert_response(response, 201, LastModified::Gt(last_modified), "1").unwrap();
+    let quick_last_modified = assert_response(response, 201, LastModified::Gt(last_modified), "1")
+        .assert()
+        .unwrap();
 
     let response = server
         .client()
@@ -843,6 +898,7 @@ fn delete_cascade() {
         LastModified::Gt(last_modified),
         r#"{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}"#,
     )
+    .assert()
     .unwrap();
 
     let response = server
@@ -860,7 +916,8 @@ fn delete_cascade() {
         200,
         LastModified::Gt(quick_last_modified),
         r#"[]"#,
-    );
+    )
+    .assert();
 }
 
 #[test]
@@ -886,7 +943,7 @@ fn delete_reject() {
         .perform()
         .unwrap();
 
-    assert_response(response, 201, LastModified::Gt(last_modified), "1");
+    assert_response(response, 201, LastModified::Gt(last_modified), "1").assert();
 
     let response = server
         .client()
@@ -910,5 +967,5 @@ fn delete_reject() {
         .perform()
         .unwrap();
 
-    assert_response(response, 400, LastModified::None, "");
+    assert_response(response, 400, LastModified::None, "").assert();
 }
