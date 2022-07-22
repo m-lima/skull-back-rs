@@ -1,5 +1,5 @@
 -- Skulls
-CREATE TABLE IF NOT EXISTS "skulls" (
+CREATE TABLE "skulls" (
   "id"         INTEGER NOT NULL PRIMARY KEY,
   "name"       TEXT    NOT NULL UNIQUE,
   "color"      TEXT    NOT NULL UNIQUE,
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS "skulls" (
 );
 
 -- Quicks
-CREATE TABLE IF NOT EXISTS "quicks" (
+CREATE TABLE "quicks" (
   "id"     INTEGER NOT NULL PRIMARY KEY,
   "skull"  INTEGER NOT NULL,
   "amount" REAL    NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS "quicks" (
 );
 
 -- Occurrences
-CREATE TABLE IF NOT EXISTS "occurrences" (
+CREATE TABLE "occurrences" (
   "id"     INTEGER NOT NULL PRIMARY KEY,
   "skull"  INTEGER NOT NULL,
   "amount" REAL    NOT NULL,
