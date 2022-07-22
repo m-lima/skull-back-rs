@@ -60,3 +60,46 @@ fn main() {
         std::process::exit(-2);
     }
 }
+
+#[cfg(test)]
+mod test_util {
+    #[macro_export]
+    macro_rules! check {
+        ($assertion:expr) => {
+            $assertion.assert(concat!(file!(), ":", line!(), ":", column!()))
+        };
+    }
+
+    pub enum Assertion<T> {
+        Ok(T),
+        Err(&'static str, String, Option<String>),
+    }
+
+    impl<T> Assertion<T> {
+        pub fn err_ne(
+            message: &'static str,
+            got: impl std::fmt::Debug,
+            wanted: impl std::fmt::Debug,
+        ) -> Self {
+            Self::Err(message, format!("{got:?}"), Some(format!("{wanted:?}")))
+        }
+
+        pub fn err_eq(message: &'static str, got: impl std::fmt::Debug) -> Self {
+            Self::Err(message, format!("{got:?}"), None)
+        }
+
+        pub fn assert(self, location: &'static str) -> T {
+            match self {
+                Self::Ok(r) => r,
+                Self::Err(message, got, wanted) => {
+                    eprintln!("{message}");
+                    eprintln!("Got:    {got}");
+                    if let Some(wanted) = wanted {
+                        eprintln!("Wanted: {wanted}");
+                    }
+                    panic!("{location}");
+                }
+            }
+        }
+    }
+}

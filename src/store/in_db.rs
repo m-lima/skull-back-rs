@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use super::{
+    crud::Response,
     data::{OccurrenceId, QuickId, SkullId},
     Crud, Data, Error, Id, Occurrence, Quick, Skull, Store,
 };
@@ -89,29 +90,35 @@ impl Store for InDb {
 
 #[async_trait::async_trait]
 impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
-    async fn list(&self, limit: Option<u32>) -> Result<Vec<D::Id>, Error> {
+    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
         let pool = self.read()?.clone();
-        D::list(limit, &pool).await
+        Ok((D::list(limit, &pool).await?, D::last_modified(&pool).await?))
     }
 
-    async fn create(&self, data: D) -> Result<Id, Error> {
+    async fn create(&self, data: D) -> Response<Id> {
         let pool = self.read()?.clone();
-        D::create(data, &pool).await
+        Ok((
+            D::create(data, &pool).await?,
+            D::last_modified(&pool).await?,
+        ))
     }
 
-    async fn read(&self, id: Id) -> Result<D::Id, Error> {
+    async fn read(&self, id: Id) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        D::read(id, &pool).await
+        Ok((D::read(id, &pool).await?, D::last_modified(&pool).await?))
     }
 
-    async fn update(&self, id: Id, data: D) -> Result<D::Id, Error> {
+    async fn update(&self, id: Id, data: D) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        D::update(data, id, &pool).await
+        Ok((
+            D::update(data, id, &pool).await?,
+            D::last_modified(&pool).await?,
+        ))
     }
 
-    async fn delete(&self, id: Id) -> Result<D::Id, Error> {
+    async fn delete(&self, id: Id) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        D::delete(id, &pool).await
+        Ok((D::delete(id, &pool).await?, D::last_modified(&pool).await?))
     }
 
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {

@@ -38,8 +38,6 @@ fn setup_skull(store: &impl Store) {
     store
         .skull(USER)
         .unwrap()
-        .write()
-        .unwrap()
         .create(Skull {
             name: String::from("skull"),
             color: String::from("color"),
