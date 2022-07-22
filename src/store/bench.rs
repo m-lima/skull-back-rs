@@ -1,4 +1,6 @@
-use super::{Occurrence, Skull, Store};
+use crate::test_util::create_base_test_path;
+
+use super::{Occurrence, Selector, Skull, Store};
 
 extern crate test;
 
@@ -26,17 +28,16 @@ const OCCURRENCE: Occurrence = Occurrence {
     millis: 0,
 };
 
-struct Defer<T: Fn()>(T);
-
-impl<T: Fn()> Drop for Defer<T> {
-    fn drop(&mut self) {
-        self.0();
-    }
+async fn migrate_db(path: &std::path::Path) {
+    let path = path.join(USER);
+    let pool = sqlx::SqlitePool::connect(&format!("sqlite://{}", path.display()))
+        .await
+        .unwrap();
+    sqlx::migrate!().run(&pool).await.unwrap();
 }
 
-fn setup_skull(store: &impl Store) {
-    store
-        .skull(USER)
+async fn setup_skull<S: Store>(store: S) -> S {
+    Skull::select(&store, USER)
         .unwrap()
         .create(Skull {
             name: String::from("skull"),
@@ -45,65 +46,107 @@ fn setup_skull(store: &impl Store) {
             unit_price: 1.,
             limit: None,
         })
+        .await
         .unwrap();
+    store
 }
 
-fn spawn<T: Store>(sender: Sender) -> Vec<std::thread::JoinHandle<()>> {
-    let mut threads = Vec::with_capacity(20);
+fn spawn<T: Store>(sender: Sender) -> Vec<tokio::task::JoinHandle<()>> {
+    let mut tasks = Vec::with_capacity(20);
 
     for _ in 0..10 {
-        threads.push(std::thread::spawn(move || {
+        tasks.push(tokio::spawn(async move {
             let store = sender.get::<T>();
-            store
-                .occurrence(USER)
-                .unwrap()
-                .write()
+            Occurrence::select(store, USER)
                 .unwrap()
                 .create(OCCURRENCE)
+                .await
                 .unwrap();
         }));
-        threads.push(std::thread::spawn(move || {
+        tasks.push(tokio::spawn(async move {
             let store = sender.get::<T>();
-            store
-                .occurrence(USER)
-                .unwrap()
-                .read()
+            Occurrence::select(store, USER)
                 .unwrap()
                 .list(Some(10))
+                .await
                 .unwrap();
         }));
     }
 
-    threads
+    tasks
+}
+
+fn launch<T: Store>(sender: Sender) {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let threads = spawn::<T>(sender);
+            for t in threads {
+                t.await.unwrap();
+            }
+        });
+}
+
+fn build_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
 }
 
 #[bench]
 fn in_memory(bench: &mut test::Bencher) {
-    let store = super::in_memory::InMemory::new([USER]);
-    setup_skull(&store);
-    let sender = Sender::new(&store);
+    let store = build_runtime().block_on(async {
+        let store = super::in_memory::InMemory::new([USER]);
 
+        setup_skull(store).await
+    });
+
+    let sender = Sender::new(&store);
     bench.iter(|| {
-        let threads = spawn::<super::in_memory::InMemory>(sender);
-        for t in threads {
-            t.join().unwrap();
-        }
+        launch::<super::in_memory::InMemory>(sender);
     });
 }
 
 #[bench]
 fn in_file(bench: &mut test::Bencher) {
-    let dir = std::env::temp_dir().join(rand::random::<u64>().to_string());
-    std::fs::create_dir(&dir).unwrap();
-    let _defer = Defer(|| std::fs::remove_dir_all(&dir).unwrap());
-    let store = super::in_file::InFile::new(&dir, [USER]).unwrap();
-    setup_skull(&store);
-    let sender = Sender::new(&store);
+    let path = create_base_test_path();
+    let store = build_runtime().block_on(async {
+        let store = super::in_file::InFile::new(
+            Some((String::from(USER), path.join(USER)))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
 
+        setup_skull(store).await
+    });
+
+    let sender = Sender::new(&store);
     bench.iter(|| {
-        let threads = spawn::<super::in_file::InFile>(sender);
-        for t in threads {
-            t.join().unwrap();
-        }
+        launch::<super::in_file::InFile>(sender);
+    });
+}
+
+#[bench]
+fn in_db(bench: &mut test::Bencher) {
+    let path = create_base_test_path();
+    let store = build_runtime().block_on(async {
+        let store = super::in_db::InDb::new(
+            Some((String::from(USER), path.join(USER)))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+
+        migrate_db(&path).await;
+        setup_skull(store).await
+    });
+
+    let sender = Sender::new(&store);
+    bench.iter(|| {
+        launch::<super::in_file::InFile>(sender);
     });
 }
