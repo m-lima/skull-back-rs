@@ -4,12 +4,13 @@ use super::middleware;
 use crate::options;
 use crate::store;
 
-// Allowed because we can't create closures with moving the same data
-#[allow(clippy::option_if_let_else)]
 pub fn route(options: options::Options) -> anyhow::Result<gotham::router::Router> {
-    let store = match options.store_path {
-        Some(path) => middleware::Store::new(store::in_file(path, options.users)?),
-        None => middleware::Store::new(store::in_memory(options.users)),
+    let store = match options.db_path {
+        Some(path) => middleware::Store::new(store::in_db(path, options.users)?),
+        None => match options.store_path {
+            Some(path) => middleware::Store::new(store::in_file(path, options.users)?),
+            None => middleware::Store::new(store::in_memory(options.users)),
+        },
     };
 
     if let Some(cors) = options.cors {
@@ -73,7 +74,7 @@ fn without_cors(
     })
 }
 
-pub fn setup_resources<C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
+fn setup_resources<C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
 where
     C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
     P: std::panic::RefUnwindSafe + Send + Sync + 'static,
@@ -86,7 +87,7 @@ where
 struct Resource<D: store::Selector>(std::marker::PhantomData<D>);
 
 impl<D: store::Selector> Resource<D> {
-    pub fn setup<C, P>(route: &mut gotham::router::builder::ScopeBuilder<'_, C, P>)
+    fn setup<C, P>(route: &mut gotham::router::builder::ScopeBuilder<'_, C, P>)
     where
         C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
         P: std::panic::RefUnwindSafe + Send + Sync + 'static,

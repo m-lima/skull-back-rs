@@ -64,90 +64,50 @@ pub struct InFile {
 }
 
 impl InFile {
-    pub fn new<S, I, P>(path: P, users: I) -> anyhow::Result<Self>
-    where
-        S: AsRef<str>,
-        I: std::iter::IntoIterator<Item = S>,
-        P: AsRef<std::path::Path>,
-    {
-        let path = std::path::PathBuf::from(path.as_ref());
-
-        if !path.exists() {
-            anyhow::bail!(
-                "Store directory does not exist: {}",
-                std::fs::canonicalize(&path).unwrap_or(path).display()
-            );
-        }
-
-        if !path.is_dir() {
-            anyhow::bail!(
-                "Store path is not a directory: {}",
-                std::fs::canonicalize(&path).unwrap_or(path).display()
-            );
-        }
-
-        let dir_reader = path
-            .read_dir()
-            .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))?;
-
-        let users = users
-            .into_iter()
-            .map(|user| path.join(user.as_ref()))
-            .chain(
-                dir_reader
-                    .filter_map(Result::ok)
-                    .map(|dir| dir.path())
-                    .filter(|dir| dir.is_dir()),
-            )
-            .filter_map(|root| {
-                root.file_name()
-                    .and_then(std::ffi::OsStr::to_str)
-                    .map(String::from)
-                    .map(|name| (name, root))
-            })
-            .collect::<std::collections::HashSet<_>>();
-
-        for (user, path) in &users {
-            if !path.exists() {
-                log::debug!("Creating {}", path.display());
-                std::fs::create_dir(&path).map_err(|e| {
-                    anyhow::anyhow!("Could not create user directory {}: {e}", path.display())
-                })?;
-            } else if !path.is_dir() {
-                anyhow::bail!("User path is not a directory {}", path.display());
-            }
-
-            for file in
-                [Skull::name(), Quick::name(), Occurrence::name()].map(|name| path.join(name))
-            {
-                if !file.exists() {
-                    log::debug!("Creating {}", path.display());
-                    std::fs::File::create(&file)
-                        .map_err(|e| anyhow::anyhow!("Could not create {}: {e}", file.display()))?;
-                } else if file.is_dir() {
-                    anyhow::bail!("Path {} is not a file", file.display());
-                }
-            }
-            log::info!("Allowing {user}");
-        }
-
+    pub fn new(
+        users: std::collections::HashMap<String, std::path::PathBuf>,
+    ) -> anyhow::Result<Self> {
         let users = users
             .into_iter()
             .map(|(user, path)| {
+                if !path.exists() {
+                    log::debug!("Creating {}", path.display());
+                    std::fs::create_dir(&path).map_err(|e| {
+                        anyhow::anyhow!("Could not create user directory {}: {e}", path.display())
+                    })?;
+                } else if !path.is_dir() {
+                    anyhow::bail!("User path is not a directory {}", path.display());
+                }
+
+                for file in
+                    [Skull::name(), Quick::name(), Occurrence::name()].map(|name| path.join(name))
+                {
+                    if !file.exists() {
+                        log::debug!("Creating {}", path.display());
+                        std::fs::File::create(&file).map_err(|e| {
+                            anyhow::anyhow!("Could not create {}: {e}", file.display())
+                        })?;
+                    } else if file.is_dir() {
+                        anyhow::bail!("Path {} is not a file", file.display());
+                    }
+                }
+
+                log::info!("Allowing {user}");
+
                 let skull = std::sync::RwLock::new(UserFile::new(path.join(Skull::name())));
                 let quick = std::sync::RwLock::new(UserFile::new(path.join(Quick::name())));
                 let occurrence =
                     std::sync::RwLock::new(UserFile::new(path.join(Occurrence::name())));
-                (
+                Ok((
                     user,
                     UserStore {
                         skull,
                         quick,
                         occurrence,
                     },
-                )
+                ))
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         Ok(Self { users })
     }
@@ -505,9 +465,7 @@ mod test {
 
     impl TestStore {
         pub fn new() -> Self {
-            use rand::Rng;
-
-            let name = format!("{:016x}", rand::thread_rng().gen::<u64>());
+            let name = format!("{:016x}", rand::random::<u64>());
             let path = std::env::temp_dir().join("skull-test");
             if path.exists() {
                 assert!(path.is_dir(), "Cannot use {} as test path", path.display());
@@ -521,7 +479,12 @@ mod test {
                 path.display()
             );
             std::fs::create_dir(&path).unwrap();
-            let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
+            let store = InFile::new(
+                Some((String::from(USER), path.join(USER)))
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap_or_else(|e| {
                 drop(std::fs::remove_dir_all(&path));
                 panic!("{e}");
             });

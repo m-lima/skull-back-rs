@@ -1,3 +1,5 @@
+#[cfg(all(test, nightly))]
+mod bench;
 mod crud;
 mod data;
 mod error;
@@ -24,120 +26,62 @@ where
     I: std::iter::IntoIterator<Item = S>,
     P: AsRef<std::path::Path>,
 {
-    in_file::InFile::new(path, users)
+    in_file::InFile::new(gather_users(path, users)?)
 }
 
-#[cfg(all(test, nightly))]
-mod bench {
-    use super::{Occurrence, Skull, Store};
+pub fn in_db<S, I, P>(path: P, users: I) -> anyhow::Result<impl Store>
+where
+    S: AsRef<str>,
+    I: std::iter::IntoIterator<Item = S>,
+    P: AsRef<std::path::Path>,
+{
+    in_db::InDb::new(gather_users(path, users)?)
+}
 
-    extern crate test;
-
-    const USER: &str = "bloink";
-
-    #[derive(Copy, Clone)]
-    struct Sender(usize);
-
-    impl Sender {
-        fn new<T: Store>(store: &T) -> Self {
-            Self(store as *const T as usize)
-        }
-
-        fn get<T: Store>(&self) -> &T {
-            unsafe { &*(self.0 as *const T) }
-        }
+fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
+    if !path.exists() {
+        anyhow::bail!(
+            "Store directory does not exist: {}",
+            std::fs::canonicalize(&path)
+                .unwrap_or_else(|_| path.clone())
+                .display()
+        );
     }
 
-    unsafe impl Send for Sender {}
-    unsafe impl Sync for Sender {}
-
-    const OCCURRENCE: Occurrence = Occurrence {
-        skull: 1,
-        amount: 1.,
-        millis: 0,
-    };
-
-    struct Defer<T: Fn()>(T);
-
-    impl<T: Fn()> Drop for Defer<T> {
-        fn drop(&mut self) {
-            self.0();
-        }
+    if !path.is_dir() {
+        anyhow::bail!(
+            "Store path is not a directory: {}",
+            std::fs::canonicalize(&path)
+                .unwrap_or_else(|_| path.clone())
+                .display()
+        );
     }
 
-    fn setup_skull(store: &impl Store) {
-        store
-            .skull(USER)
-            .unwrap()
-            .write()
-            .unwrap()
-            .create(Skull {
-                name: String::from("skull"),
-                color: String::from("color"),
-                icon: String::from("icon"),
-                unit_price: 1.,
-                limit: None,
-            })
-            .unwrap();
-    }
+    path.read_dir()
+        .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))
+}
 
-    fn spawn<T: Store>(sender: Sender) -> Vec<std::thread::JoinHandle<()>> {
-        let mut threads = Vec::with_capacity(20);
+fn gather_users<S, I, P>(
+    path: P,
+    users: I,
+) -> anyhow::Result<std::collections::HashMap<String, std::path::PathBuf>>
+where
+    S: AsRef<str>,
+    I: std::iter::IntoIterator<Item = S>,
+    P: AsRef<std::path::Path>,
+{
+    let path = std::path::PathBuf::from(path.as_ref());
+    let open_dir = open_dir(&path)?;
 
-        for _ in 0..10 {
-            threads.push(std::thread::spawn(move || {
-                let store = sender.get::<T>();
-                store
-                    .occurrence(USER)
-                    .unwrap()
-                    .write()
-                    .unwrap()
-                    .create(OCCURRENCE)
-                    .unwrap();
-            }));
-            threads.push(std::thread::spawn(move || {
-                let store = sender.get::<T>();
-                store
-                    .occurrence(USER)
-                    .unwrap()
-                    .read()
-                    .unwrap()
-                    .list(Some(10))
-                    .unwrap();
-            }));
-        }
-
-        threads
-    }
-
-    #[bench]
-    fn in_memory(bench: &mut test::Bencher) {
-        let store = super::in_memory::InMemory::new([USER]);
-        setup_skull(&store);
-        let sender = Sender::new(&store);
-
-        bench.iter(|| {
-            let threads = spawn::<super::in_memory::InMemory>(sender);
-            for t in threads {
-                t.join().unwrap();
-            }
-        });
-    }
-
-    #[bench]
-    fn in_file(bench: &mut test::Bencher) {
-        let dir = std::env::temp_dir().join(rand::random::<u64>().to_string());
-        std::fs::create_dir(&dir).unwrap();
-        let _defer = Defer(|| std::fs::remove_dir_all(&dir).unwrap());
-        let store = super::in_file::InFile::new(&dir, [USER]).unwrap();
-        setup_skull(&store);
-        let sender = Sender::new(&store);
-
-        bench.iter(|| {
-            let threads = spawn::<super::in_file::InFile>(sender);
-            for t in threads {
-                t.join().unwrap();
-            }
-        });
-    }
+    Ok(users
+        .into_iter()
+        .map(|user| path.join(user.as_ref()))
+        .chain(open_dir.filter_map(Result::ok).map(|child| child.path()))
+        .filter_map(|root| {
+            root.file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(String::from)
+                .map(|name| (name, root))
+        })
+        .collect())
 }

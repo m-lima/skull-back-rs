@@ -4,6 +4,7 @@ pub fn parse() -> Options {
 }
 
 #[derive(clap::Parser)]
+#[clap(name = "Skull", about = "A server for skull book keeping", group = clap::ArgGroup::new("store"))]
 pub struct Options {
     /// Selects the port to serve on
     #[clap(short, long, default_value = "80")]
@@ -17,11 +18,19 @@ pub struct Options {
     #[clap(short, long, parse(try_from_str = to_cors), conflicts_with = "web-path")]
     pub cors: Option<gotham::hyper::header::HeaderValue>,
 
-    /// Sets storage location
+    /// Sets file storage location
     ///
-    /// Will store data in memory if no path is provided
-    #[clap(short, long, parse(try_from_str = to_dir_path))]
+    /// Creates a file per user in the given directory. If no path is provided,
+    /// store data in memory
+    #[clap(short, long, group = "store", parse(try_from_str = to_dir_path))]
     pub store_path: Option<std::path::PathBuf>,
+
+    /// Sets database storage location
+    ///
+    /// Creates a database per user in the given directory. If no path is provided,
+    /// store data in memory
+    #[clap(short, long, group = "store", parse(try_from_str = to_dir_path))]
+    pub db_path: Option<std::path::PathBuf>,
 
     /// The directory of the front-end content
     ///

@@ -13,7 +13,9 @@ impl Log {
         use store::Error as StoreError;
 
         match error {
-            Error::Store(StoreError::NotFound(_) | StoreError::NoSuchUser(_))
+            Error::Store(
+                StoreError::NotFound(_) | StoreError::NoSuchUser(_) | StoreError::Constraint,
+            )
             | Error::JsonDeserialize(_)
             | Error::TimeDeserialize(_)
             | Error::PayloadTooLarge
@@ -26,7 +28,7 @@ impl Log {
                 StoreError::StoreFull
                 | StoreError::Io(_)
                 | StoreError::Serde(_)
-                | StoreError::FailedToAcquireLock
+                | StoreError::Lock
                 | StoreError::BadMillis(_)
                 | StoreError::Sql(_),
             )
@@ -142,7 +144,6 @@ impl gotham::middleware::Middleware for Log {
     }
 }
 
-// TODO: Got a big ol lock here, for all users, all data types
 #[derive(Clone, gotham_derive::StateData, gotham_derive::NewMiddleware)]
 pub struct Store(std::sync::Arc<dyn store::Store>);
 
