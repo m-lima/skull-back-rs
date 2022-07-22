@@ -1,4 +1,7 @@
-use crate::{check, test_util::Assertion};
+use crate::{
+    check,
+    test_util::{create_base_test_path, Assertion, TestPath},
+};
 
 const USER: &str = "bloink";
 
@@ -27,25 +30,12 @@ impl CopiablePath {
 
 struct TestServer {
     server: gotham::test::TestServer,
-    path: std::path::PathBuf,
+    path: TestPath,
 }
 
 impl TestServer {
     fn new() -> Self {
-        let name = format!("{:016x}", rand::random::<u64>());
-        let path = std::env::temp_dir().join("skull-test");
-        if path.exists() {
-            assert!(path.is_dir(), "Cannot use {} as test path", path.display());
-        } else {
-            std::fs::create_dir(&path).unwrap();
-        }
-        let path = path.join(name);
-        assert!(
-            !path.exists(),
-            "Cannot use {} as test path as it already exists",
-            path.display()
-        );
-        std::fs::create_dir(&path).unwrap();
+        let path = create_base_test_path();
         let copiable_path = CopiablePath::new(&path);
 
         let server = gotham::test::TestServer::new(move || {
@@ -197,12 +187,6 @@ impl TestServer {
         );
 
         last_modified
-    }
-}
-
-impl Drop for TestServer {
-    fn drop(&mut self) {
-        drop(std::fs::remove_dir_all(&self.path));
     }
 }
 

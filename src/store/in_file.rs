@@ -465,6 +465,7 @@ mod test {
             test_util::{last_modified_eq, last_modified_ne},
             Quick, Selector,
         },
+        test_util::{create_base_test_path, TestPath},
     };
 
     use super::{Crud, Error, FileData, InFile, Skull, Store, WithId};
@@ -479,34 +480,18 @@ mod test {
 
     struct TestStore {
         store: InFile,
-        path: std::path::PathBuf,
+        path: TestPath,
     }
 
     impl TestStore {
         fn new() -> Self {
-            let name = format!("{:016x}", rand::random::<u64>());
-            let path = std::env::temp_dir().join("skull-test");
-            if path.exists() {
-                assert!(path.is_dir(), "Cannot use {} as test path", path.display());
-            } else {
-                std::fs::create_dir(&path).unwrap();
-            }
-            let path = path.join(name);
-            assert!(
-                !path.exists(),
-                "Cannot use {} as test path as it already exists",
-                path.display()
-            );
-            std::fs::create_dir(&path).unwrap();
+            let path = create_base_test_path();
             let store = InFile::new(
                 Some((String::from(USER), path.join(USER)))
                     .into_iter()
                     .collect(),
             )
-            .unwrap_or_else(|e| {
-                drop(std::fs::remove_dir_all(&path));
-                panic!("{e}");
-            });
+            .unwrap();
 
             Self { store, path }
         }
@@ -556,12 +541,6 @@ mod test {
             user: &str,
         ) -> Result<&dyn crate::store::Crud<crate::store::Occurrence>, Error> {
             self.store.occurrence(user)
-        }
-    }
-
-    impl Drop for TestStore {
-        fn drop(&mut self) {
-            drop(std::fs::remove_dir_all(&self.path));
         }
     }
 
