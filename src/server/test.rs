@@ -29,8 +29,8 @@ impl CopiablePath {
 }
 
 struct TestServer {
-    server: gotham::test::TestServer,
     path: TestPath,
+    server: gotham::test::TestServer,
 }
 
 impl TestServer {
@@ -51,7 +51,7 @@ impl TestServer {
         })
         .unwrap();
 
-        let server = Self { server, path };
+        let server = Self { path, server };
 
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -92,71 +92,80 @@ impl TestServer {
     }
 
     fn populate(&self) -> u64 {
-        assert_eq!(
-            self.client()
-                .post(
-                    "http://localhost/skull",
-                    r#"{
+        let response = self
+            .client()
+            .post(
+                "http://localhost/skull",
+                r#"{
                         "name": "skull1",
                         "color": "color1",
                         "icon": "icon1",
                         "unitPrice": 0.1
                     }"#,
-                    mime::APPLICATION_JSON,
-                )
-                .with_header(
-                    super::mapper::request::USER_HEADER,
-                    gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
-                )
-                .perform()
-                .unwrap()
-                .status(),
-            201
-        );
+                mime::APPLICATION_JSON,
+            )
+            .with_header(
+                super::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
 
-        assert_eq!(
-            self.client()
-                .post(
-                    "http://localhost/skull",
-                    r#"{
+        assert_eq!(response.status(), 201);
+
+        let last_modified = extract_last_modified(&response).unwrap();
+
+        let response = self
+            .client()
+            .post(
+                "http://localhost/skull",
+                r#"{
                         "name": "skull2",
                         "color": "color2",
                         "icon": "icon2",
                         "unitPrice": 0.2
                     }"#,
-                    mime::APPLICATION_JSON,
-                )
-                .with_header(
-                    super::mapper::request::USER_HEADER,
-                    gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
-                )
-                .perform()
-                .unwrap()
-                .status(),
-            201
-        );
+                mime::APPLICATION_JSON,
+            )
+            .with_header(
+                super::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(response.status(), 201);
 
-        assert_eq!(
-            self.client()
-                .post(
-                    "http://localhost/skull",
-                    r#"{
+        let last_modified = {
+            let new_time = extract_last_modified(&response).unwrap();
+            assert!(new_time > last_modified);
+            new_time
+        };
+
+        let response = self
+            .client()
+            .post(
+                "http://localhost/skull",
+                r#"{
                         "name": "skull3",
                         "color": "color3",
                         "icon": "icon3",
                         "unitPrice": 0.3
                     }"#,
-                    mime::APPLICATION_JSON,
-                )
-                .with_header(
-                    super::mapper::request::USER_HEADER,
-                    gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
-                )
-                .perform()
-                .unwrap()
-                .status(),
-            201
-        );
+                mime::APPLICATION_JSON,
+            )
+            .with_header(
+                super::mapper::request::USER_HEADER,
+                gotham::hyper::header::HeaderValue::from_str(USER).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(response.status(), 201);
+
+        let last_modified = {
+            let new_time = extract_last_modified(&response).unwrap();
+            assert!(new_time > last_modified);
+            new_time
+        };
 
         let response = self
             .client()
@@ -167,15 +176,13 @@ impl TestServer {
             )
             .perform()
             .unwrap();
+        assert_eq!(response.status(), 200);
 
-        let last_modified = response
-            .headers()
-            .get(gotham::hyper::header::LAST_MODIFIED)
-            .unwrap()
-            .to_str()
-            .map(str::parse)
-            .unwrap()
-            .unwrap();
+        let last_modified = {
+            let new_time = extract_last_modified(&response).unwrap();
+            assert_eq!(new_time, last_modified);
+            new_time
+        };
 
         assert_eq!(
             serde_json::from_str::<Vec<crate::store::Skull>>(
@@ -188,6 +195,13 @@ impl TestServer {
 
         last_modified
     }
+}
+
+fn extract_last_modified(response: &gotham::test::TestResponse) -> Option<u64> {
+    response
+        .headers()
+        .get(gotham::hyper::header::LAST_MODIFIED)
+        .map(|h| h.to_str().unwrap().parse().unwrap())
 }
 
 impl std::ops::Deref for TestServer {
@@ -208,10 +222,7 @@ fn response_eq(
         return Assertion::err_ne("Status code mismatch", response.status(), expected_status);
     }
 
-    let last_modified = response
-        .headers()
-        .get(gotham::hyper::header::LAST_MODIFIED)
-        .map(|h| h.to_str().unwrap().parse().unwrap());
+    let last_modified = extract_last_modified(&response);
     if last_modified != expected_last_modified {
         return Assertion::err_ne(
             "Last modified mismatch",
