@@ -1,11 +1,14 @@
-#[cfg(all(test, nightly))]
-mod bench;
 mod crud;
 mod data;
 mod error;
 mod in_db;
 mod in_file;
 mod in_memory;
+
+#[cfg(all(test, nightly))]
+mod bench;
+#[cfg(test)]
+mod test;
 
 pub type Id = u32;
 pub use crud::{Crud, Selector, Store};
