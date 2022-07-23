@@ -112,18 +112,19 @@ impl<D: Data> UserContainer<D> {
 }
 
 #[async_trait::async_trait]
-impl<D: Data> Crud<D> for std::sync::RwLock<UserContainer<D>> {
+impl<D: MemoryData> Crud<D> for std::sync::RwLock<UserContainer<D>> {
     async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
         let lock = self.read()?;
+        let len = lock.data.len();
         Ok((
             lock.data
                 .iter()
                 .skip(
-                    lock.data.len()
-                        - limit
-                            .map(usize::try_from)
-                            .and_then(Result::ok)
-                            .unwrap_or(lock.data.len()),
+                    len - limit
+                        .map(usize::try_from)
+                        .and_then(Result::ok)
+                        .unwrap_or(len)
+                        .min(len),
                 )
                 .map(Clone::clone)
                 .collect(),
@@ -135,6 +136,9 @@ impl<D: Data> Crud<D> for std::sync::RwLock<UserContainer<D>> {
         let mut lock = self.write()?;
         if lock.next_id == u32::MAX {
             return Err(Error::StoreFull);
+        }
+        if data.conflicts(&lock.data) {
+            return Err(Error::Constraint);
         }
         lock.last_modified = std::time::SystemTime::now();
         let id = lock.next_id;
@@ -178,11 +182,36 @@ impl<D: Data> Crud<D> for std::sync::RwLock<UserContainer<D>> {
     }
 }
 
+trait MemoryData: Data {
+    fn conflicts(&self, data: &[Self::Id]) -> bool;
+}
+
+impl MemoryData for Skull {
+    fn conflicts(&self, data: &[Self::Id]) -> bool {
+        data.iter()
+            .any(|d| d.name == self.name || d.color == self.color || d.icon == self.icon)
+    }
+}
+
+impl MemoryData for Quick {
+    fn conflicts(&self, data: &[Self::Id]) -> bool {
+        data.iter()
+            .any(|d| d.skull == self.skull && (d.amount - self.amount).abs() < f32::EPSILON)
+    }
+}
+
+impl MemoryData for Occurrence {
+    fn conflicts(&self, _data: &[Self::Id]) -> bool {
+        false
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
         check,
         store::{
+            test::USER,
             test_util::{last_modified_eq, last_modified_ne},
             Quick, Selector,
         },
@@ -190,9 +219,9 @@ mod test {
 
     use super::{Crud, Error, InMemory, Skull, UserContainer, WithId};
 
-    type SkullId = <Skull as super::Data>::Id;
+    crate::create_tests!(InMemory, InMemory::new(&[USER]));
 
-    const USER: &str = "bloink";
+    type SkullId = <Skull as super::Data>::Id;
 
     mod construction {
         use super::InMemory;
@@ -251,40 +280,6 @@ mod test {
         fn test(&self) -> &std::sync::RwLock<UserContainer<Skull>> {
             self.skull.data.get(USER).unwrap()
         }
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn fetches_user_container() {
-        let mut store = InMemory::new(&[USER]);
-        let skull = new_skull("skull", 0.4);
-        let id = store.test().create(skull).await.unwrap().0;
-
-        assert!(store.skull.data.len() == 1);
-        assert!(
-            store
-                .skull
-                .data
-                .remove(USER)
-                .unwrap()
-                .into_inner()
-                .unwrap()
-                .data
-                .len()
-                == 1
-        );
-        assert!(id == 1);
-    }
-
-    #[test]
-    fn reject_unknown_user() {
-        let store = InMemory::new(&[USER]);
-        assert_eq!(
-            Skull::select(&store, "unknown")
-                .map(|_| ())
-                .unwrap_err()
-                .to_string(),
-            Error::NoSuchUser(String::from("unknown")).to_string()
-        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -359,46 +354,6 @@ mod test {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn list() {
-        let store = InMemory::new(&[USER]);
-
-        store.test().create(new_skull("skull", 0.1)).await.unwrap();
-        store.test().create(new_skull("skull", 0.2)).await.unwrap();
-        store.test().create(new_skull("skull", 0.3)).await.unwrap();
-
-        {
-            let skulls = store.test().list(None).await.unwrap().0.len();
-            assert_eq!(skulls, 3);
-        }
-        {
-            let skulls = store
-                .test()
-                .list(Some(1))
-                .await
-                .unwrap()
-                .0
-                .into_iter()
-                .collect::<Vec<_>>();
-            assert_eq!(skulls, vec![SkullId::new(3, new_skull("skull", 0.3))]);
-        }
-        {
-            let skulls = store.test().list(Some(0)).await.unwrap().0.len();
-            assert_eq!(skulls, 0);
-        }
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn create() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        let skull = new_skull("skull", 0.4);
-        let id = container.create(skull).await.unwrap().0;
-
-        let container = container.read().unwrap();
-        assert!(container.data.len() == 1);
-        assert!(id == 1);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
     async fn create_store_full() {
         let container = std::sync::RwLock::new(UserContainer {
             next_id: u32::MAX,
@@ -410,31 +365,6 @@ mod test {
         assert_eq!(
             container.create(skull).await.unwrap_err().to_string(),
             Error::StoreFull.to_string()
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn read() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        let expected = SkullId::new(3, new_skull("skull", 0.4));
-        container.write().unwrap().data.push(expected.clone());
-
-        assert_eq!(
-            Crud::<Skull>::read(&container, 3).await.unwrap().0,
-            expected
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn read_not_found() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        let id = 3;
-        assert_eq!(
-            Crud::<Skull>::read(&container, id)
-                .await
-                .unwrap_err()
-                .to_string(),
-            Error::NotFound(id).to_string()
         );
     }
 
