@@ -15,7 +15,6 @@ pub trait Crud<D: Data>: Send + Sync {
     async fn read(&self, id: Id) -> Response<D::Id>;
     async fn update(&self, id: Id, data: D) -> Response<D::Id>;
     async fn delete(&self, id: Id) -> Response<D::Id>;
-    // TODO: Return no header if not modified
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error>;
 }
 
