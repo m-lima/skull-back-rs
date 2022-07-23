@@ -12,19 +12,13 @@ mod transient {
     }
 
     pub(super) struct Time {
-        pub millis: Option<i64>,
+        pub millis: i64,
     }
 
     impl Time {
-        pub(super) fn unpack(
-            maybe_self: Option<Self>,
-        ) -> Result<std::time::SystemTime, super::Error> {
-            if let Some(millis) = maybe_self.and_then(|s| s.millis) {
-                let millis = std::time::Duration::from_millis(millis.try_into()?);
-                Ok(std::time::UNIX_EPOCH + millis)
-            } else {
-                Ok(std::time::UNIX_EPOCH)
-            }
+        pub(super) fn unpack(self) -> Result<std::time::SystemTime, super::Error> {
+            let millis = std::time::Duration::from_millis(self.millis.try_into()?);
+            Ok(std::time::UNIX_EPOCH + millis)
         }
     }
 }
@@ -319,7 +313,7 @@ impl SqlData for Skull {
                 "table" = 0
             "#
         )
-        .fetch_optional(pool)
+        .fetch_one(pool)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
@@ -474,7 +468,7 @@ impl SqlData for Quick {
                 "table" = 1
             "#
         )
-        .fetch_optional(pool)
+        .fetch_one(pool)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
@@ -639,7 +633,7 @@ impl SqlData for Occurrence {
                 "table" = 2
             "#
         )
-        .fetch_optional(pool)
+        .fetch_one(pool)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
