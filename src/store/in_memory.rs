@@ -126,7 +126,7 @@ impl<D: MemoryData> Crud<D> for std::sync::RwLock<UserContainer<D>> {
         if lock.next_id == u32::MAX {
             return Err(Error::StoreFull);
         }
-        if data.conflicts(&lock.data) {
+        if data.conflicts(lock.data.iter()) {
             return Err(Error::Constraint);
         }
         lock.last_modified = std::time::SystemTime::now();
@@ -148,6 +148,9 @@ impl<D: MemoryData> Crud<D> for std::sync::RwLock<UserContainer<D>> {
 
     async fn update(&self, id: Id, data: D) -> Response<D::Id> {
         let mut lock = self.write()?;
+        if data.conflicts(lock.data.iter().filter(|d| d.id() != id)) {
+            return Err(Error::Constraint);
+        }
         lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
             let old = &mut lock.data[i];
             let mut with_id = D::Id::new(old.id(), data);
@@ -174,25 +177,23 @@ impl<D: MemoryData> Crud<D> for std::sync::RwLock<UserContainer<D>> {
 }
 
 trait MemoryData: Data {
-    fn conflicts(&self, data: &[Self::Id]) -> bool;
+    fn conflicts<'i>(&self, data: impl Iterator<Item = &'i Self::Id>) -> bool;
 }
 
 impl MemoryData for Skull {
-    fn conflicts(&self, data: &[Self::Id]) -> bool {
-        data.iter()
-            .any(|d| d.name == self.name || d.color == self.color || d.icon == self.icon)
+    fn conflicts<'i>(&self, mut data: impl Iterator<Item = &'i Self::Id>) -> bool {
+        data.any(|d| d.name == self.name || d.color == self.color || d.icon == self.icon)
     }
 }
 
 impl MemoryData for Quick {
-    fn conflicts(&self, data: &[Self::Id]) -> bool {
-        data.iter()
-            .any(|d| d.skull == self.skull && (d.amount - self.amount).abs() < f32::EPSILON)
+    fn conflicts<'i>(&self, mut data: impl Iterator<Item = &'i Self::Id>) -> bool {
+        data.any(|d| d.skull == self.skull && (d.amount - self.amount).abs() < f32::EPSILON)
     }
 }
 
 impl MemoryData for Occurrence {
-    fn conflicts(&self, _data: &[Self::Id]) -> bool {
+    fn conflicts<'i>(&self, _: impl Iterator<Item = &'i Self::Id>) -> bool {
         false
     }
 }

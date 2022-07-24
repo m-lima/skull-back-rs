@@ -691,13 +691,5 @@ mod test {
         }
     }
 
-    impl std::ops::Deref for TestStore {
-        type Target = InDb;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
     crate::create_tests!(InDb, TestStore::new().await);
 }
