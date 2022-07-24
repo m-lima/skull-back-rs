@@ -65,6 +65,12 @@ fn derive_data_impl(input: syn::DeriveInput) -> proc_macro2::TokenStream {
             }
         }
 
+        impl #impl_generics std::cmp::PartialEq<#original_name #type_generics> for #with_id_name #type_generics #where_clause {
+            fn eq(&self, other: &#original_name #type_generics) -> bool {
+                #(self.#field_names == other.#field_names)&&*
+            }
+        }
+
         impl #impl_generics Data for #original_name #type_generics #where_clause {
             type Id = #with_id_name #type_generics;
         }
@@ -87,7 +93,7 @@ mod tests {
         let expected = quote::quote! {
             #[derive(Clone, Debug, PartialEq, ::serde::Serialize)]
             pub(crate) struct SId {
-                id: Id,
+                pub id: Id,
                 string: String,
                 pub int: i32,
                 pub(super) optional: Optional<bool>,
@@ -113,6 +119,14 @@ mod tests {
 
                 fn id(&self) -> Id {
                     self.id
+                }
+            }
+
+            impl std::cmp::PartialEq<S> for SId {
+                fn  eq(&self, other: &S) -> bool {
+                    self.string == other.string &&
+                    self.int == other.int &&
+                    self.optional == other.optional
                 }
             }
 
@@ -143,11 +157,11 @@ mod tests {
         };
 
         let expected = quote::quote! {
-            #[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::sqlx::FromRow)]
+            #[derive(Clone, Debug, PartialEq, ::serde::Serialize)]
             struct SId<'a, A, B: Bee, C, const L: usize>
             where C: Cee
             {
-                id: Id,
+                pub id: Id,
                 a: &'a A,
                 b: B,
                 c: C,
@@ -178,6 +192,17 @@ mod tests {
 
                 fn id(&self) -> Id {
                     self.id
+                }
+            }
+
+            impl<'a, A, B: Bee, C, const L: usize> std::cmp::PartialEq<S<'a, A, B, C, L> > for SId<'a, A, B, C, L>
+            where C: Cee
+            {
+                fn  eq(&self, other: &S<'a, A, B, C, L> ) -> bool {
+                    self.a == other.a &&
+                    self.b == other.b &&
+                    self.c == other.c &&
+                    self.l == other.l
                 }
             }
 
