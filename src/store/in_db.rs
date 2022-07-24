@@ -150,7 +150,6 @@ impl SqlData for Skull {
                     "unit_price" as "unit_price: _",
                     "limit" as "limit: _"
                 FROM skulls
-                ORDER BY "id" DESC
                 LIMIT $1
                 "#,
                 limit
@@ -169,7 +168,6 @@ impl SqlData for Skull {
                     "unit_price" as "unit_price: _",
                     "limit" as "limit: _"
                 FROM skulls
-                ORDER BY "id" DESC
                 "#
             )
             .fetch_all(pool)
@@ -332,7 +330,7 @@ impl SqlData for Quick {
                     "skull" as "skull: _",
                     "amount" as "amount: _"
                 FROM quicks
-                ORDER BY "id" DESC
+                ORDER BY "id" ASC
                 LIMIT $1
                 "#,
                 limit
@@ -348,7 +346,7 @@ impl SqlData for Quick {
                     "skull" as "skull: _",
                     "amount" as "amount: _"
                 FROM quicks
-                ORDER BY "id" DESC
+                ORDER BY "id" ASC
                 "#
             )
             .fetch_all(pool)
@@ -488,7 +486,7 @@ impl SqlData for Occurrence {
                     "amount" as "amount!: _",
                     "millis" as "millis!: _"
                 FROM occurrences
-                ORDER BY "millis", "id" DESC
+                ORDER BY "millis" DESC
                 LIMIT $1
                 "#,
                 limit
@@ -505,7 +503,7 @@ impl SqlData for Occurrence {
                     "amount" as "amount: _",
                     "millis" as "millis: _"
                 FROM occurrences
-                ORDER BY "millis", "id" DESC
+                ORDER BY "millis" DESC
                 "#
             )
             .fetch_all(pool)
@@ -638,4 +636,68 @@ impl SqlData for Occurrence {
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
     }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{store::test::USER, test_util::create_base_test_path};
+
+    use super::{InDb, Store};
+
+    struct TestStore(InDb, crate::test_util::TestPath);
+
+    impl TestStore {
+        async fn new() -> TestStore {
+            let path = create_base_test_path();
+
+            let db = InDb::new(
+                Some((String::from(USER), path.join(USER)))
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap();
+
+            let pool =
+                sqlx::SqlitePool::connect(&format!("sqlite://{}", path.join(USER).display()))
+                    .await
+                    .unwrap();
+            sqlx::migrate!().run(&pool).await.unwrap();
+
+            Self(db, path)
+        }
+    }
+
+    impl Store for TestStore {
+        fn skull(
+            &self,
+            user: &str,
+        ) -> Result<&dyn crate::store::Crud<crate::store::Skull>, crate::store::Error> {
+            self.0.skull(user)
+        }
+
+        fn quick(
+            &self,
+            user: &str,
+        ) -> Result<&dyn crate::store::Crud<crate::store::Quick>, crate::store::Error> {
+            self.0.quick(user)
+        }
+
+        fn occurrence(
+            &self,
+            user: &str,
+        ) -> Result<&dyn crate::store::Crud<crate::store::Occurrence>, crate::store::Error>
+        {
+            self.0.occurrence(user)
+        }
+    }
+
+    impl std::ops::Deref for TestStore {
+        type Target = InDb;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    crate::create_tests!(InDb, TestStore::new().await);
 }

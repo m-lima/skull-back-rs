@@ -190,6 +190,14 @@ impl<D: store::Selector> Update<D> {
         let store = middleware::Store::borrow_from(state).get();
         let crud = D::select(store, user)?;
 
+        // TODO:
+        // 1 - Move this responsibility to Crud
+        // 2 - Update unit tests to cover this
+        // -- so far no API breaking changes --
+        // 3 - Receive a full object to ensure request is what it is
+        // 4 - Update front-end to match
+        // -- so far smaller effort --
+        // 5 - Create websockets to push modifications
         if crud.last_modified().await? > unmodified_since {
             return Err(Error::OutOfSync);
         }

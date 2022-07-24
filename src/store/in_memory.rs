@@ -92,22 +92,11 @@ impl<D: Data> Default for UserContainer<D> {
 }
 
 impl<D: Data> UserContainer<D> {
-    fn id_to_index(&self, id: Id) -> Option<usize> {
-        if self.data.is_empty() {
-            None
-        } else {
-            let index = <usize as std::convert::TryFrom<Id>>::try_from(id).ok()?;
-            Some(std::cmp::min(self.data.len() - 1, index))
-        }
-    }
-
     fn find(&self, id: Id) -> Option<usize> {
-        for i in (0..=self.id_to_index(id)?).rev() {
-            if self.data[i].id() == id {
-                return Some(i);
-            }
-        }
-        None
+        self.data
+            .iter()
+            .take(usize::try_from(id).ok().map(|id| id.min(self.data.len()))?)
+            .rposition(|d| d.id() == id)
     }
 }
 
@@ -160,10 +149,12 @@ impl<D: MemoryData> Crud<D> for std::sync::RwLock<UserContainer<D>> {
     async fn update(&self, id: Id, data: D) -> Response<D::Id> {
         let mut lock = self.write()?;
         lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
-            lock.last_modified = std::time::SystemTime::now();
             let old = &mut lock.data[i];
             let mut with_id = D::Id::new(old.id(), data);
-            std::mem::swap(old, &mut with_id);
+            if old != &with_id {
+                std::mem::swap(old, &mut with_id);
+                lock.last_modified = std::time::SystemTime::now();
+            }
             (with_id, lock.last_modified)
         })
     }
@@ -418,54 +409,5 @@ mod test {
 
         let id = container.create(skull).await.unwrap().0;
         assert_eq!(id, 2);
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn find() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        for i in 1..=30 {
-            container
-                .create(new_skull("skull", i as f32))
-                .await
-                .unwrap();
-        }
-
-        container
-            .write()
-            .unwrap()
-            .data
-            .retain(|d| d.id() % 3 != 0 && d.id() % 4 != 0);
-
-        for i in 1..=30 {
-            assert_eq!(
-                Crud::<Skull>::read(&container, i).await.is_ok(),
-                i % 3 != 0 && i % 4 != 0
-            );
-        }
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn delete_from_list() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        for i in 1..=30 {
-            container
-                .create(new_skull("skull", i as f32))
-                .await
-                .unwrap();
-        }
-
-        let mut reference = container.read().unwrap().data.clone();
-
-        reference.retain(|d| d.id() % 3 != 0 && d.id() % 4 != 0);
-
-        for i in 1..=30 {
-            if i % 3 == 0 || i % 4 == 0 {
-                container.delete(i).await.unwrap();
-            }
-        }
-
-        assert_eq!(container.read().unwrap().data, reference);
     }
 }
