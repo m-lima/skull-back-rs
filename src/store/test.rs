@@ -111,19 +111,11 @@ macro_rules! create_tests {
                 Tester::update_constraint(&$instance).await;
             }
 
-            #[ignore]
             #[tokio::test(flavor = "multi_thread")]
             async fn delete() {
                 Tester::delete(&$instance).await;
             }
 
-            #[ignore]
-            #[tokio::test(flavor = "multi_thread")]
-            async fn delete_sparse() {
-                Tester::delete_sparse(&$instance).await;
-            }
-
-            #[ignore]
             #[tokio::test(flavor = "multi_thread")]
             async fn delete_not_found() {
                 Tester::delete_not_found(&$instance).await;
@@ -145,7 +137,7 @@ macro_rules! create_tests {
 }
 use crate::check;
 
-use super::{Data, Error, Id, Occurrence, Quick, Selector, Skull, Store, WithId};
+use super::{Error, Id, Occurrence, Quick, Selector, Skull, Store, WithId};
 
 pub const USER: &str = "bloink";
 
@@ -291,6 +283,22 @@ impl<D: helper::TesterData> Tester<D> {
         assert_eq!(response, expected);
     }
 
+    pub async fn create_constraint(store: &impl Store) {
+        if let Some(unconstraint) = D::make_unconstraint() {
+            helper::populate(store).await;
+            let store = D::select(store, USER).unwrap();
+
+            let last_modified = store.last_modified().await.unwrap();
+
+            let err = store.create(unconstraint).await.unwrap_err().to_string();
+            assert_eq!(store.last_modified().await.unwrap(), last_modified);
+            assert_eq!(err, "Failed constraint");
+
+            let response = store.list(None).await.unwrap().0;
+            assert_eq!(response, helper::from_range::<D>(1..=3));
+        }
+    }
+
     pub async fn create_monotonic(store: &impl Store) {
         helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
@@ -401,6 +409,9 @@ impl<D: helper::TesterData> Tester<D> {
             last_modified
         ));
         assert_eq!(response, D::with_id(2));
+
+        let response = store.list(None).await.unwrap().0;
+        assert_eq!(response, helper::from_range::<D>(1..=3));
     }
 
     pub async fn update_not_found(store: &impl Store) {
@@ -425,22 +436,90 @@ impl<D: helper::TesterData> Tester<D> {
             .to_string();
         assert_eq!(store.last_modified().await.unwrap(), last_modified);
         assert_eq!(err, format!("Entry not found for id `{}`", Id::MAX));
+
+        let response = store.list(None).await.unwrap().0;
+        assert_eq!(response, helper::from_range::<D>(1..=3));
+    }
+
+    pub async fn update_conflict(store: &impl Store) {
+        let store = D::select(store, USER).unwrap();
+
+        let initial = D::new(1);
+        store.create(initial.clone()).await.unwrap();
+
+        let mut last_modified = store.create(D::new(2)).await.unwrap().1;
+        let mut expected = helper::from_range::<D>(1..=2);
+
+        for (i, _) in initial.make_non_conflicts().iter().enumerate() {
+            last_modified = store
+                .create(D::new(u8::try_from(i + 3).unwrap()))
+                .await
+                .unwrap()
+                .1;
+        }
+
+        for conflicting in initial.make_conflicts() {
+            let err = store.update(2, conflicting).await.unwrap_err().to_string();
+            assert_eq!(store.last_modified().await.unwrap(), last_modified);
+            assert_eq!(err, "Failed constraint");
+        }
+
+        for (id, non_conflicting) in initial.make_non_conflicts().into_iter().enumerate() {
+            let id = Id::try_from(id + 3).unwrap();
+            let response = check!(helper::get_modified_data(
+                store.update(id, non_conflicting.clone()).await.unwrap(),
+                last_modified
+            ));
+            assert_eq!(response, D::new(u8::try_from(id).unwrap()));
+            expected.push(D::Id::new(id, non_conflicting));
+        }
+
+        let response = store.list(None).await.unwrap().0;
+        assert_eq!(response, expected);
     }
 
     pub async fn update_constraint(_store: &impl Store) {
         todo!()
     }
 
-    pub async fn delete(_store: &impl Store) {
-        todo!()
+    pub async fn delete(store: &impl Store) {
+        helper::populate(store).await;
+        let store = D::select(store, USER).unwrap();
+
+        let last_modified = store.last_modified().await.unwrap();
+
+        let response = check!(helper::get_modified_data(
+            store.delete(2).await.unwrap(),
+            last_modified
+        ));
+        assert_eq!(response, D::with_id(2));
+
+        let response = store.list(None).await.unwrap().0;
+        let mut expected = helper::from_range::<D>(1..=3);
+        expected.remove(1);
+        assert_eq!(response, expected);
     }
 
-    pub async fn delete_sparse(_store: &impl Store) {
-        todo!()
-    }
+    pub async fn delete_not_found(store: &impl Store) {
+        helper::populate(store).await;
+        let store = D::select(store, USER).unwrap();
 
-    pub async fn delete_not_found(_store: &impl Store) {
-        todo!()
+        let last_modified = store.last_modified().await.unwrap();
+
+        let err = store.delete(0).await.unwrap_err().to_string();
+        assert_eq!(store.last_modified().await.unwrap(), last_modified);
+        assert_eq!(err, "Entry not found for id `0`");
+
+        let err = store.delete(4).await.unwrap_err().to_string();
+        assert_eq!(store.last_modified().await.unwrap(), last_modified);
+        assert_eq!(err, "Entry not found for id `4`");
+
+        let err = store.delete(Id::MAX).await.unwrap_err().to_string();
+        assert_eq!(store.last_modified().await.unwrap(), last_modified);
+        assert_eq!(err, format!("Entry not found for id `{}`", Id::MAX));
+
+        let response = store.list(None).await.unwrap().0;
+        assert_eq!(response, helper::from_range::<D>(1..=3));
     }
 
     pub async fn delete_cascade(_store: &impl Store) {
@@ -450,152 +529,6 @@ impl<D: helper::TesterData> Tester<D> {
     pub async fn delete_reject(_store: &impl Store) {
         todo!()
     }
-}
-
-impl Tester<Skull> {
-    pub async fn create_constraint(_store: &impl Store) {}
-
-    pub async fn update_conflict(store: &impl Store) {
-        let store = Skull::select(store, USER).unwrap();
-
-        let last_modified = store.last_modified().await.unwrap();
-
-        let conflicting = <Skull as helper::TesterData>::new(1);
-
-        let err = store
-            .update(2, conflicting.clone())
-            .await
-            .unwrap_err()
-            .to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-
-        let data = Skull {
-            name: conflicting.name.clone(),
-            ..helper::TesterData::new(2)
-        };
-        let err = store.update(2, data).await.unwrap_err().to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-
-        let data = Skull {
-            color: conflicting.color.clone(),
-            ..helper::TesterData::new(2)
-        };
-        let err = store.update(2, data).await.unwrap_err().to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-
-        let data = Skull {
-            icon: conflicting.icon.clone(),
-            ..helper::TesterData::new(2)
-        };
-        let err = store.update(2, data).await.unwrap_err().to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-
-        let data = Skull {
-            unit_price: conflicting.unit_price,
-            limit: conflicting.limit,
-            ..helper::TesterData::new(2)
-        };
-        let response = check!(helper::get_modified_data(
-            store.create(data.clone()).await.unwrap(),
-            last_modified
-        ));
-        assert_eq!(response, 2);
-
-        let response = store.list(None).await.unwrap().0;
-        let mut expected = helper::from_range::<Skull>(1..=3);
-        expected[1] = <Skull as Data>::Id::new(2, data);
-        assert_eq!(response, expected);
-    }
-}
-
-impl Tester<Quick> {
-    pub async fn create_constraint(store: &impl Store) {
-        helper::populate(store).await;
-        let store = Quick::select(store, USER).unwrap();
-
-        let last_modified = store.last_modified().await.unwrap();
-
-        let err = store
-            .create(Quick {
-                skull: 7,
-                amount: 7.,
-            })
-            .await
-            .unwrap_err()
-            .to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-    }
-
-    pub async fn update_conflict(store: &impl Store) {
-        helper::populate(store).await;
-        let store = Quick::select(store, USER).unwrap();
-
-        let last_modified = store.last_modified().await.unwrap();
-        let modified = <Quick as helper::TesterData>::with_id(2);
-
-        let data = Quick {
-            skull: 1,
-            ..helper::TesterData::new(2)
-        };
-        let response = check!(helper::get_modified_data(
-            store.update(2, data).await.unwrap(),
-            last_modified
-        ));
-        assert_eq!(response, modified);
-        let modified = response;
-
-        let data = Quick {
-            amount: 3.,
-            ..helper::TesterData::new(2)
-        };
-        let response = check!(helper::get_modified_data(
-            store.update(2, data).await.unwrap(),
-            last_modified
-        ));
-        assert_eq!(response, modified);
-        let modified = response;
-
-        let data = Quick {
-            amount: 1.,
-            ..helper::TesterData::new(2)
-        };
-        let err = store.update(2, data).await.unwrap_err().to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-
-        let response = store.list(None).await.unwrap().0;
-        let mut expected = helper::from_range::<Quick>(1..=3);
-        expected[1] = modified;
-        assert_eq!(response, expected);
-    }
-}
-
-impl Tester<Occurrence> {
-    pub async fn create_constraint(store: &impl Store) {
-        helper::populate(store).await;
-        let store = Occurrence::select(store, USER).unwrap();
-
-        let last_modified = store.last_modified().await.unwrap();
-
-        let err = store
-            .create(Occurrence {
-                skull: 7,
-                amount: 7.,
-                millis: 7,
-            })
-            .await
-            .unwrap_err()
-            .to_string();
-        assert_eq!(store.last_modified().await.unwrap(), last_modified);
-        assert_eq!(err, "Failed constraint");
-    }
-
-    pub async fn update_conflict(_store: &impl Store) {}
 }
 
 mod helper {
@@ -612,6 +545,7 @@ mod helper {
 
         fn make_conflicts(&self) -> Vec<Self>;
         fn make_non_conflicts(&self) -> Vec<Self>;
+        fn make_unconstraint() -> Option<Self>;
     }
 
     impl TesterData for Skull {
@@ -650,6 +584,10 @@ mod helper {
                 ..Self::new(7)
             }]
         }
+
+        fn make_unconstraint() -> Option<Self> {
+            None
+        }
     }
 
     impl TesterData for Quick {
@@ -676,6 +614,13 @@ mod helper {
                 },
             ]
         }
+
+        fn make_unconstraint() -> Option<Self> {
+            Some(Quick {
+                skull: 7,
+                amount: 7.,
+            })
+        }
     }
 
     impl TesterData for Occurrence {
@@ -693,6 +638,14 @@ mod helper {
 
         fn make_non_conflicts(&self) -> Vec<Self> {
             Vec::new()
+        }
+
+        fn make_unconstraint() -> Option<Self> {
+            Some(Occurrence {
+                skull: 7,
+                amount: 7.,
+                millis: 7,
+            })
         }
     }
 

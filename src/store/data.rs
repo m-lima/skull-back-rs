@@ -7,7 +7,15 @@ pub trait Data:
 }
 
 pub trait WithId<D: Data>:
-    Clone + Send + Sync + Unpin + PartialEq + PartialEq<D> + std::fmt::Debug + serde::Serialize
+    'static
+    + Clone
+    + Send
+    + Sync
+    + Unpin
+    + PartialEq
+    + PartialEq<D>
+    + std::fmt::Debug
+    + serde::Serialize
 {
     fn new(id: Id, data: D) -> Self;
     fn forget_id(self) -> D;
