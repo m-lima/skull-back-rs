@@ -1,6 +1,8 @@
 use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
 #[cfg(all(test, nightly))]
+mod bench;
+#[cfg(all(test, nightly))]
 mod serde;
 
 macro_rules! parse {
@@ -460,27 +462,17 @@ impl FileData for Occurrence {
 #[cfg(test)]
 mod test {
     use crate::{
-        check,
-        store::{
-            test_util::{last_modified_eq, last_modified_ne},
-            Quick, Selector,
-        },
+        store::{data::SkullId, test::USER, WithId},
         test_util::{create_base_test_path, TestPath},
     };
 
-    use super::{Crud, Error, FileData, InFile, Skull, Store, WithId};
+    use super::{Error, FileData, InFile, Skull, Store};
 
-    type SkullId = <Skull as super::Data>::Id;
-
-    const USER: &str = "bloink";
-    const SKULLS: &str = r#"0	skull	0		0.1	
-4	skool	0		0.3	
-10	skrut	0		43	
-"#;
+    crate::impl_crud_tests!(InFile, TestStore::new());
 
     struct TestStore {
         store: InFile,
-        path: TestPath,
+        _path: TestPath,
     }
 
     impl TestStore {
@@ -493,37 +485,7 @@ mod test {
             )
             .unwrap();
 
-            Self { store, path }
-        }
-
-        fn with_data(self) -> Self {
-            std::fs::write(self.path.join(USER).join("skull"), SKULLS).unwrap();
-            self
-        }
-
-        fn verify_skull(&self, payload: &str) {
-            let data =
-                String::from_utf8(std::fs::read(self.path.join(USER).join("skull")).unwrap())
-                    .unwrap();
-            assert_eq!(data.as_str(), payload);
-        }
-
-        fn test(&self) -> &std::sync::RwLock<super::UserFile<Skull>> {
-            &self.store.users.get(USER).unwrap().skull
-        }
-    }
-
-    impl std::ops::Deref for TestStore {
-        type Target = InFile;
-
-        fn deref(&self) -> &Self::Target {
-            &self.store
-        }
-    }
-
-    impl std::ops::DerefMut for TestStore {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.store
+            Self { store, _path: path }
         }
     }
 
@@ -542,263 +504,6 @@ mod test {
         ) -> Result<&dyn crate::store::Crud<crate::store::Occurrence>, Error> {
             self.store.occurrence(user)
         }
-    }
-
-    fn new_skull(name: &str, unit_price: f32) -> Skull {
-        Skull {
-            name: String::from(name),
-            color: String::from('0'),
-            icon: String::new(),
-            unit_price,
-            limit: None,
-        }
-    }
-
-    #[test]
-    fn reject_unknown_user() {
-        let store = TestStore::new();
-        assert_eq!(
-            Skull::select(&store, "unknown")
-                .map(|_| ())
-                .unwrap_err()
-                .to_string(),
-            Error::NoSuchUser(String::from("unknown")).to_string()
-        );
-    }
-
-    #[allow(clippy::too_many_lines)]
-    #[tokio::test(flavor = "multi_thread")]
-    async fn last_modified() {
-        let store = TestStore::new().with_data();
-
-        let last_modified = store.test().last_modified().await.unwrap();
-
-        // List [no change]
-        let op_time = store.test().list(None).await.unwrap().1;
-        let last_modified = check!(last_modified_eq(store.test(), last_modified, op_time).await);
-
-        // Create [change]
-        let op_time = store.test().create(new_skull("bla", 1.0)).await.unwrap().1;
-        let last_modified = check!(last_modified_ne(store.test(), last_modified, op_time).await);
-
-        // Read [no change]
-        let op_time = Crud::read(store.test(), 0).await.unwrap().1;
-        let last_modified = check!(last_modified_eq(store.test(), last_modified, op_time).await);
-
-        // Update [change]
-        let op_time = store
-            .test()
-            .update(0, new_skull("bla", 2.0))
-            .await
-            .unwrap()
-            .1;
-        let last_modified = check!(last_modified_ne(store.test(), last_modified, op_time).await);
-
-        // Delete [change]
-        let op_time = store.test().delete(0).await.unwrap().1;
-        let last_modified = check!(last_modified_ne(store.test(), last_modified, op_time).await);
-
-        // Update failure [no change]
-        assert!(store.test().update(3, new_skull("bla", 1.0)).await.is_err());
-        let last_modified = check!(last_modified_eq(store.test(), last_modified, None).await);
-
-        // Delete failure [no change]
-        assert!(store.test().delete(5).await.is_err());
-        let last_modified = check!(last_modified_eq(store.test(), last_modified, None).await);
-
-        // Stores don't affect each other
-        Quick::select(&store, USER)
-            .unwrap()
-            .create(Quick {
-                skull: 0,
-                amount: 3.0,
-            })
-            .await
-            .unwrap();
-        let last_modified = check!(last_modified_eq(store.test(), last_modified, None).await);
-        assert_ne!(
-            Quick::select(&store, USER)
-                .unwrap()
-                .last_modified()
-                .await
-                .unwrap(),
-            last_modified
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn list() {
-        let store = TestStore::new().with_data();
-        let skulls = store.test().list(None).await.unwrap().0.len();
-        assert_eq!(skulls, 3);
-
-        let skulls = store
-            .test()
-            .list(Some(1))
-            .await
-            .unwrap()
-            .0
-            .into_iter()
-            .collect::<Vec<_>>();
-        assert_eq!(skulls, vec![SkullId::new(10, new_skull("skrut", 43.0))]);
-
-        let skulls = store.test().list(Some(0)).await.unwrap().0.len();
-        assert_eq!(skulls, 0);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn create() {
-        let store = TestStore::new().with_data();
-        {
-            let skull = new_skull("skull", 0.1);
-            let id = store.test().create(skull).await.unwrap().0;
-            assert!(id == 11);
-        }
-        {
-            let skull = new_skull("skull", 0.3);
-            let id = store.test().create(skull).await.unwrap().0;
-            assert!(id == 12);
-        }
-
-        store.verify_skull(
-            r#"0	skull	0		0.1	
-4	skool	0		0.3	
-10	skrut	0		43	
-11	skull	0		0.1	
-12	skull	0		0.3	
-"#,
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn read() {
-        let store = TestStore::new().with_data();
-
-        let expected = SkullId::new(4, new_skull("skool", 0.3));
-        let read = Crud::read(store.test(), 4).await.unwrap().0;
-        assert_eq!(read, expected);
-        store.verify_skull(SKULLS);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn read_not_found() {
-        let store = TestStore::new().with_data();
-
-        assert_eq!(
-            Crud::read(store.test(), 1).await.unwrap_err().to_string(),
-            Error::NotFound(1).to_string()
-        );
-        store.verify_skull(SKULLS);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn update() {
-        let store = TestStore::new().with_data();
-
-        let old = SkullId::new(4, new_skull("skool", 0.3));
-        let new = new_skull("bla", 0.7);
-
-        assert_eq!(store.test().update(4, new).await.unwrap().0, old);
-
-        store.verify_skull(
-            r#"0	skull	0		0.1	
-4	bla	0		0.7	
-10	skrut	0		43.0	
-"#,
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn update_not_found() {
-        let store = TestStore::new().with_data();
-
-        let new = new_skull("bla", 0.7);
-
-        assert_eq!(
-            store.test().update(1, new).await.unwrap_err().to_string(),
-            Error::NotFound(1).to_string()
-        );
-        store.verify_skull(SKULLS);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn delete() {
-        let store = TestStore::new().with_data();
-
-        let old = SkullId::new(4, new_skull("skool", 0.3));
-
-        assert_eq!(store.test().delete(4).await.unwrap().0, old);
-
-        store.verify_skull(
-            r#"0	skull	0		0.1	
-10	skrut	0		43.0	
-"#,
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn delete_not_found() {
-        let store = TestStore::new().with_data();
-
-        assert_eq!(
-            store.test().delete(1).await.unwrap_err().to_string(),
-            Error::NotFound(1).to_string()
-        );
-
-        store.verify_skull(SKULLS);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[allow(clippy::cast_precision_loss)]
-    async fn find() {
-        let store = TestStore::new();
-        {
-            let mut file = std::fs::File::create(store.path.join(USER).join("skull")).unwrap();
-            (0..30)
-                .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| SkullId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| Skull::write_tsv(s, &mut file).unwrap());
-        }
-
-        for i in 0..30 {
-            assert_eq!(
-                Crud::read(store.test(), i).await.is_ok(),
-                i % 3 != 0 && i % 4 != 0
-            );
-        }
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[allow(clippy::cast_precision_loss)]
-    async fn delete_from_list() {
-        let store = TestStore::new();
-
-        for i in 1..=30 {
-            store
-                .test()
-                .create(new_skull("skull", i as f32))
-                .await
-                .unwrap();
-        }
-
-        for i in 1..=30 {
-            if i % 3 == 0 || i % 4 == 0 {
-                store.test().delete(i).await.unwrap();
-            }
-        }
-
-        let expected = {
-            let mut expected = vec![];
-            (1..=30)
-                .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| SkullId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| Skull::write_tsv(s, &mut expected).unwrap());
-            expected
-        };
-
-        let actual = std::fs::read(store.path.join(USER).join("skull")).unwrap();
-
-        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -846,7 +551,16 @@ mod test {
             String::from("Serde error: Too many fields for Skull")
         );
 
-        let skull = SkullId::new(0, new_skull("skull", 0.0));
+        let skull = SkullId::new(
+            0,
+            Skull {
+                name: String::from("skull"),
+                color: String::from('0'),
+                icon: String::new(),
+                unit_price: 1.,
+                limit: None,
+            },
+        );
         let mut writer = FailedWriter;
         assert_eq!(
             Skull::write_tsv(skull, &mut writer)
@@ -854,269 +568,5 @@ mod test {
                 .to_string(),
             String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
         );
-    }
-}
-
-#[cfg(all(test, nightly))]
-mod bench {
-
-    mod handwritten {
-        extern crate test;
-        use super::super::{FileData, Occurrence, Skull, WithId};
-
-        type SkullId = <Skull as super::super::Data>::Id;
-        type OccurrenceId = <Occurrence as super::super::Data>::Id;
-
-        #[bench]
-        fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = Skull {
-                name: String::from("xnamex"),
-                color: String::from("xcolorx"),
-                icon: String::from("xiconx"),
-                unit_price: 0.1,
-                limit: None,
-            };
-
-            bench.iter(|| {
-                let mut buffer = vec![];
-
-                (0..100)
-                    .map(|i| SkullId::new(i, skull.clone()))
-                    .for_each(|s| Skull::write_tsv(s, &mut buffer).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_skull(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|i| format!("{i}\txnamex\txcolorx\txiconx\t1.2\t{i}"))
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                for (i, string) in data.into_iter().enumerate() {
-                    let s = Skull::read_tsv(Ok(string)).unwrap();
-                    assert_eq!(s.id, i as u32);
-                    assert_eq!(s.name, "xnamex");
-                    assert_eq!(s.color, "xcolorx");
-                    assert_eq!(s.icon, "xiconx");
-                    assert_eq!(s.unit_price, 1.2);
-                    assert_eq!(s.limit.unwrap(), i as f32);
-                }
-            });
-        }
-
-        #[bench]
-        fn serialize_occurrence(bench: &mut test::Bencher) {
-            let occurrence = Occurrence {
-                skull: 0,
-                amount: 1.2,
-                millis: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64,
-            };
-
-            bench.iter(|| {
-                let mut buffer = vec![];
-
-                (0..100)
-                    .map(|i| OccurrenceId::new(i, occurrence.clone()))
-                    .for_each(|s| Occurrence::write_tsv(s, &mut buffer).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_occurrence(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|i| format!("{i}\t0\t1.2\t4"))
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                for (i, string) in data.into_iter().enumerate() {
-                    let s = Occurrence::read_tsv(Ok(string)).unwrap();
-                    assert_eq!(s.id, i as u32);
-                    assert_eq!(s.skull, 0);
-                    assert_eq!(s.amount, 1.2);
-                    assert_eq!(s.millis, 4);
-                }
-            });
-        }
-    }
-
-    mod serde {
-        extern crate test;
-        use super::super::{serde::Serde, Occurrence, Skull, WithId};
-
-        type SkullId = <Skull as super::super::Data>::Id;
-        type OccurrenceId = <Occurrence as super::super::Data>::Id;
-
-        #[bench]
-        fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = Skull {
-                name: String::from("xnamex"),
-                color: String::from("xcolorx"),
-                icon: String::from("xiconx"),
-                unit_price: 0.1,
-                limit: None,
-            };
-
-            bench.iter(|| {
-                let mut buffer = vec![];
-                let mut serder = Serde::new(&mut buffer);
-
-                (0..100)
-                    .map(|i| SkullId::new(i, skull.clone()))
-                    .for_each(|s| {
-                        serde::Serialize::serialize(&s, &mut serder).unwrap();
-                    });
-            });
-        }
-
-        #[bench]
-        fn serialize_occurrence(bench: &mut test::Bencher) {
-            let occurrence = Occurrence {
-                skull: 0,
-                amount: 1.2,
-                millis: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64,
-            };
-
-            bench.iter(|| {
-                let mut buffer = vec![];
-                let mut serder = super::super::serde::Serde::new(&mut buffer);
-
-                (0..100)
-                    .map(|i| OccurrenceId::new(i, occurrence.clone()))
-                    .for_each(|s| {
-                        serde::Serialize::serialize(&s, &mut serder).unwrap();
-                    });
-            });
-        }
-    }
-
-    mod csv {
-        extern crate test;
-        use super::super::{Occurrence, Skull, WithId};
-
-        type SkullId = <Skull as super::super::Data>::Id;
-        type OccurrenceId = <Occurrence as super::super::Data>::Id;
-
-        #[bench]
-        fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = SkullId {
-                id: 0,
-                name: String::from("xnamex"),
-                color: String::from("xcolorx"),
-                icon: String::from("xiconx"),
-                unit_price: 0.1,
-                limit: None,
-            };
-
-            bench.iter(|| {
-                let buffer = vec![];
-
-                let mut writer = csv::WriterBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_writer(buffer);
-
-                (0..100)
-                    .map(|i| {
-                        let mut s = skull.clone();
-                        s.id = i;
-                        s
-                    })
-                    .for_each(|s| writer.serialize(s).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_skull(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|i| format!("xnamex\txcolorx\txiconx\t1.2\t{i}\n"))
-                .map(|s| s.into_bytes())
-                .flatten()
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                let mut reader = csv::ReaderBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_reader(data.as_slice());
-
-                reader
-                    .deserialize::<Skull>()
-                    .enumerate()
-                    .for_each(|(i, s)| {
-                        let s = s.unwrap();
-                        assert_eq!(s.name, "xnamex");
-                        assert_eq!(s.color, "xcolorx");
-                        assert_eq!(s.icon, "xiconx");
-                        assert_eq!(s.unit_price, 1.2);
-                        assert_eq!(s.limit.unwrap(), i as f32);
-                    })
-            });
-        }
-
-        #[bench]
-        fn serialize_occurrence(bench: &mut test::Bencher) {
-            let occurrence = Occurrence {
-                skull: 0,
-                amount: 1.2,
-                millis: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as i64,
-            };
-
-            bench.iter(|| {
-                let buffer = vec![];
-
-                let mut writer = csv::WriterBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_writer(buffer);
-
-                (0..100)
-                    .map(|i| OccurrenceId::new(i, occurrence.clone()))
-                    .for_each(|s| writer.serialize(s).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_occurrence(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|_| String::from("0\t1.2\t4\n"))
-                .map(|s| s.into_bytes())
-                .flatten()
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                let mut reader = csv::ReaderBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_reader(data.as_slice());
-
-                reader
-                    .deserialize::<Occurrence>()
-                    .enumerate()
-                    .for_each(|(_, s)| {
-                        let s = s.unwrap();
-                        assert_eq!(s.skull, 0);
-                        assert_eq!(s.amount, 1.2);
-                        assert_eq!(s.millis, 4);
-                    })
-            });
-        }
     }
 }

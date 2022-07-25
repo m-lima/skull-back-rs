@@ -1,5 +1,5 @@
 #[macro_export]
-macro_rules! create_tests {
+macro_rules! impl_crud_tests {
     ($uut:ident, $instance:expr) => {
         mod crud {
             use super::*;
@@ -28,9 +28,9 @@ macro_rules! create_tests {
                 }
             }
 
-            $crate::create_tests!(skull, $crate::store::Skull, $uut, $instance);
-            $crate::create_tests!(quick, $crate::store::Quick, $uut, $instance);
-            $crate::create_tests!(occurrence, $crate::store::Occurrence, $uut, $instance);
+            $crate::impl_crud_tests!(skull, $crate::store::Skull, $uut, $instance);
+            $crate::impl_crud_tests!(quick, $crate::store::Quick, $uut, $instance);
+            $crate::impl_crud_tests!(occurrence, $crate::store::Occurrence, $uut, $instance);
         }
     };
 
@@ -296,13 +296,13 @@ impl<D: helper::TesterData> Tester<D> {
     }
 
     pub async fn create_constraint(store: &impl Store) {
-        if let Some(unconstraint) = D::make_unconstraint() {
+        if let Some(unconstrained) = D::make_unconstrained() {
             helper::populate(store).await;
             let store = D::select(store, USER).unwrap();
 
             let last_modified = store.last_modified().await.unwrap();
 
-            let err = store.create(unconstraint).await.unwrap_err().to_string();
+            let err = store.create(unconstrained).await.unwrap_err().to_string();
             assert_eq!(store.last_modified().await.unwrap(), last_modified);
             assert_eq!(err, "Failed constraint");
 
@@ -491,13 +491,17 @@ impl<D: helper::TesterData> Tester<D> {
     }
 
     pub async fn update_constraint(store: &impl Store) {
-        if let Some(unconstraint) = D::make_unconstraint() {
+        if let Some(unconstrained) = D::make_unconstrained() {
             helper::populate(store).await;
             let store = D::select(store, USER).unwrap();
 
             let last_modified = store.last_modified().await.unwrap();
 
-            let err = store.update(2, unconstraint).await.unwrap_err().to_string();
+            let err = store
+                .update(2, unconstrained)
+                .await
+                .unwrap_err()
+                .to_string();
             assert_eq!(store.last_modified().await.unwrap(), last_modified);
             assert_eq!(err, "Failed constraint");
 
@@ -839,7 +843,7 @@ mod helper {
 
         fn make_conflicts(&self) -> Vec<Self>;
         fn make_non_conflicts(&self) -> Vec<Self>;
-        fn make_unconstraint() -> Option<Self>;
+        fn make_unconstrained() -> Option<Self>;
     }
 
     impl TesterData for Skull {
@@ -879,7 +883,7 @@ mod helper {
             }]
         }
 
-        fn make_unconstraint() -> Option<Self> {
+        fn make_unconstrained() -> Option<Self> {
             None
         }
     }
@@ -909,7 +913,7 @@ mod helper {
             ]
         }
 
-        fn make_unconstraint() -> Option<Self> {
+        fn make_unconstrained() -> Option<Self> {
             Some(Quick {
                 skull: 7,
                 amount: 7.,
@@ -934,7 +938,7 @@ mod helper {
             Vec::new()
         }
 
-        fn make_unconstraint() -> Option<Self> {
+        fn make_unconstrained() -> Option<Self> {
             Some(Occurrence {
                 skull: 7,
                 amount: 7.,

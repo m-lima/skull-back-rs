@@ -691,5 +691,5 @@ mod test {
         }
     }
 
-    crate::create_tests!(InDb, TestStore::new().await);
+    crate::impl_crud_tests!(InDb, TestStore::new().await);
 }
