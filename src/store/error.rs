@@ -20,6 +20,8 @@ pub enum Error {
     BadMillis(#[from] std::num::TryFromIntError),
     #[error("Failed constraint")]
     Constraint,
+    #[error("Conflicting entry")]
+    Conflict,
 }
 
 impl From<sqlx::Error> for Error {
@@ -28,10 +30,15 @@ impl From<sqlx::Error> for Error {
             sqlx::Error::Database(db_err)
                 if db_err
                     .try_downcast_ref::<sqlx::sqlite::SqliteError>()
-                    .is_some()
-                    && db_err.message().starts_with("FOREIGN KEY") =>
+                    .is_some() =>
             {
-                Self::Constraint
+                if db_err.message().starts_with("FOREIGN KEY") {
+                    Self::Constraint
+                } else if db_err.message().starts_with("UNIQUE constraint") {
+                    Self::Conflict
+                } else {
+                    Self::Sql(err)
+                }
             }
             _ => Self::Sql(err),
         }

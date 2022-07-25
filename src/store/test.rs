@@ -191,7 +191,7 @@ impl<D: helper::TesterData> Tester<D> {
             store.list(None).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, helper::from_range::<D>(1..=3));
+        check!(D::compare_with_range(response, 1..=3));
     }
 
     pub async fn list_limited(store: &impl Store) {
@@ -210,25 +210,25 @@ impl<D: helper::TesterData> Tester<D> {
             store.list(Some(1)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, helper::from_range::<D>(3..=3));
+        check!(D::compare_with_range(response, 3..=3));
 
         let response = check!(helper::get_unchanged_data(
             store.list(Some(2)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, helper::from_range::<D>(2..=3));
+        check!(D::compare_with_range(response, 2..=3));
 
         let response = check!(helper::get_unchanged_data(
             store.list(Some(3)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, helper::from_range::<D>(1..=3));
+        check!(D::compare_with_range(response, 1..=3));
 
         let response = check!(helper::get_unchanged_data(
             store.list(Some(4)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, helper::from_range::<D>(1..=3));
+        check!(D::compare_with_range(response, 1..=3));
     }
 
     pub async fn list_empty(store: &impl Store) {
@@ -265,7 +265,7 @@ impl<D: helper::TesterData> Tester<D> {
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
         expected.push(D::Id::new(4, data));
-        assert_eq!(response, expected);
+        check!(D::compare(response, expected));
     }
 
     pub async fn create_conflict(store: &impl Store) {
@@ -280,7 +280,7 @@ impl<D: helper::TesterData> Tester<D> {
         for conflicting in initial.make_conflicts() {
             let err = store.create(conflicting).await.unwrap_err().to_string();
             assert_eq!(store.last_modified().await.unwrap(), last_modified);
-            assert_eq!(err, "Failed constraint");
+            assert_eq!(err, "Conflicting entry");
         }
 
         for (id, non_conflicting) in initial.make_non_conflicts().into_iter().enumerate() {
@@ -294,7 +294,7 @@ impl<D: helper::TesterData> Tester<D> {
         }
 
         let response = store.list(None).await.unwrap().0;
-        assert_eq!(response, expected);
+        check!(D::compare(response, expected));
     }
 
     pub async fn create_constraint(store: &impl Store) {
@@ -309,7 +309,7 @@ impl<D: helper::TesterData> Tester<D> {
             assert_eq!(err, "Failed constraint");
 
             let response = store.list(None).await.unwrap().0;
-            assert_eq!(response, helper::from_range::<D>(1..=3));
+            check!(D::compare_with_range(response, 1..=3));
         }
     }
 
@@ -317,11 +317,11 @@ impl<D: helper::TesterData> Tester<D> {
         helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        for i in 4..=20 {
+        for i in 4..=21 {
             store.create(D::new(i).with_skull(1)).await.unwrap();
         }
 
-        for i in 4..=20 {
+        for i in 4..=21 {
             if i % 3 == 0 || i % 4 == 0 {
                 store.delete(i).await.unwrap();
             }
@@ -333,7 +333,7 @@ impl<D: helper::TesterData> Tester<D> {
             store.create(D::new(4).with_skull(1)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, 21);
+        assert_eq!(response, 20);
     }
 
     pub async fn read(store: &impl Store) {
@@ -409,7 +409,7 @@ impl<D: helper::TesterData> Tester<D> {
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
         expected[1] = D::Id::new(2, data);
-        assert_eq!(response, expected);
+        check!(D::compare(response, expected));
     }
 
     pub async fn update_no_changes(store: &impl Store) {
@@ -425,7 +425,7 @@ impl<D: helper::TesterData> Tester<D> {
         assert_eq!(response, D::id(2));
 
         let response = store.list(None).await.unwrap().0;
-        assert_eq!(response, helper::from_range::<D>(1..=3));
+        check!(D::compare_with_range(response, 1..=3));
     }
 
     pub async fn update_not_found(store: &impl Store) {
@@ -452,7 +452,7 @@ impl<D: helper::TesterData> Tester<D> {
         assert_eq!(err, format!("Entry not found for id `{}`", Id::MAX));
 
         let response = store.list(None).await.unwrap().0;
-        assert_eq!(response, helper::from_range::<D>(1..=3));
+        check!(D::compare_with_range(response, 1..=3));
     }
 
     pub async fn update_conflict(store: &impl Store) {
@@ -479,7 +479,7 @@ impl<D: helper::TesterData> Tester<D> {
         for conflicting in initial.make_conflicts() {
             let err = store.update(2, conflicting).await.unwrap_err().to_string();
             assert_eq!(store.last_modified().await.unwrap(), last_modified);
-            assert_eq!(err, "Failed constraint");
+            assert_eq!(err, "Conflicting entry");
         }
 
         for (id, non_conflicting) in initial.make_non_conflicts().into_iter().enumerate() {
@@ -494,7 +494,7 @@ impl<D: helper::TesterData> Tester<D> {
         }
 
         let response = store.list(None).await.unwrap().0;
-        assert_eq!(response, expected);
+        check!(D::compare(response, expected));
     }
 
     pub async fn update_constraint(store: &impl Store) {
@@ -513,7 +513,7 @@ impl<D: helper::TesterData> Tester<D> {
             assert_eq!(err, "Failed constraint");
 
             let response = store.list(None).await.unwrap().0;
-            assert_eq!(response, helper::from_range::<D>(1..=3));
+            check!(D::compare_with_range(response, 1..=3));
         }
     }
 
@@ -533,7 +533,7 @@ impl<D: helper::TesterData> Tester<D> {
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
         expected.push(D::new(5).with_skull(1).with_id(5));
-        assert_eq!(response, expected);
+        check!(D::compare(response, expected));
     }
 
     pub async fn delete_not_found(store: &impl Store) {
@@ -555,7 +555,7 @@ impl<D: helper::TesterData> Tester<D> {
         assert_eq!(err, format!("Entry not found for id `{}`", Id::MAX));
 
         let response = store.list(None).await.unwrap().0;
-        assert_eq!(response, helper::from_range::<D>(1..=3));
+        check!(D::compare_with_range(response, 1..=3));
     }
 }
 
@@ -642,25 +642,25 @@ pub async fn delete_cascade(store: &impl Store) {
             > quick_last_modified
     );
 
-    assert_eq!(
+    check!(<Skull as helper::TesterData>::compare_with_range(
         Skull::select(store, USER)
             .unwrap()
             .list(None)
             .await
             .unwrap()
             .0,
-        helper::from_range::<Skull>(2..=3)
-    );
+        2..=3
+    ));
 
-    assert_eq!(
+    check!(<Quick as helper::TesterData>::compare_with_range(
         Quick::select(store, USER)
             .unwrap()
             .list(None)
             .await
             .unwrap()
             .0,
-        helper::from_range::<Quick>(2..=2)
-    );
+        2..=2
+    ));
 
     assert!(Occurrence::select(store, USER)
         .unwrap()
@@ -711,35 +711,35 @@ pub async fn delete_reject(store: &impl Store) {
         occurrence_last_modified
     );
 
-    assert_eq!(
+    check!(<Skull as helper::TesterData>::compare_with_range(
         Skull::select(store, USER)
             .unwrap()
             .list(None)
             .await
             .unwrap()
             .0,
-        helper::from_range::<Skull>(1..=3)
-    );
+        1..=3
+    ));
 
-    assert_eq!(
+    check!(<Quick as helper::TesterData>::compare_with_range(
         Quick::select(store, USER)
             .unwrap()
             .list(None)
             .await
             .unwrap()
             .0,
-        helper::from_range::<Quick>(1..=3)
-    );
+        1..=3
+    ));
 
-    assert_eq!(
+    check!(<Occurrence as helper::TesterData>::compare_with_range(
         Occurrence::select(store, USER)
             .unwrap()
             .list(None)
             .await
             .unwrap()
             .0,
-        helper::from_range::<Occurrence>(1..=3)
-    );
+        1..=3
+    ));
 }
 
 pub async fn multiple_handles(store: impl Store) {
@@ -749,29 +749,30 @@ pub async fn multiple_handles(store: impl Store) {
     let cloned_store = store.clone();
     let skull_task = async move {
         let crud = Skull::select(cloned_store.as_ref(), USER).unwrap();
-        for i in 1..=3 {
-            assert_eq!(
+        for _ in 1..=3 {
+            check!(<Skull as helper::TesterData>::compare_with_range(
                 crud.list(None).await.unwrap().0,
-                helper::from_range::<Skull>(1..=3)
-            );
+                1..=3
+            ));
             assert_eq!(
-                crud.create(<Skull as helper::TesterData>::new(i + 3))
+                crud.create(<Skull as helper::TesterData>::new(4))
                     .await
                     .unwrap()
                     .0,
-                Id::from(i) + 3
+                4
             );
-            let mut expected = helper::from_range::<Skull>(1..=3);
-            expected.push(<Skull as helper::TesterData>::id(i + 3));
-            assert_eq!(crud.list(None).await.unwrap().0, expected);
-            assert_eq!(
-                crud.delete(Id::from(i) + 3).await.unwrap().0,
-                <Skull as helper::TesterData>::id(i + 3)
-            );
-            assert_eq!(
+            check!(<Skull as helper::TesterData>::compare_with_range(
                 crud.list(None).await.unwrap().0,
-                helper::from_range::<Skull>(1..=3)
+                1..=4
+            ));
+            assert_eq!(
+                crud.delete(4).await.unwrap().0,
+                <Skull as helper::TesterData>::id(4)
             );
+            check!(<Skull as helper::TesterData>::compare_with_range(
+                crud.list(None).await.unwrap().0,
+                1..=3
+            ));
         }
     };
 
@@ -779,25 +780,28 @@ pub async fn multiple_handles(store: impl Store) {
     let quick_task = async move {
         use crate::store::data::QuickId;
         let crud = Quick::select(cloned_store.as_ref(), USER).unwrap();
-        for i in 1..=3 {
-            assert_eq!(
+        for _ in 1..=3 {
+            check!(<Quick as helper::TesterData>::compare_with_range(
                 crud.list(None).await.unwrap().0,
-                helper::from_range::<Quick>(1..=3)
-            );
+                1..=3
+            ));
             let data = Quick {
                 skull: 1,
                 amount: 7.,
             };
-            assert_eq!(crud.create(data.clone()).await.unwrap().0, i + 3);
-            let data: QuickId = WithId::new(i + 3, data);
+            assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
+            let data: QuickId = WithId::new(4, data);
             let mut expected = helper::from_range::<Quick>(1..=3);
             expected.push(data.clone());
-            assert_eq!(crud.list(None).await.unwrap().0, expected);
-            assert_eq!(crud.delete(i + 3).await.unwrap().0, data);
-            assert_eq!(
+            check!(<Quick as helper::TesterData>::compare(
                 crud.list(None).await.unwrap().0,
-                helper::from_range::<Quick>(1..=3)
-            );
+                expected
+            ));
+            assert_eq!(crud.delete(4).await.unwrap().0, data);
+            check!(<Quick as helper::TesterData>::compare_with_range(
+                crud.list(None).await.unwrap().0,
+                1..=3
+            ));
         }
     };
 
@@ -805,26 +809,29 @@ pub async fn multiple_handles(store: impl Store) {
     let occurrence_task = async move {
         use crate::store::data::OccurrenceId;
         let crud = Occurrence::select(cloned_store.as_ref(), USER).unwrap();
-        for i in 1..=3 {
-            assert_eq!(
+        for _ in 1..=3 {
+            check!(<Occurrence as helper::TesterData>::compare_with_range(
                 crud.list(None).await.unwrap().0,
-                helper::from_range::<Occurrence>(1..=3)
-            );
+                1..=3
+            ));
             let data = Occurrence {
                 skull: 1,
                 amount: 2.,
                 millis: 3,
             };
-            assert_eq!(crud.create(data.clone()).await.unwrap().0, i + 3);
-            let data: OccurrenceId = WithId::new(i + 3, data);
+            assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
+            let data: OccurrenceId = WithId::new(4, data);
             let mut expected = helper::from_range::<Occurrence>(1..=3);
             expected.push(data.clone());
-            assert_eq!(crud.list(None).await.unwrap().0, expected);
-            assert_eq!(crud.delete(i + 3).await.unwrap().0, data);
-            assert_eq!(
+            check!(<Occurrence as helper::TesterData>::compare(
                 crud.list(None).await.unwrap().0,
-                helper::from_range::<Occurrence>(1..=3)
-            );
+                expected
+            ));
+            assert_eq!(crud.delete(4).await.unwrap().0, data);
+            check!(<Occurrence as helper::TesterData>::compare_with_range(
+                crud.list(None).await.unwrap().0,
+                1..=3
+            ));
         }
     };
 
@@ -858,6 +865,14 @@ mod helper {
         fn make_conflicts(&self) -> Vec<Self>;
         fn make_non_conflicts(&self) -> Vec<Self>;
         fn make_unconstrained() -> Option<Self>;
+
+        fn compare(got: Vec<Self::Id>, wanted: Vec<Self::Id>) -> Assertion<()>;
+        fn compare_with_range(
+            got: Vec<Self::Id>,
+            wanted: std::ops::RangeInclusive<u8>,
+        ) -> Assertion<()> {
+            Self::compare(got, from_range::<Self>(wanted))
+        }
     }
 
     impl TesterData for Skull {
@@ -904,6 +919,17 @@ mod helper {
         fn make_unconstrained() -> Option<Self> {
             None
         }
+
+        fn compare(mut got: Vec<Self::Id>, mut wanted: Vec<Self::Id>) -> Assertion<()> {
+            got.sort_unstable_by_key(WithId::id);
+            wanted.sort_unstable_by_key(WithId::id);
+
+            if got == wanted {
+                Assertion::Ok(())
+            } else {
+                Assertion::err_ne("Output arrays did not match", got, wanted)
+            }
+        }
     }
 
     impl TesterData for Quick {
@@ -941,14 +967,26 @@ mod helper {
                 amount: 7.,
             })
         }
+
+        fn compare(mut got: Vec<Self::Id>, mut wanted: Vec<Self::Id>) -> Assertion<()> {
+            got.sort_unstable_by_key(WithId::id);
+            wanted.sort_unstable_by_key(WithId::id);
+
+            if got == wanted {
+                Assertion::Ok(())
+            } else {
+                Assertion::err_ne("Output arrays did not match", got, wanted)
+            }
+        }
     }
 
     impl TesterData for Occurrence {
         fn new(i: u8) -> Occurrence {
+            use rand::{RngCore, SeedableRng};
             Occurrence {
                 skull: u32::from(i),
                 amount: f32::from(i),
-                millis: i64::from(i),
+                millis: i64::from(rand::rngs::StdRng::from_seed([i; 32]).next_u32()),
             }
         }
 
@@ -970,6 +1008,19 @@ mod helper {
                 amount: 7.,
                 millis: 7,
             })
+        }
+
+        fn compare(got: Vec<Self::Id>, mut wanted: Vec<Self::Id>) -> Assertion<()> {
+            wanted.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
+                std::cmp::Ordering::Equal => b.id.cmp(&a.id),
+                c => c,
+            });
+
+            if got == wanted {
+                Assertion::Ok(())
+            } else {
+                Assertion::err_ne("Output arrays did not match", got, wanted)
+            }
         }
     }
 

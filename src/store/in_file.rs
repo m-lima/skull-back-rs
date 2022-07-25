@@ -228,6 +228,8 @@ impl<D: FileData> UserFile<D> {
     fn replace(&mut self, entries: Vec<D::Id>) -> Result<std::time::SystemTime, Error> {
         use std::io::Write;
 
+        self.next_id = entries.last().map_or(0, WithId::id) + 1;
+
         let mut buffer = vec![];
         for entry in entries {
             D::write_tsv(entry, &mut buffer)?;
@@ -251,12 +253,26 @@ impl<D: FileData> UserFile<D> {
 
 trait FileData: Serializable + 'static {
     fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>>;
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>>;
     fn create(store: &UserStore, data: Self) -> Response<Id>;
     fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id>;
     fn delete(store: &UserStore, id: Id) -> Response<Self::Id>;
     fn conflicts(&self, other: &Self::Id) -> bool;
 
-    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+    fn read(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let lock = Self::as_read(store)?;
+        let data = lock
+            .lines()?
+            .find(|d| d.id() == id)
+            .ok_or(Error::NotFound(id))?;
+        Ok((data, lock.last_modified()?))
+    }
+
+    fn last_modified(store: &UserStore) -> Result<std::time::SystemTime, Error> {
+        Self::as_read(store)?.last_modified()
+    }
+
+    fn list_inner(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
         let lock = Self::as_read(store)?;
 
         let entries = lock.lines()?.collect::<Vec<_>>();
@@ -270,19 +286,6 @@ trait FileData: Serializable + 'static {
         } else {
             Ok((entries, lock.last_modified()?))
         }
-    }
-
-    fn read(store: &UserStore, id: Id) -> Response<Self::Id> {
-        let lock = Self::as_read(store)?;
-        let data = lock
-            .lines()?
-            .find(|d| d.id() == id)
-            .ok_or(Error::NotFound(id))?;
-        Ok((data, lock.last_modified()?))
-    }
-
-    fn last_modified(store: &UserStore) -> Result<std::time::SystemTime, Error> {
-        Self::as_read(store)?.last_modified()
     }
 
     fn update_inner(
@@ -350,9 +353,13 @@ impl FileData for Skull {
         &store.skull
     }
 
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        Self::list_inner(store, limit)
+    }
+
     fn create(store: &UserStore, data: Self) -> Response<Id> {
         if Self::as_read(store)?.lines()?.any(|d| data.conflicts(&d)) {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::as_write(store)?.append(data)
         }
@@ -366,7 +373,7 @@ impl FileData for Skull {
             .filter(|d| d.id != id)
             .any(|d| data.conflicts(d))
         {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::update_inner(store, index, entries, Self::Id::new(id, data))
         }
@@ -404,10 +411,14 @@ impl FileData for Quick {
         &store.quick
     }
 
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        Self::list_inner(store, limit)
+    }
+
     fn create(store: &UserStore, data: Self) -> Response<Id> {
         Self::has_skull(store, data.skull)?;
         if Self::as_read(store)?.lines()?.any(|d| data.conflicts(&d)) {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::as_write(store)?.append(data)
         }
@@ -421,7 +432,7 @@ impl FileData for Quick {
             .filter(|d| d.id != id)
             .any(|d| data.conflicts(d))
         {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::update_inner(store, index, entries, Self::Id::new(id, data))
         }
@@ -439,6 +450,15 @@ impl FileData for Quick {
 impl FileData for Occurrence {
     fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>> {
         &store.occurrence
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let (mut occurrences, last_modified) = Self::list_inner(store, limit)?;
+        occurrences.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
+            std::cmp::Ordering::Equal => b.id.cmp(&a.id),
+            c => c,
+        });
+        Ok((occurrences, last_modified))
     }
 
     fn create(store: &UserStore, data: Self) -> Response<Id> {
@@ -609,10 +629,10 @@ impl Serializable for Occurrence {
 mod test {
     use crate::{
         store::{data::SkullId, test::USER, WithId},
-        test_util::{create_base_test_path, TestPath},
+        test_util::TestPath,
     };
 
-    use super::{Data, Error, FileData, InFile, Serializable, Skull, Store, UserFile, UserStore};
+    use super::{Error, FileData, InFile, Serializable, Skull, Store, UserFile, UserStore};
 
     crate::impl_crud_tests!(InFile, TestStore::new());
 
@@ -623,7 +643,7 @@ mod test {
 
     impl TestStore {
         fn new() -> Self {
-            let path = create_base_test_path();
+            let path = TestPath::new();
             let store = InFile::new(
                 Some((String::from(USER), path.join(USER)))
                     .into_iter()
@@ -654,18 +674,21 @@ mod test {
 
     #[test]
     fn create_store_full() {
-        fn full_container<D: Data>() -> std::sync::RwLock<UserFile<D>> {
+        fn full_container<D: FileData>(file: std::path::PathBuf) -> std::sync::RwLock<UserFile<D>> {
             std::sync::RwLock::new(UserFile {
                 next_id: u32::MAX,
-                file: std::path::PathBuf::new(),
-                _marker: std::marker::PhantomData,
+                ..UserFile::new(file)
             })
         }
 
+        let path = TestPath::new();
+        let file = path.join("yo");
+        std::fs::File::create(&file).unwrap();
+
         let store = UserStore {
-            skull: full_container(),
-            quick: full_container(),
-            occurrence: full_container(),
+            skull: full_container(file.clone()),
+            quick: full_container(file.clone()),
+            occurrence: full_container(file),
         };
 
         let skull = Skull {

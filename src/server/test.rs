@@ -1,6 +1,6 @@
 use crate::{
     check,
-    test_util::{create_base_test_path, Assertion, TestPath},
+    test_util::{Assertion, TestPath},
 };
 
 const USER: &str = "bloink";
@@ -35,7 +35,7 @@ struct TestServer {
 
 impl TestServer {
     fn new() -> Self {
-        let path = create_base_test_path();
+        let path = TestPath::new();
         let copiable_path = CopiablePath::new(&path);
 
         let server = gotham::test::TestServer::new(move || {

@@ -42,7 +42,7 @@ impl Error {
             Self::JsonDeserialize(_)
             | Self::TimeDeserialize(_)
             | Self::BadHeader
-            | Self::Store(StoreError::Constraint) => StatusCode::BAD_REQUEST,
+            | Self::Store(StoreError::Constraint | StoreError::Conflict) => StatusCode::BAD_REQUEST,
             Self::OutOfSync => StatusCode::PRECONDITION_FAILED,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ContentLengthMissing => StatusCode::LENGTH_REQUIRED,

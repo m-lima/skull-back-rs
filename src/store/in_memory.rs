@@ -114,12 +114,13 @@ impl<D: Data> UserContainer<D> {
 
 trait MemoryData: Data + 'static {
     fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>>;
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>>;
     fn create(store: &UserStore, data: Self) -> Response<Id>;
     fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id>;
     fn delete(store: &UserStore, id: Id) -> Response<Self::Id>;
     fn conflicts(&self, other: &Self::Id) -> bool;
 
-    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+    fn list_inner(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
         let lock = Self::as_read(store)?;
         let len = lock.data.len();
         Ok((
@@ -177,10 +178,12 @@ trait MemoryData: Data + 'static {
 
     fn delete_inner(store: &UserStore, id: Id) -> Response<Self::Id> {
         let mut lock = Self::as_write(store)?;
-        lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
+        let response = lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
             lock.last_modified = std::time::SystemTime::now();
             (lock.data.remove(i), lock.last_modified)
-        })
+        })?;
+        lock.next_id = lock.data.last().map_or(0, WithId::id) + 1;
+        Ok(response)
     }
 
     fn find_index(store: &UserStore, id: Id) -> Result<usize, Error> {
@@ -213,9 +216,13 @@ impl MemoryData for Skull {
         &store.skull
     }
 
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        Self::list_inner(store, limit)
+    }
+
     fn create(store: &UserStore, data: Self) -> Response<Id> {
         if Self::as_read(store)?.data.iter().any(|d| data.conflicts(d)) {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::create_inner(store, data)
         }
@@ -230,7 +237,7 @@ impl MemoryData for Skull {
             .filter(|d| d.id != id)
             .any(|d| data.conflicts(d))
         {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::update_inner(store, idx, data)
         }
@@ -262,11 +269,15 @@ impl MemoryData for Quick {
         &store.quick
     }
 
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        Self::list_inner(store, limit)
+    }
+
     fn create(store: &UserStore, data: Self) -> Response<Id> {
         Self::has_skull(store, data.skull)?;
 
         if Self::as_read(store)?.data.iter().any(|d| data.conflicts(d)) {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::create_inner(store, data)
         }
@@ -282,7 +293,7 @@ impl MemoryData for Quick {
             .filter(|d| d.id != id)
             .any(|d| data.conflicts(d))
         {
-            Err(Error::Constraint)
+            Err(Error::Conflict)
         } else {
             Self::update_inner(store, idx, data)
         }
@@ -301,6 +312,15 @@ impl MemoryData for Quick {
 impl MemoryData for Occurrence {
     fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>> {
         &store.occurrence
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let (mut occurrences, last_modified) = Self::list_inner(store, limit)?;
+        occurrences.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
+            std::cmp::Ordering::Equal => b.id.cmp(&a.id),
+            c => c,
+        });
+        Ok((occurrences, last_modified))
     }
 
     fn create(store: &UserStore, data: Self) -> Response<Id> {
