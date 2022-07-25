@@ -14,7 +14,10 @@ impl Log {
 
         match error {
             Error::Store(
-                StoreError::NotFound(_) | StoreError::NoSuchUser(_) | StoreError::Constraint,
+                StoreError::NotFound(_)
+                | StoreError::NoSuchUser(_)
+                | StoreError::Constraint
+                | StoreError::Conflict,
             )
             | Error::JsonDeserialize(_)
             | Error::TimeDeserialize(_)

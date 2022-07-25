@@ -105,6 +105,30 @@ mod test_util {
 
     pub struct TestPath(std::path::PathBuf);
 
+    impl TestPath {
+        pub fn new() -> Self {
+            let name = format!(
+                "{:016x}{:016x}",
+                rand::random::<u64>(),
+                rand::random::<u64>()
+            );
+            let path = std::env::temp_dir().join("skull-test");
+            if path.exists() {
+                assert!(path.is_dir(), "Cannot use {} as test path", path.display());
+            } else {
+                std::fs::create_dir(&path).unwrap();
+            }
+            let path = path.join(name);
+            assert!(
+                !path.exists(),
+                "Cannot use {} as test path as it already exists",
+                path.display()
+            );
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
     impl std::ops::Deref for TestPath {
         type Target = std::path::PathBuf;
 
@@ -117,27 +141,5 @@ mod test_util {
         fn drop(&mut self) {
             drop(std::fs::remove_dir_all(&self.0));
         }
-    }
-
-    pub fn create_base_test_path() -> TestPath {
-        let name = format!(
-            "{:016x}{:016x}",
-            rand::random::<u64>(),
-            rand::random::<u64>()
-        );
-        let path = std::env::temp_dir().join("skull-test");
-        if path.exists() {
-            assert!(path.is_dir(), "Cannot use {} as test path", path.display());
-        } else {
-            std::fs::create_dir(&path).unwrap();
-        }
-        let path = path.join(name);
-        assert!(
-            !path.exists(),
-            "Cannot use {} as test path as it already exists",
-            path.display()
-        );
-        std::fs::create_dir(&path).unwrap();
-        TestPath(path)
     }
 }

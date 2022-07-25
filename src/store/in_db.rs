@@ -330,7 +330,6 @@ impl SqlData for Quick {
                     "skull" as "skull: _",
                     "amount" as "amount: _"
                 FROM quicks
-                ORDER BY "id" ASC
                 LIMIT $1
                 "#,
                 limit
@@ -346,7 +345,6 @@ impl SqlData for Quick {
                     "skull" as "skull: _",
                     "amount" as "amount: _"
                 FROM quicks
-                ORDER BY "id" ASC
                 "#
             )
             .fetch_all(pool)
@@ -486,7 +484,7 @@ impl SqlData for Occurrence {
                     "amount" as "amount!: _",
                     "millis" as "millis!: _"
                 FROM occurrences
-                ORDER BY "millis" DESC
+                ORDER BY "millis" DESC, "id" DESC
                 LIMIT $1
                 "#,
                 limit
@@ -503,7 +501,7 @@ impl SqlData for Occurrence {
                     "amount" as "amount: _",
                     "millis" as "millis: _"
                 FROM occurrences
-                ORDER BY "millis" DESC
+                ORDER BY "millis" DESC, "id" DESC
                 "#
             )
             .fetch_all(pool)
@@ -640,7 +638,7 @@ impl SqlData for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::{store::test::USER, test_util::create_base_test_path};
+    use crate::{store::test::USER, test_util::TestPath};
 
     use super::{InDb, Store};
 
@@ -648,7 +646,7 @@ mod test {
 
     impl TestStore {
         async fn new() -> TestStore {
-            let path = create_base_test_path();
+            let path = TestPath::new();
 
             let db = InDb::new(
                 Some((String::from(USER), path.join(USER)))
