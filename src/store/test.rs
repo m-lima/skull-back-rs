@@ -1123,12 +1123,7 @@ mod helper {
         range.map(D::id).collect()
     }
 
-    pub struct Poller(
-        usize,
-        std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
-        std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
-        std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
-    );
+    pub struct Poller(Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>>);
 
     impl Poller {
         pub fn new(
@@ -1136,7 +1131,7 @@ mod helper {
             f2: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
             f3: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
         ) -> Self {
-            Self(0, Box::pin(f1), Box::pin(f2), Box::pin(f3))
+            Self(vec![Box::pin(f1), Box::pin(f2), Box::pin(f3)])
         }
     }
 
@@ -1149,27 +1144,19 @@ mod helper {
         ) -> std::task::Poll<Self::Output> {
             let unpinned = std::pin::Pin::into_inner(self);
 
-            for _ in 0..3 {
-                unpinned.0 = (unpinned.0 + 1) % 3;
+            loop {
+                if unpinned.0.is_empty() {
+                    return std::task::Poll::Ready(());
+                }
 
-                match unpinned.0 {
-                    0 => match unpinned.1.as_mut().poll(cx) {
-                        std::task::Poll::Ready(_) => continue,
-                        std::task::Poll::Pending => return std::task::Poll::Pending,
-                    },
-                    1 => match unpinned.2.as_mut().poll(cx) {
-                        std::task::Poll::Ready(_) => continue,
-                        std::task::Poll::Pending => return std::task::Poll::Pending,
-                    },
-                    2 => match unpinned.3.as_mut().poll(cx) {
-                        std::task::Poll::Ready(_) => continue,
-                        std::task::Poll::Pending => return std::task::Poll::Pending,
-                    },
-                    _ => unreachable!(),
+                let index = rand::random::<usize>() % unpinned.0.len();
+                match unpinned.0[index].as_mut().poll(cx) {
+                    std::task::Poll::Ready(_) => {
+                        unpinned.0.remove(index);
+                    }
+                    std::task::Poll::Pending => return std::task::Poll::Pending,
                 }
             }
-
-            std::task::Poll::Ready(())
         }
     }
 }
