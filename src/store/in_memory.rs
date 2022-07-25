@@ -209,11 +209,9 @@ mod test {
         },
     };
 
-    use super::{Crud, Error, InMemory, Skull, UserContainer, WithId};
+    use super::{Crud, Error, InMemory, Skull, UserContainer};
 
     crate::create_tests!(InMemory, InMemory::new(&[USER]));
-
-    type SkullId = <Skull as super::Data>::Id;
 
     mod construction {
         use super::InMemory;
@@ -358,57 +356,5 @@ mod test {
             container.create(skull).await.unwrap_err().to_string(),
             Error::StoreFull.to_string()
         );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn update() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        let old = SkullId::new(3, new_skull("skull", 0.4));
-        let new = new_skull("bla", 0.7);
-        let expected = SkullId::new(3, new.clone());
-        container.write().unwrap().data.push(old.clone());
-
-        assert_eq!(container.update(3, new).await.unwrap().0, old);
-        assert_eq!(container.read().unwrap().data[0], expected);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn update_not_found() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        let new = new_skull("bla", 0.7);
-        assert!(matches!(
-            container.update(3, new).await,
-            Err(Error::NotFound(3))
-        ));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn delete() {
-        let container = std::sync::RwLock::new(UserContainer::<Skull>::default());
-        let skull = SkullId::new(3, new_skull("skull", 0.4));
-        container.write().unwrap().data.push(skull.clone());
-
-        assert_eq!(container.delete(3).await.unwrap().0, skull);
-        assert!(container.read().unwrap().data.is_empty());
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn delete_not_found() {
-        let container = std::sync::RwLock::new(UserContainer::<Skull>::default());
-        assert!(matches!(container.delete(3).await, Err(Error::NotFound(3))));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn id_always_grows() {
-        let container = std::sync::RwLock::new(UserContainer::default());
-        let skull = new_skull("skull", 0.4);
-
-        let id = container.create(skull.clone()).await.unwrap().0;
-        assert_eq!(id, 1);
-        assert!(container.delete(id).await.is_ok());
-        assert!(container.read().unwrap().data.is_empty());
-
-        let id = container.create(skull).await.unwrap().0;
-        assert_eq!(id, 2);
     }
 }

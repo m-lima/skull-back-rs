@@ -3,6 +3,31 @@ macro_rules! create_tests {
     ($uut:ident, $instance:expr) => {
         mod crud {
             use super::*;
+
+            mod global {
+                use super::*;
+
+                #[tokio::test(flavor = "multi_thread")]
+                async fn last_modified_does_not_leak() {
+                    $crate::store::test::last_modified_does_not_leak(&$instance).await;
+                }
+
+                #[tokio::test(flavor = "multi_thread")]
+                async fn delete_cascade() {
+                    $crate::store::test::delete_cascade(&$instance).await;
+                }
+
+                #[tokio::test(flavor = "multi_thread")]
+                async fn delete_reject() {
+                    $crate::store::test::delete_reject(&$instance).await;
+                }
+
+                #[tokio::test(flavor = "multi_thread")]
+                async fn multiple_handles() {
+                    $crate::store::test::multiple_handles($instance).await;
+                }
+            }
+
             $crate::create_tests!(skull, $crate::store::Skull, $uut, $instance);
             $crate::create_tests!(quick, $crate::store::Quick, $uut, $instance);
             $crate::create_tests!(occurrence, $crate::store::Occurrence, $uut, $instance);
@@ -105,7 +130,6 @@ macro_rules! create_tests {
                 Tester::update_conflict(&$instance).await;
             }
 
-            #[ignore]
             #[tokio::test(flavor = "multi_thread")]
             async fn update_constraint() {
                 Tester::update_constraint(&$instance).await;
@@ -119,18 +143,6 @@ macro_rules! create_tests {
             #[tokio::test(flavor = "multi_thread")]
             async fn delete_not_found() {
                 Tester::delete_not_found(&$instance).await;
-            }
-
-            #[ignore]
-            #[tokio::test(flavor = "multi_thread")]
-            async fn delete_cascade() {
-                Tester::delete_cascade(&$instance).await;
-            }
-
-            #[ignore]
-            #[tokio::test(flavor = "multi_thread")]
-            async fn delete_reject() {
-                Tester::delete_reject(&$instance).await;
             }
         }
     };
@@ -478,8 +490,20 @@ impl<D: helper::TesterData> Tester<D> {
         assert_eq!(response, expected);
     }
 
-    pub async fn update_constraint(_store: &impl Store) {
-        todo!()
+    pub async fn update_constraint(store: &impl Store) {
+        if let Some(unconstraint) = D::make_unconstraint() {
+            helper::populate(store).await;
+            let store = D::select(store, USER).unwrap();
+
+            let last_modified = store.last_modified().await.unwrap();
+
+            let err = store.update(2, unconstraint).await.unwrap_err().to_string();
+            assert_eq!(store.last_modified().await.unwrap(), last_modified);
+            assert_eq!(err, "Failed constraint");
+
+            let response = store.list(None).await.unwrap().0;
+            assert_eq!(response, helper::from_range::<D>(1..=3));
+        }
     }
 
     pub async fn delete(store: &impl Store) {
@@ -521,14 +545,284 @@ impl<D: helper::TesterData> Tester<D> {
         let response = store.list(None).await.unwrap().0;
         assert_eq!(response, helper::from_range::<D>(1..=3));
     }
+}
 
-    pub async fn delete_cascade(_store: &impl Store) {
-        todo!()
+pub async fn last_modified_does_not_leak(store: &impl Store) {
+    helper::populate(store).await;
+
+    let skull_last_modified = Skull::select(store, USER)
+        .unwrap()
+        .last_modified()
+        .await
+        .unwrap();
+    let quick_last_modified = Quick::select(store, USER)
+        .unwrap()
+        .last_modified()
+        .await
+        .unwrap();
+    let occurrence_last_modified = Occurrence::select(store, USER)
+        .unwrap()
+        .last_modified()
+        .await
+        .unwrap();
+
+    let response = check!(helper::get_modified_data(
+        Skull::select(store, USER)
+            .unwrap()
+            .create(<Skull as helper::TesterData>::new(4))
+            .await
+            .unwrap(),
+        skull_last_modified
+    ));
+    assert_eq!(response, 4);
+
+    assert_eq!(
+        Quick::select(store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap(),
+        quick_last_modified
+    );
+
+    assert_eq!(
+        Occurrence::select(store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap(),
+        occurrence_last_modified
+    );
+}
+
+pub async fn delete_cascade(store: &impl Store) {
+    helper::populate(store).await;
+
+    for i in 1..=3 {
+        Occurrence::select(store, USER)
+            .unwrap()
+            .delete(i)
+            .await
+            .unwrap();
     }
 
-    pub async fn delete_reject(_store: &impl Store) {
-        todo!()
-    }
+    let quick_last_modified = Quick::select(store, USER)
+        .unwrap()
+        .update(
+            1,
+            Quick {
+                skull: 1,
+                amount: 3.,
+            },
+        )
+        .await
+        .unwrap()
+        .1;
+
+    Skull::select(store, USER).unwrap().delete(1).await.unwrap();
+
+    assert!(
+        Quick::select(store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap()
+            > quick_last_modified
+    );
+
+    assert_eq!(
+        Skull::select(store, USER)
+            .unwrap()
+            .list(None)
+            .await
+            .unwrap()
+            .0,
+        helper::from_range::<Skull>(2..=3)
+    );
+
+    assert_eq!(
+        Quick::select(store, USER)
+            .unwrap()
+            .list(None)
+            .await
+            .unwrap()
+            .0,
+        helper::from_range::<Quick>(2..=2)
+    );
+
+    assert!(Occurrence::select(store, USER)
+        .unwrap()
+        .list(None)
+        .await
+        .unwrap()
+        .0
+        .is_empty());
+}
+
+pub async fn delete_reject(store: &impl Store) {
+    helper::populate(store).await;
+
+    let skull_last_modified = Skull::select(store, USER)
+        .unwrap()
+        .last_modified()
+        .await
+        .unwrap();
+
+    let occurrence_last_modified = Occurrence::select(store, USER)
+        .unwrap()
+        .last_modified()
+        .await
+        .unwrap();
+
+    let err = Skull::select(store, USER)
+        .unwrap()
+        .delete(1)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(err, "Failed constraint");
+
+    assert_eq!(
+        Skull::select(store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap(),
+        skull_last_modified
+    );
+    assert_eq!(
+        Occurrence::select(store, USER)
+            .unwrap()
+            .last_modified()
+            .await
+            .unwrap(),
+        occurrence_last_modified
+    );
+
+    assert_eq!(
+        Skull::select(store, USER)
+            .unwrap()
+            .list(None)
+            .await
+            .unwrap()
+            .0,
+        helper::from_range::<Skull>(1..=3)
+    );
+
+    assert_eq!(
+        Quick::select(store, USER)
+            .unwrap()
+            .list(None)
+            .await
+            .unwrap()
+            .0,
+        helper::from_range::<Quick>(1..=3)
+    );
+
+    assert_eq!(
+        Occurrence::select(store, USER)
+            .unwrap()
+            .list(None)
+            .await
+            .unwrap()
+            .0,
+        helper::from_range::<Occurrence>(1..=3)
+    );
+}
+
+pub async fn multiple_handles(store: impl Store) {
+    let store = std::sync::Arc::new(store);
+    helper::populate(store.as_ref()).await;
+
+    let cloned_store = store.clone();
+    let skull_task = async move {
+        let crud = Skull::select(cloned_store.as_ref(), USER).unwrap();
+        for i in 1..=3 {
+            assert_eq!(
+                crud.list(None).await.unwrap().0,
+                helper::from_range::<Skull>(1..=3)
+            );
+            assert_eq!(
+                crud.create(<Skull as helper::TesterData>::new(i + 3))
+                    .await
+                    .unwrap()
+                    .0,
+                Id::from(i) + 3
+            );
+            let mut expected = helper::from_range::<Skull>(1..=3);
+            expected.push(<Skull as helper::TesterData>::with_id(i + 3));
+            assert_eq!(crud.list(None).await.unwrap().0, expected);
+            assert_eq!(
+                crud.delete(Id::from(i) + 3).await.unwrap().0,
+                <Skull as helper::TesterData>::with_id(i + 3)
+            );
+            assert_eq!(
+                crud.list(None).await.unwrap().0,
+                helper::from_range::<Skull>(1..=3)
+            );
+        }
+    };
+
+    let cloned_store = store.clone();
+    let quick_task = async move {
+        use crate::store::data::QuickId;
+        let crud = Quick::select(cloned_store.as_ref(), USER).unwrap();
+        for i in 1..=3 {
+            assert_eq!(
+                crud.list(None).await.unwrap().0,
+                helper::from_range::<Quick>(1..=3)
+            );
+            let data = Quick {
+                skull: 1,
+                amount: 7.,
+            };
+            assert_eq!(crud.create(data.clone()).await.unwrap().0, i + 3);
+            let data: QuickId = WithId::new(i + 3, data);
+            let mut expected = helper::from_range::<Quick>(1..=3);
+            expected.push(data.clone());
+            assert_eq!(crud.list(None).await.unwrap().0, expected);
+            assert_eq!(crud.delete(i + 3).await.unwrap().0, data);
+            assert_eq!(
+                crud.list(None).await.unwrap().0,
+                helper::from_range::<Quick>(1..=3)
+            );
+        }
+    };
+
+    let cloned_store = store.clone();
+    let occurrence_task = async move {
+        use crate::store::data::OccurrenceId;
+        let crud = Occurrence::select(cloned_store.as_ref(), USER).unwrap();
+        for i in 1..=3 {
+            assert_eq!(
+                crud.list(None).await.unwrap().0,
+                helper::from_range::<Occurrence>(1..=3)
+            );
+            let data = Occurrence {
+                skull: 1,
+                amount: 2.,
+                millis: 3,
+            };
+            assert_eq!(crud.create(data.clone()).await.unwrap().0, i + 3);
+            let data: OccurrenceId = WithId::new(i + 3, data);
+            let mut expected = helper::from_range::<Occurrence>(1..=3);
+            expected.push(data.clone());
+            assert_eq!(crud.list(None).await.unwrap().0, expected);
+            assert_eq!(crud.delete(i + 3).await.unwrap().0, data);
+            assert_eq!(
+                crud.list(None).await.unwrap().0,
+                helper::from_range::<Occurrence>(1..=3)
+            );
+        }
+    };
+
+    let poller = helper::Poller::new(
+        Box::pin(skull_task),
+        Box::pin(quick_task),
+        Box::pin(occurrence_task),
+    );
+
+    poller.await;
 }
 
 mod helper {
@@ -696,5 +990,55 @@ mod helper {
 
     pub fn from_range<D: TesterData>(range: std::ops::RangeInclusive<u8>) -> Vec<D::Id> {
         range.map(D::with_id).collect()
+    }
+
+    pub struct Poller(
+        usize,
+        std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+        std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+        std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+    );
+
+    impl Poller {
+        pub fn new(
+            f1: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+            f2: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+            f3: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+        ) -> Self {
+            Self(0, Box::pin(f1), Box::pin(f2), Box::pin(f3))
+        }
+    }
+
+    impl std::future::Future for Poller {
+        type Output = ();
+
+        fn poll(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Self::Output> {
+            let unpinned = std::pin::Pin::into_inner(self);
+
+            for _ in 0..3 {
+                unpinned.0 = (unpinned.0 + 1) % 3;
+
+                match unpinned.0 {
+                    0 => match unpinned.1.as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => continue,
+                        std::task::Poll::Pending => return std::task::Poll::Pending,
+                    },
+                    1 => match unpinned.2.as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => continue,
+                        std::task::Poll::Pending => return std::task::Poll::Pending,
+                    },
+                    2 => match unpinned.3.as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => continue,
+                        std::task::Poll::Pending => return std::task::Poll::Pending,
+                    },
+                    _ => unreachable!(),
+                }
+            }
+
+            std::task::Poll::Ready(())
+        }
     }
 }
