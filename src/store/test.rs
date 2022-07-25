@@ -255,7 +255,7 @@ impl<D: helper::TesterData> Tester<D> {
         let store = D::select(store, USER).unwrap();
 
         let last_modified = store.last_modified().await.unwrap();
-        let data = D::new(7);
+        let data = D::new(7).with_skull(1);
         let response = check!(helper::get_modified_data(
             store.create(data.clone()).await.unwrap(),
             last_modified
@@ -269,11 +269,13 @@ impl<D: helper::TesterData> Tester<D> {
     }
 
     pub async fn create_conflict(store: &impl Store) {
+        helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        let initial = D::new(1);
+        let initial = D::new(4).with_skull(1);
         let last_modified = store.create(initial.clone()).await.unwrap().1;
-        let mut expected = vec![D::Id::new(1, initial.clone())];
+        let mut expected = helper::from_range::<D>(1..=3);
+        expected.push(D::Id::new(4, initial.clone()));
 
         for conflicting in initial.make_conflicts() {
             let err = store.create(conflicting).await.unwrap_err().to_string();
@@ -286,7 +288,7 @@ impl<D: helper::TesterData> Tester<D> {
                 store.create(non_conflicting.clone()).await.unwrap(),
                 last_modified
             ));
-            let expected_id = Id::try_from(id + 2).unwrap();
+            let expected_id = Id::try_from(id + 5).unwrap();
             assert_eq!(response, expected_id);
             expected.push(D::Id::new(expected_id, non_conflicting));
         }
@@ -316,10 +318,10 @@ impl<D: helper::TesterData> Tester<D> {
         let store = D::select(store, USER).unwrap();
 
         for i in 4..=20 {
-            store.create(D::new(i)).await.unwrap();
+            store.create(D::new(i).with_skull(1)).await.unwrap();
         }
 
-        for i in 1..=20 {
+        for i in 4..=20 {
             if i % 3 == 0 || i % 4 == 0 {
                 store.delete(i).await.unwrap();
             }
@@ -328,7 +330,7 @@ impl<D: helper::TesterData> Tester<D> {
         let last_modified = store.last_modified().await.unwrap();
 
         let response = check!(helper::get_modified_data(
-            store.create(D::new(3)).await.unwrap(),
+            store.create(D::new(4).with_skull(1)).await.unwrap(),
             last_modified
         ));
         assert_eq!(response, 21);
@@ -345,7 +347,7 @@ impl<D: helper::TesterData> Tester<D> {
                 store.read(Id::from(i)).await.unwrap(),
                 last_modified
             ));
-            assert_eq!(response, D::with_id(i));
+            assert_eq!(response, D::id(i));
         }
     }
 
@@ -354,10 +356,10 @@ impl<D: helper::TesterData> Tester<D> {
         let store = D::select(store, USER).unwrap();
 
         for i in 4..=20 {
-            store.create(D::new(i)).await.unwrap();
+            store.create(D::new(i).with_skull(1)).await.unwrap();
         }
 
-        for i in 1..=20 {
+        for i in 4..=20 {
             if i % 3 == 0 || i % 4 == 0 {
                 store.delete(i).await.unwrap();
             }
@@ -369,7 +371,7 @@ impl<D: helper::TesterData> Tester<D> {
             store.read(11).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::with_id(11));
+        assert_eq!(response, D::new(11).with_skull(1).with_id(11));
     }
 
     pub async fn read_not_found(store: &impl Store) {
@@ -397,12 +399,12 @@ impl<D: helper::TesterData> Tester<D> {
 
         let last_modified = store.last_modified().await.unwrap();
 
-        let data = D::new(7);
+        let data = D::new(7).with_skull(1);
         let response = check!(helper::get_modified_data(
             store.update(2, data.clone()).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::with_id(2));
+        assert_eq!(response, D::id(2));
 
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
@@ -420,7 +422,7 @@ impl<D: helper::TesterData> Tester<D> {
             store.update(2, D::new(2)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::with_id(2));
+        assert_eq!(response, D::id(2));
 
         let response = store.list(None).await.unwrap().0;
         assert_eq!(response, helper::from_range::<D>(1..=3));
@@ -454,17 +456,21 @@ impl<D: helper::TesterData> Tester<D> {
     }
 
     pub async fn update_conflict(store: &impl Store) {
+        helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        let initial = D::new(1);
-        store.create(initial.clone()).await.unwrap();
+        let initial = D::new(4).with_skull(1);
 
-        let mut last_modified = store.create(D::new(2)).await.unwrap().1;
-        let mut expected = helper::from_range::<D>(1..=2);
+        store.create(initial.clone()).await.unwrap();
+        let mut last_modified = store.create(D::new(5).with_skull(1)).await.unwrap().1;
+
+        let mut expected = helper::from_range::<D>(1..=3);
+        expected.push(initial.clone().with_id(4));
+        expected.push(D::new(5).with_skull(1).with_id(5));
 
         for (i, _) in initial.make_non_conflicts().iter().enumerate() {
             last_modified = store
-                .create(D::new(u8::try_from(i + 3).unwrap()))
+                .create(D::new(u8::try_from(i + 6).unwrap()).with_skull(3))
                 .await
                 .unwrap()
                 .1;
@@ -477,12 +483,13 @@ impl<D: helper::TesterData> Tester<D> {
         }
 
         for (id, non_conflicting) in initial.make_non_conflicts().into_iter().enumerate() {
-            let id = Id::try_from(id + 3).unwrap();
+            let id = Id::try_from(id + 6).unwrap();
+            let id_u8 = u8::try_from(id).unwrap();
             let response = check!(helper::get_modified_data(
                 store.update(id, non_conflicting.clone()).await.unwrap(),
                 last_modified
             ));
-            assert_eq!(response, D::new(u8::try_from(id).unwrap()));
+            assert_eq!(response, D::new(id_u8).with_skull(3).with_id(id_u8));
             expected.push(D::Id::new(id, non_conflicting));
         }
 
@@ -514,17 +521,18 @@ impl<D: helper::TesterData> Tester<D> {
         helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        let last_modified = store.last_modified().await.unwrap();
+        store.create(D::new(4).with_skull(1)).await.unwrap();
+        let last_modified = store.create(D::new(5).with_skull(1)).await.unwrap().1;
 
         let response = check!(helper::get_modified_data(
-            store.delete(2).await.unwrap(),
+            store.delete(4).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::with_id(2));
+        assert_eq!(response, D::new(4).with_skull(1).with_id(4));
 
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
-        expected.remove(1);
+        expected.push(D::new(5).with_skull(1).with_id(5));
         assert_eq!(response, expected);
     }
 
@@ -613,7 +621,7 @@ pub async fn delete_cascade(store: &impl Store) {
     let quick_last_modified = Quick::select(store, USER)
         .unwrap()
         .update(
-            1,
+            3,
             Quick {
                 skull: 1,
                 amount: 3.,
@@ -754,11 +762,11 @@ pub async fn multiple_handles(store: impl Store) {
                 Id::from(i) + 3
             );
             let mut expected = helper::from_range::<Skull>(1..=3);
-            expected.push(<Skull as helper::TesterData>::with_id(i + 3));
+            expected.push(<Skull as helper::TesterData>::id(i + 3));
             assert_eq!(crud.list(None).await.unwrap().0, expected);
             assert_eq!(
                 crud.delete(Id::from(i) + 3).await.unwrap().0,
-                <Skull as helper::TesterData>::with_id(i + 3)
+                <Skull as helper::TesterData>::id(i + 3)
             );
             assert_eq!(
                 crud.list(None).await.unwrap().0,
@@ -837,9 +845,15 @@ mod helper {
     pub trait TesterData: Selector {
         fn new(i: u8) -> Self;
 
-        fn with_id(i: u8) -> Self::Id {
-            Self::Id::new(Id::from(i), Self::new(i))
+        fn id(i: u8) -> Self::Id {
+            Self::new(i).with_id(i)
         }
+
+        fn with_id(self, i: u8) -> Self::Id {
+            Self::Id::new(Id::from(i), self)
+        }
+
+        fn with_skull(self, id: Id) -> Self;
 
         fn make_conflicts(&self) -> Vec<Self>;
         fn make_non_conflicts(&self) -> Vec<Self>;
@@ -855,6 +869,10 @@ mod helper {
                 unit_price: f32::from(i),
                 limit: None,
             }
+        }
+
+        fn with_skull(self, _id: Id) -> Self {
+            self
         }
 
         fn make_conflicts(&self) -> Vec<Self> {
@@ -896,6 +914,10 @@ mod helper {
             }
         }
 
+        fn with_skull(self, id: Id) -> Self {
+            Self { skull: id, ..self }
+        }
+
         fn make_conflicts(&self) -> Vec<Self> {
             vec![self.clone()]
         }
@@ -904,11 +926,11 @@ mod helper {
             vec![
                 Self {
                     skull: self.skull,
-                    ..Self::new(7)
+                    amount: 7.,
                 },
                 Self {
+                    skull: ((self.skull + 1) % 3) + 1,
                     amount: self.amount,
-                    ..Self::new(7)
                 },
             ]
         }
@@ -928,6 +950,10 @@ mod helper {
                 amount: f32::from(i),
                 millis: i64::from(i),
             }
+        }
+
+        fn with_skull(self, id: Id) -> Self {
+            Self { skull: id, ..self }
         }
 
         fn make_conflicts(&self) -> Vec<Self> {
@@ -993,7 +1019,7 @@ mod helper {
     }
 
     pub fn from_range<D: TesterData>(range: std::ops::RangeInclusive<u8>) -> Vec<D::Id> {
-        range.map(D::with_id).collect()
+        range.map(D::id).collect()
     }
 
     pub struct Poller(
