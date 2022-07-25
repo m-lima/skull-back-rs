@@ -453,11 +453,15 @@ impl FileData for Occurrence {
     }
 
     fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
-        let (mut occurrences, last_modified) = Self::list_inner(store, limit)?;
+        let (mut occurrences, last_modified) = Self::list_inner(store, None)?;
         occurrences.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
             std::cmp::Ordering::Equal => b.id.cmp(&a.id),
             c => c,
         });
+        if let Some(limit) = limit {
+            let limit = usize::try_from(limit).unwrap_or(occurrences.len());
+            occurrences = occurrences.into_iter().take(limit).collect();
+        }
         Ok((occurrences, last_modified))
     }
 

@@ -210,13 +210,13 @@ impl<D: helper::TesterData> Tester<D> {
             store.list(Some(1)).await.unwrap(),
             last_modified
         ));
-        check!(D::compare_with_range(response, 3..=3));
+        check!(D::compare_limited(response, 1..=3, 1));
 
         let response = check!(helper::get_unchanged_data(
             store.list(Some(2)).await.unwrap(),
             last_modified
         ));
-        check!(D::compare_with_range(response, 2..=3));
+        check!(D::compare_limited(response, 1..=3, 2));
 
         let response = check!(helper::get_unchanged_data(
             store.list(Some(3)).await.unwrap(),
@@ -873,6 +873,11 @@ mod helper {
         ) -> Assertion<()> {
             Self::compare(got, from_range::<Self>(wanted))
         }
+        fn compare_limited(
+            got: Vec<Self::Id>,
+            wanted: std::ops::RangeInclusive<u8>,
+            count: usize,
+        ) -> Assertion<()>;
     }
 
     impl TesterData for Skull {
@@ -930,6 +935,18 @@ mod helper {
                 Assertion::err_ne("Output arrays did not match", got, wanted)
             }
         }
+
+        fn compare_limited(
+            got: Vec<Self::Id>,
+            _wanted: std::ops::RangeInclusive<u8>,
+            count: usize,
+        ) -> Assertion<()> {
+            if got.len() == count {
+                Assertion::Ok(())
+            } else {
+                Assertion::err_ne("Output array size did not match", got.len(), count)
+            }
+        }
     }
 
     impl TesterData for Quick {
@@ -978,6 +995,18 @@ mod helper {
                 Assertion::err_ne("Output arrays did not match", got, wanted)
             }
         }
+
+        fn compare_limited(
+            got: Vec<Self::Id>,
+            _wanted: std::ops::RangeInclusive<u8>,
+            count: usize,
+        ) -> Assertion<()> {
+            if got.len() == count {
+                Assertion::Ok(())
+            } else {
+                Assertion::err_ne("Output array size did not match", got.len(), count)
+            }
+        }
     }
 
     impl TesterData for Occurrence {
@@ -1015,6 +1044,27 @@ mod helper {
                 std::cmp::Ordering::Equal => b.id.cmp(&a.id),
                 c => c,
             });
+
+            if got == wanted {
+                Assertion::Ok(())
+            } else {
+                Assertion::err_ne("Output arrays did not match", got, wanted)
+            }
+        }
+
+        fn compare_limited(
+            got: Vec<Self::Id>,
+            wanted: std::ops::RangeInclusive<u8>,
+            count: usize,
+        ) -> Assertion<()> {
+            let mut wanted = from_range::<Self>(wanted);
+
+            wanted.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
+                std::cmp::Ordering::Equal => b.id.cmp(&a.id),
+                c => c,
+            });
+
+            let wanted = wanted.into_iter().take(count).collect::<Vec<_>>();
 
             if got == wanted {
                 Assertion::Ok(())
