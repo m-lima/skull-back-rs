@@ -272,9 +272,10 @@ trait FileData: Serializable + 'static {
         Self::as_read(store)?.last_modified()
     }
 
-    fn list_inner(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
-        let lock = Self::as_read(store)?;
-
+    fn list_inner(
+        lock: &std::sync::RwLockReadGuard<'_, UserFile<Self>>,
+        limit: Option<u32>,
+    ) -> Response<Vec<Self::Id>> {
         let entries = lock.lines()?.collect::<Vec<_>>();
 
         if let Some(limit) = limit.map(usize::try_from).and_then(Result::ok) {
@@ -289,42 +290,50 @@ trait FileData: Serializable + 'static {
     }
 
     fn update_inner(
-        store: &UserStore,
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserFile<Self>>,
         index: usize,
         mut entries: Vec<Self::Id>,
         mut data: Self::Id,
     ) -> Response<Self::Id> {
         let left = &mut entries[index];
         let last_modified = if left == &data {
-            Self::as_read(store)?.last_modified()
+            lock.last_modified()
         } else {
             std::mem::swap(left, &mut data);
-            Self::as_write(store)?.replace(entries)
+            lock.replace(entries)
         }?;
         Ok((data, last_modified))
     }
 
-    fn delete_inner(store: &UserStore, id: Id) -> Response<Self::Id> {
-        let (index, mut entries) = Self::entries_with_index(store, id)?;
+    fn delete_inner(
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserFile<Self>>,
+        id: Id,
+    ) -> Response<Self::Id> {
+        let (index, mut entries) = Self::entries_with_index(lock, id)?;
 
         let old = entries.remove(index);
 
-        let last_modified = Self::as_write(store)?.replace(entries)?;
+        let last_modified = lock.replace(entries)?;
         Ok((old, last_modified))
     }
 
-    fn has_skull(store: &UserStore, skull: Id) -> Result<(), Error> {
-        Skull::as_read(store)?
-            .ids()?
+    fn has_skull(
+        lock: &std::sync::RwLockReadGuard<'_, UserFile<Skull>>,
+        skull: Id,
+    ) -> Result<(), Error> {
+        lock.ids()?
             .filter_map(Result::ok)
             .find(|id| *id == skull)
             .map(|_| ())
             .ok_or(Error::Constraint)
     }
 
-    fn entries_with_index(store: &UserStore, id: Id) -> Result<(usize, Vec<Self::Id>), Error> {
+    fn entries_with_index(
+        lock: &std::sync::RwLockWriteGuard<'_, UserFile<Self>>,
+        id: Id,
+    ) -> Result<(usize, Vec<Self::Id>), Error> {
         let mut index = None;
-        let entries = Self::as_read(store)?
+        let entries = lock
             .lines()?
             .enumerate()
             .map(|line| {
@@ -354,19 +363,22 @@ impl FileData for Skull {
     }
 
     fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
-        Self::list_inner(store, limit)
+        let lock = Self::as_read(store)?;
+        Self::list_inner(&lock, limit)
     }
 
     fn create(store: &UserStore, data: Self) -> Response<Id> {
-        if Self::as_read(store)?.lines()?.any(|d| data.conflicts(&d)) {
+        let mut lock = Self::as_write(store)?;
+        if lock.lines()?.any(|d| data.conflicts(&d)) {
             Err(Error::Conflict)
         } else {
-            Self::as_write(store)?.append(data)
+            lock.append(data)
         }
     }
 
     fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
-        let (index, entries) = Self::entries_with_index(store, id)?;
+        let mut lock = Self::as_write(store)?;
+        let (index, entries) = Self::entries_with_index(&lock, id)?;
 
         if entries
             .iter()
@@ -375,24 +387,24 @@ impl FileData for Skull {
         {
             Err(Error::Conflict)
         } else {
-            Self::update_inner(store, index, entries, Self::Id::new(id, data))
+            Self::update_inner(&mut lock, index, entries, Self::Id::new(id, data))
         }
     }
 
     fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
-        if Occurrence::as_read(store)?.lines()?.any(|d| d.skull == id) {
+        let mut lock = Self::as_write(store)?;
+        let occurrence_lock = Occurrence::as_read(store)?;
+
+        if occurrence_lock.lines()?.any(|d| d.skull == id) {
             Err(Error::Constraint)
         } else {
-            let quicks = Quick::as_read(store)?
-                .lines()?
-                .filter(|d| d.skull != id)
-                .collect();
-
             let mut quick_lock = Quick::as_write(store)?;
+            let quicks = quick_lock.lines()?.filter(|d| d.skull != id).collect();
+
             let (old, last_modified) = {
-                let (index, mut entries) = Self::entries_with_index(store, id)?;
+                let (index, mut entries) = Self::entries_with_index(&lock, id)?;
                 let old = entries.remove(index);
-                let last_modified = Self::as_write(store)?.replace(entries)?;
+                let last_modified = lock.replace(entries)?;
                 (old, last_modified)
             };
             quick_lock.replace(quicks)?;
@@ -412,21 +424,29 @@ impl FileData for Quick {
     }
 
     fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
-        Self::list_inner(store, limit)
+        let lock = Self::as_read(store)?;
+        Self::list_inner(&lock, limit)
     }
 
     fn create(store: &UserStore, data: Self) -> Response<Id> {
-        Self::has_skull(store, data.skull)?;
-        if Self::as_read(store)?.lines()?.any(|d| data.conflicts(&d)) {
+        let skull_lock = Skull::as_read(store)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        let mut lock = Self::as_write(store)?;
+        if lock.lines()?.any(|d| data.conflicts(&d)) {
             Err(Error::Conflict)
         } else {
-            Self::as_write(store)?.append(data)
+            lock.append(data)
         }
     }
 
     fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
-        let (index, entries) = Self::entries_with_index(store, id)?;
-        Self::has_skull(store, data.skull)?;
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        let (index, entries) = Self::entries_with_index(&lock, id)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+
         if entries
             .iter()
             .filter(|d| d.id != id)
@@ -434,12 +454,13 @@ impl FileData for Quick {
         {
             Err(Error::Conflict)
         } else {
-            Self::update_inner(store, index, entries, Self::Id::new(id, data))
+            Self::update_inner(&mut lock, index, entries, Self::Id::new(id, data))
         }
     }
 
     fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
-        Self::delete_inner(store, id)
+        let mut lock = Self::as_write(store)?;
+        Self::delete_inner(&mut lock, id)
     }
 
     fn conflicts(&self, other: &Self::Id) -> bool {
@@ -453,7 +474,10 @@ impl FileData for Occurrence {
     }
 
     fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
-        let (mut occurrences, last_modified) = Self::list_inner(store, None)?;
+        let (mut occurrences, last_modified) = {
+            let lock = Self::as_read(store)?;
+            Self::list_inner(&lock, None)?
+        };
         occurrences.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
             std::cmp::Ordering::Equal => b.id.cmp(&a.id),
             c => c,
@@ -466,18 +490,26 @@ impl FileData for Occurrence {
     }
 
     fn create(store: &UserStore, data: Self) -> Response<Id> {
-        Self::has_skull(store, data.skull)?;
-        Self::as_write(store)?.append(data)
+        let skull_lock = Skull::as_read(store)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+        let mut lock = Self::as_write(store)?;
+        lock.append(data)
     }
 
     fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
-        let (index, entries) = Self::entries_with_index(store, id)?;
-        Self::has_skull(store, data.skull)?;
-        Self::update_inner(store, index, entries, Self::Id::new(id, data))
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        let (index, entries) = Self::entries_with_index(&lock, id)?;
+
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        Self::update_inner(&mut lock, index, entries, Self::Id::new(id, data))
     }
 
     fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
-        Self::delete_inner(store, id)
+        let mut lock = Self::as_write(store)?;
+        Self::delete_inner(&mut lock, id)
     }
 
     fn conflicts(&self, _other: &Self::Id) -> bool {
