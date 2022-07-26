@@ -772,4 +772,125 @@ mod test {
             String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
         );
     }
+
+    mod serde {
+
+        use super::super::Serializable;
+        use crate::store::data::{Occurrence, OccurrenceId, Quick, QuickId, Skull, SkullId};
+
+        #[test]
+        fn serialize_skull() {
+            let skull = SkullId {
+                id: 3,
+                name: String::from("xnamex"),
+                color: String::from("xcolorx"),
+                icon: String::from("xiconx"),
+                unit_price: 0.1,
+                limit: None,
+            };
+
+            let mut buffer = Vec::new();
+            Skull::write_tsv(skull, &mut buffer).unwrap();
+            assert_eq!(buffer, b"3\txnamex\txcolorx\txiconx\t0.1\t\n");
+        }
+
+        #[test]
+        fn deserialize_skull() {
+            let tsv = String::from("3\txnamex\txcolorx\txiconx\t0.1");
+
+            assert_eq!(
+                Skull::read_tsv(Ok(tsv)).unwrap(),
+                SkullId {
+                    id: 3,
+                    name: String::from("xnamex"),
+                    color: String::from("xcolorx"),
+                    icon: String::from("xiconx"),
+                    unit_price: 0.1,
+                    limit: None,
+                }
+            );
+
+            let tsv = String::from("3\txnamex\txcolorx\txiconx\t0.1\t");
+
+            assert_eq!(
+                Skull::read_tsv(Ok(tsv)).unwrap(),
+                SkullId {
+                    id: 3,
+                    name: String::from("xnamex"),
+                    color: String::from("xcolorx"),
+                    icon: String::from("xiconx"),
+                    unit_price: 0.1,
+                    limit: None,
+                }
+            );
+
+            let tsv = String::from("3\txnamex\txcolorx\txiconx\t0.1\t0.2");
+
+            assert_eq!(
+                Skull::read_tsv(Ok(tsv)).unwrap(),
+                SkullId {
+                    id: 3,
+                    name: String::from("xnamex"),
+                    color: String::from("xcolorx"),
+                    icon: String::from("xiconx"),
+                    unit_price: 0.1,
+                    limit: Some(0.2),
+                }
+            );
+        }
+
+        #[test]
+        fn serialize_quick() {
+            let quick = QuickId {
+                id: 3,
+                skull: 1,
+                amount: 2.0,
+            };
+
+            let mut buffer = Vec::new();
+            Quick::write_tsv(quick, &mut buffer).unwrap();
+            assert_eq!(buffer, b"3\t1\t2.0\n");
+        }
+
+        #[test]
+        fn deserialize_quick() {
+            let tsv = String::from("3\t1\t2.0");
+
+            assert_eq!(
+                Quick::read_tsv(Ok(tsv)).unwrap(),
+                Quick {
+                    skull: 1,
+                    amount: 2.0,
+                }
+            );
+        }
+
+        #[test]
+        fn serialize_occurrence() {
+            let occurrence = OccurrenceId {
+                id: 3,
+                skull: 1,
+                amount: 2.0,
+                millis: 4,
+            };
+
+            let mut buffer = Vec::new();
+            Occurrence::write_tsv(occurrence, &mut buffer).unwrap();
+            assert_eq!(buffer, b"3\t1\t2.0\t4\n");
+        }
+
+        #[test]
+        fn deserialize_occurrence() {
+            let tsv = String::from("3\t1\t2.0\t4");
+
+            assert_eq!(
+                Occurrence::read_tsv(Ok(tsv)).unwrap(),
+                Occurrence {
+                    skull: 1,
+                    amount: 2.0,
+                    millis: 4,
+                }
+            );
+        }
+    }
 }

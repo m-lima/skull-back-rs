@@ -1,6 +1,6 @@
 mod handwritten {
     extern crate test;
-    use super::super::{FileData, Occurrence, Skull, WithId};
+    use super::super::{Occurrence, Serializable, Skull, WithId};
 
     type SkullId = <Skull as super::super::Data>::Id;
     type OccurrenceId = <Occurrence as super::super::Data>::Id;
