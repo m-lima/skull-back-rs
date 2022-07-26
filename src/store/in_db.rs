@@ -252,6 +252,10 @@ impl SqlData for Skull {
         .map_err(Into::into)
         .and_then(|d| d.ok_or(Error::NotFound(id)))?;
 
+        if previous == self {
+            return Ok(previous);
+        }
+
         sqlx::query!(
             r#"
             UPDATE skulls
@@ -414,6 +418,10 @@ impl SqlData for Quick {
         .map_err(Into::into)
         .and_then(|d| d.ok_or(Error::NotFound(id)))?;
 
+        if previous == self {
+            return Ok(previous);
+        }
+
         sqlx::query!(
             r#"
             UPDATE quicks
@@ -575,6 +583,10 @@ impl SqlData for Occurrence {
         .await
         .map_err(Into::into)
         .and_then(|d| d.ok_or(Error::NotFound(id)))?;
+
+        if previous == self {
+            return Ok(previous);
+        }
 
         sqlx::query!(
             r#"
