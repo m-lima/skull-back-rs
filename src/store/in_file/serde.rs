@@ -40,6 +40,7 @@ impl<'w, W: std::io::Write> Serde<'w, W> {
     }
 
     fn step_in(&mut self) -> &mut Self {
+        self.filled = false;
         self.depth += 1;
         self
     }
@@ -438,7 +439,7 @@ mod test {
 
         serde::Serialize::serialize(&skull, &mut serder).unwrap();
         let output = String::from_utf8(buffer).unwrap();
-        assert_eq!(output.as_str(), "2\txnamex\txcolorx\txiconx\t0.1\t\n");
+        assert_eq!(output.as_str(), "2\txnamex\txcolorx\txiconx\t0.1\n");
     }
 
     #[test]

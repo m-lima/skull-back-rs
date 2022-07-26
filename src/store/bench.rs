@@ -1,4 +1,4 @@
-use crate::test_util::create_base_test_path;
+use crate::test_util::TestPath;
 
 use super::{Occurrence, Selector, Skull, Store};
 
@@ -110,7 +110,7 @@ fn in_memory(bench: &mut test::Bencher) {
 
 #[bench]
 fn in_file(bench: &mut test::Bencher) {
-    let path = create_base_test_path();
+    let path = TestPath::new();
     let store = build_runtime().block_on(async {
         let store = super::in_file::InFile::new(
             Some((String::from(USER), path.join(USER)))
@@ -130,7 +130,7 @@ fn in_file(bench: &mut test::Bencher) {
 
 #[bench]
 fn in_db(bench: &mut test::Bencher) {
-    let path = create_base_test_path();
+    let path = TestPath::new();
     let store = build_runtime().block_on(async {
         let store = super::in_db::InDb::new(
             Some((String::from(USER), path.join(USER)))
