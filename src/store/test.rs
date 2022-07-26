@@ -23,8 +23,13 @@ macro_rules! impl_crud_tests {
                 }
 
                 #[tokio::test(flavor = "multi_thread")]
-                async fn multiple_handles() {
-                    $crate::store::test::multiple_handles($instance).await;
+                async fn multiple_spawned_handles() {
+                    $crate::store::test::multiple_spawned_handles($instance).await;
+                }
+
+                #[tokio::test(flavor = "multi_thread")]
+                async fn multiple_polled_handles() {
+                    $crate::store::test::multiple_polled_handles($instance).await;
                 }
             }
 
@@ -150,12 +155,13 @@ macro_rules! impl_crud_tests {
 use crate::check;
 
 use super::{Error, Id, Occurrence, Quick, Selector, Skull, Store, WithId};
+use helper::{Poller, TesterData};
 
 pub const USER: &str = "bloink";
 
 pub struct Tester<D: Selector>(std::marker::PhantomData<D>);
 
-impl<D: helper::TesterData> Tester<D> {
+impl<D: TesterData> Tester<D> {
     pub async fn selectable(store: &impl Store) {
         helper::populate(store).await;
         assert!(D::select(store, USER).is_ok());
@@ -581,7 +587,7 @@ pub async fn last_modified_does_not_leak(store: &impl Store) {
     let response = check!(helper::get_modified_data(
         Skull::select(store, USER)
             .unwrap()
-            .create(<Skull as helper::TesterData>::new(4))
+            .create(Skull::new(4))
             .await
             .unwrap(),
         skull_last_modified
@@ -642,7 +648,7 @@ pub async fn delete_cascade(store: &impl Store) {
             > quick_last_modified
     );
 
-    check!(<Skull as helper::TesterData>::compare_with_range(
+    check!(Skull::compare_with_range(
         Skull::select(store, USER)
             .unwrap()
             .list(None)
@@ -652,7 +658,7 @@ pub async fn delete_cascade(store: &impl Store) {
         2..=3
     ));
 
-    check!(<Quick as helper::TesterData>::compare_with_range(
+    check!(Quick::compare_with_range(
         Quick::select(store, USER)
             .unwrap()
             .list(None)
@@ -711,7 +717,7 @@ pub async fn delete_reject(store: &impl Store) {
         occurrence_last_modified
     );
 
-    check!(<Skull as helper::TesterData>::compare_with_range(
+    check!(Skull::compare_with_range(
         Skull::select(store, USER)
             .unwrap()
             .list(None)
@@ -721,7 +727,7 @@ pub async fn delete_reject(store: &impl Store) {
         1..=3
     ));
 
-    check!(<Quick as helper::TesterData>::compare_with_range(
+    check!(Quick::compare_with_range(
         Quick::select(store, USER)
             .unwrap()
             .list(None)
@@ -731,7 +737,7 @@ pub async fn delete_reject(store: &impl Store) {
         1..=3
     ));
 
-    check!(<Occurrence as helper::TesterData>::compare_with_range(
+    check!(Occurrence::compare_with_range(
         Occurrence::select(store, USER)
             .unwrap()
             .list(None)
@@ -742,100 +748,22 @@ pub async fn delete_reject(store: &impl Store) {
     ));
 }
 
-pub async fn multiple_handles(store: impl Store) {
-    let store = std::sync::Arc::new(store);
-    helper::populate(store.as_ref()).await;
+pub async fn multiple_spawned_handles(store: impl Store) {
+    let (skull_task, quick_task, occurrence_task) = helper::make_futures(store).await;
 
-    let cloned_store = store.clone();
-    let skull_task = async move {
-        let crud = Skull::select(cloned_store.as_ref(), USER).unwrap();
-        for _ in 1..=3 {
-            check!(<Skull as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=3
-            ));
-            assert_eq!(
-                crud.create(<Skull as helper::TesterData>::new(4))
-                    .await
-                    .unwrap()
-                    .0,
-                4
-            );
-            check!(<Skull as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=4
-            ));
-            assert_eq!(
-                crud.delete(4).await.unwrap().0,
-                <Skull as helper::TesterData>::id(4)
-            );
-            check!(<Skull as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=3
-            ));
-        }
-    };
+    for t in vec![
+        tokio::spawn(skull_task),
+        tokio::spawn(quick_task),
+        tokio::spawn(occurrence_task),
+    ] {
+        t.await.unwrap();
+    }
+}
 
-    let cloned_store = store.clone();
-    let quick_task = async move {
-        use crate::store::data::QuickId;
-        let crud = Quick::select(cloned_store.as_ref(), USER).unwrap();
-        for _ in 1..=3 {
-            check!(<Quick as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=3
-            ));
-            let data = Quick {
-                skull: 1,
-                amount: 7.,
-            };
-            assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
-            let data: QuickId = WithId::new(4, data);
-            let mut expected = helper::from_range::<Quick>(1..=3);
-            expected.push(data.clone());
-            check!(<Quick as helper::TesterData>::compare(
-                crud.list(None).await.unwrap().0,
-                expected
-            ));
-            assert_eq!(crud.delete(4).await.unwrap().0, data);
-            check!(<Quick as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=3
-            ));
-        }
-    };
+pub async fn multiple_polled_handles(store: impl Store) {
+    let (skull_task, quick_task, occurrence_task) = helper::make_futures(store).await;
 
-    let cloned_store = store.clone();
-    let occurrence_task = async move {
-        use crate::store::data::OccurrenceId;
-        let crud = Occurrence::select(cloned_store.as_ref(), USER).unwrap();
-        for _ in 1..=3 {
-            check!(<Occurrence as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=3
-            ));
-            let data = Occurrence {
-                skull: 1,
-                amount: 2.,
-                millis: 3,
-            };
-            assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
-            let data: OccurrenceId = WithId::new(4, data);
-            let mut expected = helper::from_range::<Occurrence>(1..=3);
-            expected.push(data.clone());
-            check!(<Occurrence as helper::TesterData>::compare(
-                crud.list(None).await.unwrap().0,
-                expected
-            ));
-            assert_eq!(crud.delete(4).await.unwrap().0, data);
-            check!(<Occurrence as helper::TesterData>::compare_with_range(
-                crud.list(None).await.unwrap().0,
-                1..=3
-            ));
-        }
-    };
-
-    let poller = helper::Poller::new(
+    let poller = Poller::new(
         Box::pin(skull_task),
         Box::pin(quick_task),
         Box::pin(occurrence_task),
@@ -847,7 +775,7 @@ pub async fn multiple_handles(store: impl Store) {
 mod helper {
     use crate::test_util::Assertion;
 
-    use super::{Id, Occurrence, Quick, Selector, Skull, Store, WithId, USER};
+    use super::{check, Id, Occurrence, Quick, Selector, Skull, Store, WithId, USER};
 
     pub trait TesterData: Selector {
         fn new(i: u8) -> Self;
@@ -1121,6 +1049,96 @@ mod helper {
 
     pub fn from_range<D: TesterData>(range: std::ops::RangeInclusive<u8>) -> Vec<D::Id> {
         range.map(D::id).collect()
+    }
+
+    pub async fn make_futures<S: Store>(
+        store: S,
+    ) -> (
+        impl std::future::Future<Output = ()>,
+        impl std::future::Future<Output = ()>,
+        impl std::future::Future<Output = ()>,
+    ) {
+        let store = std::sync::Arc::new(store);
+        populate(store.as_ref()).await;
+
+        let cloned_store = store.clone();
+        let skull_task = async move {
+            let crud = Skull::select(cloned_store.as_ref(), USER).unwrap();
+            for _ in 1..=3 {
+                check!(Skull::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=3
+                ));
+                assert_eq!(crud.create(Skull::new(4)).await.unwrap().0, 4);
+                check!(Skull::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=4
+                ));
+                assert_eq!(crud.delete(4).await.unwrap().0, Skull::id(4));
+                check!(Skull::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=3
+                ));
+            }
+        };
+
+        let cloned_store = store.clone();
+        let quick_task = async move {
+            use crate::store::data::QuickId;
+            let crud = Quick::select(cloned_store.as_ref(), USER).unwrap();
+            for _ in 1..=3 {
+                check!(Quick::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=3
+                ));
+                let data = Quick {
+                    skull: 1,
+                    amount: 7.,
+                };
+                assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
+                let data: QuickId = WithId::new(4, data);
+                let mut expected = from_range::<Quick>(1..=3);
+                expected.push(data.clone());
+                check!(Quick::compare(crud.list(None).await.unwrap().0, expected));
+                assert_eq!(crud.delete(4).await.unwrap().0, data);
+                check!(Quick::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=3
+                ));
+            }
+        };
+
+        let cloned_store = store.clone();
+        let occurrence_task = async move {
+            use crate::store::data::OccurrenceId;
+            let crud = Occurrence::select(cloned_store.as_ref(), USER).unwrap();
+            for _ in 1..=3 {
+                check!(Occurrence::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=3
+                ));
+                let data = Occurrence {
+                    skull: 1,
+                    amount: 2.,
+                    millis: 3,
+                };
+                assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
+                let data: OccurrenceId = WithId::new(4, data);
+                let mut expected = from_range::<Occurrence>(1..=3);
+                expected.push(data.clone());
+                check!(Occurrence::compare(
+                    crud.list(None).await.unwrap().0,
+                    expected
+                ));
+                assert_eq!(crud.delete(4).await.unwrap().0, data);
+                check!(Occurrence::compare_with_range(
+                    crud.list(None).await.unwrap().0,
+                    1..=3
+                ));
+            }
+        };
+
+        (skull_task, quick_task, occurrence_task)
     }
 
     pub struct Poller(Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>>);
