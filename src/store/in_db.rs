@@ -1,10 +1,6 @@
 #![allow(dead_code)]
 
-use super::{
-    crud::Response,
-    data::{OccurrenceId, QuickId, SkullId},
-    Crud, Data, Error, Id, Occurrence, Quick, Skull, Store,
-};
+use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
 
 mod transient {
     pub(super) struct Id {
@@ -93,37 +89,27 @@ impl Store for InDb {
 impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
     async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
         let pool = self.read()?.clone();
-        let data = D::list(limit, &pool).await?;
-        let last_modified = D::last_modified(&pool).await?;
-        Ok((data, last_modified))
+        D::list(limit, &pool).await
     }
 
     async fn create(&self, data: D) -> Response<Id> {
         let pool = self.read()?.clone();
-        let data = D::create(data, &pool).await?;
-        let last_modified = D::last_modified(&pool).await?;
-        Ok((data, last_modified))
+        D::create(data, &pool).await
     }
 
     async fn read(&self, id: Id) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        let data = D::read(id, &pool).await?;
-        let last_modified = D::last_modified(&pool).await?;
-        Ok((data, last_modified))
+        D::read(id, &pool).await
     }
 
     async fn update(&self, id: Id, data: D) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        let data = D::update(data, id, &pool).await?;
-        let last_modified = D::last_modified(&pool).await?;
-        Ok((data, last_modified))
+        D::update(data, id, &pool).await
     }
 
     async fn delete(&self, id: Id) -> Response<D::Id> {
         let pool = self.read()?.clone();
-        let data = D::delete(id, &pool).await?;
-        let last_modified = D::last_modified(&pool).await?;
-        Ok((data, last_modified))
+        D::delete(id, &pool).await
     }
 
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
@@ -134,58 +120,135 @@ impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
 
 #[async_trait::async_trait]
 trait SqlData: Data + 'static {
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Result<Vec<Self::Id>, Error>;
-    async fn create(self, pool: &sqlx::SqlitePool) -> Result<Id, Error>;
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Result<Self::Id, Error>;
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Result<Self::Id, Error>;
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Result<Self::Id, Error>;
+    const TABLE_ID: u32;
+    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>>;
+    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id>;
+    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id>;
+    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id>;
+    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id>;
     async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error>;
+}
+
+macro_rules! query {
+    (list, $limit:expr, $pool:tt, $data:path, $query:literal) => {{
+        type DataId = <$data as Data>::Id;
+
+        let mut conn = $pool.acquire().await?;
+        let limit = $limit.map(i64::from).unwrap_or(-1);
+        let data = sqlx::query_as!(DataId, $query, limit)
+            .fetch_all(&mut conn)
+            .await?;
+        Ok((data, query!(last_modified, conn, $data)))
+    }};
+
+    (create, $pool:tt, $data:path, $query:literal, $($fields:tt)*) => {{
+        let mut conn = $pool.acquire().await?;
+        let data = sqlx::query_as!(
+            transient::Id,
+            $query,
+            $($fields)*
+        )
+        .fetch_one(&mut conn)
+        .await
+        .map(|id| id.id)?;
+        Ok((data, query!(last_modified, conn, $data)))
+    }};
+
+    (read, $id:tt, $pool:tt, $data:path, $query:literal) => {{
+        type DataId = <$data as Data>::Id;
+
+        let mut conn = $pool.acquire().await?;
+        let data = sqlx::query_as!(DataId, $query, $id)
+            .fetch_optional(&mut conn)
+            .await
+            .map_err(Into::into)
+            .and_then(|d| d.ok_or(Error::NotFound($id)))?;
+        Ok((data, query!(last_modified, conn, $data)))
+    }};
+
+    (update, $self:tt, $id:tt, $pool:tt, $data:path, $previous:literal, $update:literal, $($fields:tt)*) => {{
+        type DataId = <$data as Data>::Id;
+
+        let mut tx = $pool.begin().await?;
+        let data = sqlx::query_as!(
+            DataId,
+            $previous,
+            $id
+        )
+        .fetch_optional(&mut tx)
+        .await
+        .map_err(Into::into)
+        .and_then(|d| d.ok_or(Error::NotFound($id)))?;
+
+        if data != $self {
+            sqlx::query!($update, $id, $($fields)*)
+            .execute(&mut tx)
+            .await?;
+        }
+
+        let last_modified = query!(last_modified, tx, $data);
+        tx.commit().await?;
+
+        Ok((data, last_modified))
+    }};
+
+    (delete, $id:tt, $pool:tt, $data:path, $query:literal) => {{
+        type DataId = <$data as Data>::Id;
+
+        let mut conn = $pool.acquire().await?;
+        let data = sqlx::query_as!(DataId, $query, $id)
+            .fetch_optional(&mut conn)
+            .await
+            .map_err(Into::into)
+            .and_then(|d| d.ok_or(Error::NotFound($id)))?;
+        Ok((data, query!(last_modified, conn, $data)))
+    }};
+
+
+    (last_modified, $conn:expr, $data:path) => {{
+        const TABLE_ID: u32 = <$data>::TABLE_ID;
+
+        sqlx::query_as!(
+            transient::Time,
+            r#"SELECT "millis" FROM last_modified WHERE "table" = $1"#,
+            TABLE_ID
+        )
+        .fetch_one(&mut $conn)
+        .await
+        .map_err(Into::into)
+        .and_then(transient::Time::unpack)?
+    }};
 }
 
 #[async_trait::async_trait]
 impl SqlData for Skull {
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Result<Vec<SkullId>, Error> {
-        if let Some(limit) = limit {
-            sqlx::query_as!(
-                SkullId,
-                r#"
-                SELECT
-                    "id" as "id: _",
-                    "name",
-                    "color",
-                    "icon",
-                    "unit_price" as "unit_price: _",
-                    "limit" as "limit: _"
-                FROM skulls
-                LIMIT $1
-                "#,
-                limit
-            )
-            .fetch_all(pool)
-            .await
-        } else {
-            sqlx::query_as!(
-                SkullId,
-                r#"
-                SELECT
-                    "id" as "id: _",
-                    "name",
-                    "color",
-                    "icon",
-                    "unit_price" as "unit_price: _",
-                    "limit" as "limit: _"
-                FROM skulls
-                "#
-            )
-            .fetch_all(pool)
-            .await
-        }
-        .map_err(Into::into)
+    const TABLE_ID: u32 = 0;
+
+    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
+        query!(
+            list,
+            limit,
+            pool,
+            Skull,
+            r#"
+            SELECT
+                "id" as "id: _",
+                "name",
+                "color",
+                "icon",
+                "unit_price" as "unit_price: _",
+                "limit" as "limit: _"
+            FROM skulls
+            LIMIT $1
+            "#
+        )
     }
 
-    async fn create(self, pool: &sqlx::SqlitePool) -> Result<Id, Error> {
-        sqlx::query_as!(
-            transient::Id,
+    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id> {
+        query!(
+            create,
+            pool,
+            Skull,
             r#"
             INSERT INTO skulls (
                 "name",
@@ -208,15 +271,35 @@ impl SqlData for Skull {
             self.unit_price,
             self.limit,
         )
-        .fetch_one(pool)
-        .await
-        .map_err(Into::into)
-        .map(|id| id.id)
     }
 
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Result<SkullId, Error> {
-        sqlx::query_as!(
-            SkullId,
+    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            read,
+            id,
+            pool,
+            Skull,
+            r#"
+            SELECT
+                "id" as "id: _",
+                "name",
+                "color",
+                "icon",
+                "unit_price" as "unit_price: _",
+                "limit" as "limit: _"
+            FROM skulls
+            WHERE id = $1
+            "#
+        )
+    }
+
+    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            update,
+            self,
+            id,
+            pool,
+            Skull,
             r#"
             SELECT
                 "id" as "id: _",
@@ -228,42 +311,6 @@ impl SqlData for Skull {
             FROM skulls
             WHERE id = $1
             "#,
-            id
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))
-    }
-
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Result<SkullId, Error> {
-        let mut tx = pool.begin().await?;
-
-        let previous = sqlx::query_as!(
-            SkullId,
-            r#"
-            SELECT
-                "id" as "id: _",
-                "name",
-                "color",
-                "icon",
-                "unit_price" as "unit_price: _",
-                "limit" as "limit: _"
-            FROM skulls
-            WHERE id = $1
-            "#,
-            id
-        )
-        .fetch_optional(&mut tx)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))?;
-
-        if previous == self {
-            return Ok(previous);
-        }
-
-        sqlx::query!(
             r#"
             UPDATE skulls
             SET
@@ -274,24 +321,20 @@ impl SqlData for Skull {
                 "limit" = $6
             WHERE id = $1
             "#,
-            id,
             self.name,
             self.color,
             self.icon,
             self.unit_price,
             self.limit,
         )
-        .execute(&mut tx)
-        .await?;
-
-        tx.commit().await?;
-
-        Ok(previous)
     }
 
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Result<SkullId, Error> {
-        sqlx::query_as!(
-            SkullId,
+    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            delete,
+            id,
+            pool,
+            Skull,
             r#"
             DELETE FROM skulls
             WHERE id = $1
@@ -302,13 +345,8 @@ impl SqlData for Skull {
                 "icon",
                 "unit_price" as "unit_price: _",
                 "limit" as "limit: _"
-            "#,
-            id
+            "#
         )
-        .fetch_optional(pool)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))
     }
 
     async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
@@ -331,42 +369,30 @@ impl SqlData for Skull {
 
 #[async_trait::async_trait]
 impl SqlData for Quick {
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Result<Vec<QuickId>, Error> {
-        if let Some(limit) = limit {
-            sqlx::query_as!(
-                QuickId,
-                r#"
-                SELECT
-                    "id" as "id: _",
-                    "skull" as "skull: _",
-                    "amount" as "amount: _"
-                FROM quicks
-                LIMIT $1
-                "#,
-                limit
-            )
-            .fetch_all(pool)
-            .await
-        } else {
-            sqlx::query_as!(
-                QuickId,
-                r#"
-                SELECT
-                    "id" as "id: _",
-                    "skull" as "skull: _",
-                    "amount" as "amount: _"
-                FROM quicks
-                "#
-            )
-            .fetch_all(pool)
-            .await
-        }
-        .map_err(Into::into)
+    const TABLE_ID: u32 = 1;
+
+    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
+        query!(
+            list,
+            limit,
+            pool,
+            Quick,
+            r#"
+            SELECT
+                "id" as "id: _",
+                "skull" as "skull: _",
+                "amount" as "amount: _"
+            FROM quicks
+            LIMIT $1
+            "#
+        )
     }
 
-    async fn create(self, pool: &sqlx::SqlitePool) -> Result<Id, Error> {
-        sqlx::query_as!(
-            transient::Id,
+    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id> {
+        query!(
+            create,
+            pool,
+            Quick,
             r#"
             INSERT INTO quicks (
                 "skull",
@@ -380,15 +406,32 @@ impl SqlData for Quick {
             self.skull,
             self.amount,
         )
-        .fetch_one(pool)
-        .await
-        .map_err(Into::into)
-        .map(|id| id.id)
     }
 
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Result<QuickId, Error> {
-        sqlx::query_as!(
-            QuickId,
+    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            read,
+            id,
+            pool,
+            Quick,
+            r#"
+            SELECT
+                "id" as "id: _",
+                "skull" as "skull: _",
+                "amount" as "amount: _"
+            FROM quicks
+            WHERE id = $1
+            "#
+        )
+    }
+
+    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            update,
+            self,
+            id,
+            pool,
+            Quick,
             r#"
             SELECT
                 "id" as "id: _",
@@ -397,39 +440,6 @@ impl SqlData for Quick {
             FROM quicks
             WHERE id = $1
             "#,
-            id
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))
-    }
-
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Result<QuickId, Error> {
-        let mut tx = pool.begin().await?;
-
-        let previous = sqlx::query_as!(
-            QuickId,
-            r#"
-            SELECT
-                "id" as "id: _",
-                "skull" as "skull: _",
-                "amount" as "amount: _"
-            FROM quicks
-            WHERE id = $1
-            "#,
-            id
-        )
-        .fetch_optional(&mut tx)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))?;
-
-        if previous == self {
-            return Ok(previous);
-        }
-
-        sqlx::query!(
             r#"
             UPDATE quicks
             SET
@@ -437,21 +447,17 @@ impl SqlData for Quick {
                 "amount" = $3
             WHERE id = $1
             "#,
-            id,
             self.skull,
             self.amount,
         )
-        .execute(&mut tx)
-        .await?;
-
-        tx.commit().await?;
-
-        Ok(previous)
     }
 
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Result<QuickId, Error> {
-        sqlx::query_as!(
-            QuickId,
+    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            delete,
+            id,
+            pool,
+            Quick,
             r#"
             DELETE FROM quicks
             WHERE id = $1
@@ -459,13 +465,8 @@ impl SqlData for Quick {
                 "id" as "id: _",
                 "skull" as "skull: _",
                 "amount" as "amount: _"
-            "#,
-            id
+            "#
         )
-        .fetch_optional(pool)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))
     }
 
     async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
@@ -488,46 +489,32 @@ impl SqlData for Quick {
 
 #[async_trait::async_trait]
 impl SqlData for Occurrence {
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Result<Vec<OccurrenceId>, Error> {
-        if let Some(limit) = limit {
-            sqlx::query_as!(
-                OccurrenceId,
-                r#"
-                SELECT
-                    "id" as "id!: _",
-                    "skull" as "skull!: _",
-                    "amount" as "amount!: _",
-                    "millis" as "millis!: _"
-                FROM occurrences
-                ORDER BY "millis" DESC, "id" DESC
-                LIMIT $1
-                "#,
-                limit
-            )
-            .fetch_all(pool)
-            .await
-        } else {
-            sqlx::query_as!(
-                OccurrenceId,
-                r#"
-                SELECT
-                    "id" as "id: _",
-                    "skull" as "skull: _",
-                    "amount" as "amount: _",
-                    "millis" as "millis: _"
-                FROM occurrences
-                ORDER BY "millis" DESC, "id" DESC
-                "#
-            )
-            .fetch_all(pool)
-            .await
-        }
-        .map_err(Into::into)
+    const TABLE_ID: u32 = 2;
+
+    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
+        query!(
+            list,
+            limit,
+            pool,
+            Occurrence,
+            r#"
+            SELECT
+                "id" as "id!: _",
+                "skull" as "skull!: _",
+                "amount" as "amount!: _",
+                "millis" as "millis!: _"
+            FROM occurrences
+            ORDER BY "millis" DESC, "id" DESC
+            LIMIT $1
+            "#
+        )
     }
 
-    async fn create(self, pool: &sqlx::SqlitePool) -> Result<Id, Error> {
-        sqlx::query_as!(
-            transient::Id,
+    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id> {
+        query!(
+            create,
+            pool,
+            Occurrence,
             r#"
             INSERT INTO occurrences (
                 "skull",
@@ -544,15 +531,33 @@ impl SqlData for Occurrence {
             self.amount,
             self.millis,
         )
-        .fetch_one(pool)
-        .await
-        .map_err(Into::into)
-        .map(|id| id.id)
     }
 
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Result<OccurrenceId, Error> {
-        sqlx::query_as!(
-            OccurrenceId,
+    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            read,
+            id,
+            pool,
+            Occurrence,
+            r#"
+            SELECT
+                "id" as "id: _",
+                "skull" as "skull: _",
+                "amount" as "amount: _",
+                "millis"
+            FROM occurrences
+            WHERE id = $1
+            "#
+        )
+    }
+
+    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            update,
+            self,
+            id,
+            pool,
+            Occurrence,
             r#"
             SELECT
                 "id" as "id: _",
@@ -562,40 +567,6 @@ impl SqlData for Occurrence {
             FROM occurrences
             WHERE id = $1
             "#,
-            id
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))
-    }
-
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Result<OccurrenceId, Error> {
-        let mut tx = pool.begin().await?;
-
-        let previous = sqlx::query_as!(
-            OccurrenceId,
-            r#"
-            SELECT
-                "id" as "id: _",
-                "skull" as "skull: _",
-                "amount" as "amount: _",
-                "millis"
-            FROM occurrences
-            WHERE id = $1
-            "#,
-            id
-        )
-        .fetch_optional(&mut tx)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))?;
-
-        if previous == self {
-            return Ok(previous);
-        }
-
-        sqlx::query!(
             r#"
             UPDATE occurrences
             SET
@@ -604,22 +575,18 @@ impl SqlData for Occurrence {
                 "millis" = $4
             WHERE id = $1
             "#,
-            id,
             self.skull,
             self.amount,
             self.millis,
         )
-        .execute(&mut tx)
-        .await?;
-
-        tx.commit().await?;
-
-        Ok(previous)
     }
 
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Result<OccurrenceId, Error> {
-        sqlx::query_as!(
-            OccurrenceId,
+    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+        query!(
+            delete,
+            id,
+            pool,
+            Occurrence,
             r#"
             DELETE FROM occurrences
             WHERE id = $1
@@ -628,13 +595,8 @@ impl SqlData for Occurrence {
                 "skull" as "skull: _",
                 "amount" as "amount: _",
                 "millis"
-            "#,
-            id
+            "#
         )
-        .fetch_optional(pool)
-        .await
-        .map_err(Into::into)
-        .and_then(|d| d.ok_or(Error::NotFound(id)))
     }
 
     async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
