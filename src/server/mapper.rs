@@ -55,7 +55,7 @@ pub mod request {
         gotham_derive::StateData, serde::Deserialize, gotham_derive::StaticResponseExtender,
     )]
     pub struct Limit {
-        pub limit: Option<usize>,
+        pub limit: Option<u32>,
     }
 
     pub struct UnmodifiedSince;
@@ -100,16 +100,5 @@ pub mod request {
             .map_err(Error::Hyper)?;
             serde_json::from_slice(&body).map_err(Error::JsonDeserialize)
         }
-    }
-}
-
-pub mod respose {
-    use crate::store;
-
-    #[derive(serde::Serialize, Clone, Debug, PartialEq)]
-    pub struct DataWithId<'a, D: store::Data> {
-        id: store::Id,
-        #[serde(flatten)]
-        data: &'a D,
     }
 }

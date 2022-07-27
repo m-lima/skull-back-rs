@@ -39,9 +39,10 @@ impl Error {
             Self::Store(StoreError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Store(StoreError::StoreFull) => StatusCode::INSUFFICIENT_STORAGE,
             Self::MissingUser | Self::Store(StoreError::NoSuchUser(_)) => StatusCode::FORBIDDEN,
-            Self::JsonDeserialize(_) | Self::TimeDeserialize(_) | Self::BadHeader => {
-                StatusCode::BAD_REQUEST
-            }
+            Self::JsonDeserialize(_)
+            | Self::TimeDeserialize(_)
+            | Self::BadHeader
+            | Self::Store(StoreError::Constraint | StoreError::Conflict) => StatusCode::BAD_REQUEST,
             Self::OutOfSync => StatusCode::PRECONDITION_FAILED,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ContentLengthMissing => StatusCode::LENGTH_REQUIRED,
@@ -51,7 +52,11 @@ impl Error {
             | Self::Http(_)
             | Self::Hyper(_)
             | Self::Store(
-                StoreError::Io(_) | StoreError::Serde(_) | StoreError::FailedToAcquireLock,
+                StoreError::Io(_)
+                | StoreError::Serde(_)
+                | StoreError::Lock
+                | StoreError::BadMillis(_)
+                | StoreError::Sql(_),
             ) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

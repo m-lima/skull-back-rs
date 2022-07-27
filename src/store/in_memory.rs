@@ -1,10 +1,8 @@
-use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
+use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
 #[derive(Debug, Default)]
 pub struct InMemory {
-    skull: Container<Skull>,
-    quick: Container<Quick>,
-    occurrence: Container<Occurrence>,
+    users: std::collections::HashMap<String, UserStore>,
 }
 
 impl InMemory {
@@ -15,17 +13,13 @@ impl InMemory {
     {
         let mut in_memory = InMemory::default();
         users.into_iter().for_each(|user| {
-            in_memory.skull.data.insert(
+            in_memory.users.insert(
                 user.to_string(),
-                std::sync::RwLock::new(UserContainer::default()),
-            );
-            in_memory.quick.data.insert(
-                user.to_string(),
-                std::sync::RwLock::new(UserContainer::default()),
-            );
-            in_memory.occurrence.data.insert(
-                user.to_string(),
-                std::sync::RwLock::new(UserContainer::default()),
+                UserStore {
+                    skull: std::sync::RwLock::new(UserContainer::default()),
+                    quick: std::sync::RwLock::new(UserContainer::default()),
+                    occurrence: std::sync::RwLock::new(UserContainer::default()),
+                },
             );
         });
         in_memory
@@ -33,28 +27,25 @@ impl InMemory {
 }
 
 impl Store for InMemory {
-    fn skull(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Skull>>, Error> {
+    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error> {
         let user_container = self
-            .skull
-            .data
+            .users
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))?;
         Ok(user_container)
     }
 
-    fn quick(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Quick>>, Error> {
+    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error> {
         let user_container = self
-            .quick
-            .data
+            .users
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))?;
         Ok(user_container)
     }
 
-    fn occurrence(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Occurrence>>, Error> {
+    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error> {
         let user_container = self
-            .occurrence
-            .data
+            .users
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))?;
         Ok(user_container)
@@ -62,29 +53,50 @@ impl Store for InMemory {
 }
 
 #[derive(Debug)]
-pub(super) struct Container<D: Data> {
-    data: std::collections::HashMap<String, std::sync::RwLock<UserContainer<D>>>,
+struct UserStore {
+    skull: std::sync::RwLock<UserContainer<Skull>>,
+    quick: std::sync::RwLock<UserContainer<Quick>>,
+    occurrence: std::sync::RwLock<UserContainer<Occurrence>>,
 }
 
-impl<D: Data> Default for Container<D> {
-    fn default() -> Self {
-        Self {
-            data: std::collections::HashMap::new(),
-        }
+#[async_trait::async_trait]
+impl<D: MemoryData> Crud<D> for UserStore {
+    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
+        D::list(self, limit)
+    }
+
+    async fn create(&self, data: D) -> Response<Id> {
+        D::create(self, data)
+    }
+
+    async fn read(&self, id: Id) -> Response<D::Id> {
+        D::read(self, id)
+    }
+
+    async fn update(&self, id: Id, data: D) -> Response<D::Id> {
+        D::update(self, id, data)
+    }
+
+    async fn delete(&self, id: Id) -> Response<D::Id> {
+        D::delete(self, id)
+    }
+
+    async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
+        D::last_modified(self)
     }
 }
 
 #[derive(Debug)]
 pub(super) struct UserContainer<D: Data> {
-    count: u32,
-    data: Vec<WithId<D>>,
+    next_id: u32,
+    data: Vec<D::Id>,
     last_modified: std::time::SystemTime,
 }
 
 impl<D: Data> Default for UserContainer<D> {
     fn default() -> Self {
         Self {
-            count: 0,
+            next_id: 1,
             data: Vec::new(),
             last_modified: std::time::SystemTime::now(),
         }
@@ -92,95 +104,292 @@ impl<D: Data> Default for UserContainer<D> {
 }
 
 impl<D: Data> UserContainer<D> {
-    fn id_to_index(&self, id: Id) -> Option<usize> {
-        if self.data.is_empty() {
-            None
-        } else {
-            let index = <usize as std::convert::TryFrom<Id>>::try_from(id).ok()?;
-            Some(std::cmp::min(self.data.len() - 1, index))
-        }
-    }
-
     fn find(&self, id: Id) -> Option<usize> {
-        for i in (0..=self.id_to_index(id)?).rev() {
-            if self.data[i].id == id {
-                return Some(i);
-            }
-        }
-        None
+        self.data
+            .iter()
+            .take(usize::try_from(id).ok().map(|id| id.min(self.data.len()))?)
+            .rposition(|d| d.id() == id)
     }
 }
 
-impl<D: Data> Crud<D> for UserContainer<D> {
-    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
-        Ok(self
-            .data
-            .iter()
-            .skip(self.data.len() - limit.unwrap_or(self.data.len()))
-            .map(std::borrow::Cow::Borrowed)
-            .collect())
+trait MemoryData: Data + 'static {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>>;
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>>;
+    fn create(store: &UserStore, data: Self) -> Response<Id>;
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id>;
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id>;
+    fn conflicts(&self, other: &Self::Id) -> bool;
+
+    fn read(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let lock = Self::as_read(store)?;
+        lock.find(id)
+            .ok_or(Error::NotFound(id))
+            .map(|i| &lock.data[i])
+            .map(Clone::clone)
+            .map(|data| (data, lock.last_modified))
     }
 
-    fn filter_list(
-        &self,
-        filter: Box<dyn Fn(&WithId<D>) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
-        Ok(self
-            .data
-            .iter()
-            .filter(|d| filter(d))
-            .map(std::borrow::Cow::Borrowed)
-            .collect())
+    fn last_modified(store: &UserStore) -> Result<std::time::SystemTime, Error> {
+        Ok(Self::as_read(store)?.last_modified)
     }
 
-    fn create(&mut self, data: D) -> Result<Id, Error> {
-        if self.count == u32::MAX {
+    fn list_inner(
+        lock: &std::sync::RwLockReadGuard<'_, UserContainer<Self>>,
+        limit: Option<u32>,
+    ) -> Response<Vec<Self::Id>> {
+        let len = lock.data.len();
+        Ok((
+            lock.data
+                .iter()
+                .skip(
+                    len - limit
+                        .map(usize::try_from)
+                        .and_then(Result::ok)
+                        .unwrap_or(len)
+                        .min(len),
+                )
+                .map(Clone::clone)
+                .collect(),
+            lock.last_modified,
+        ))
+    }
+
+    fn create_inner(
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserContainer<Self>>,
+        data: Self,
+    ) -> Response<Id> {
+        if lock.next_id == u32::MAX {
             return Err(Error::StoreFull);
         }
-        self.last_modified = std::time::SystemTime::now();
-        let id = self.count;
-        let with_id = WithId::new(id, data);
-        self.data.push(with_id);
-        self.count += 1;
-        Ok(id)
+        lock.last_modified = std::time::SystemTime::now();
+        let id = lock.next_id;
+        let with_id = Self::Id::new(id, data);
+        lock.data.push(with_id);
+        lock.next_id += 1;
+        Ok((id, lock.last_modified))
     }
 
-    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
-        self.find(id)
-            .ok_or(Error::NotFound(id))
-            .map(|i| &self.data[i])
-            .map(std::borrow::Cow::Borrowed)
-    }
-
-    fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error> {
-        self.find(id).ok_or(Error::NotFound(id)).map(|i| {
-            self.last_modified = std::time::SystemTime::now();
-            let old = &mut self.data[i];
-            let mut with_id = WithId::new(old.id, data);
+    fn update_inner(
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserContainer<Self>>,
+        idx: usize,
+        data: Self,
+    ) -> Response<Self::Id> {
+        let old = &mut lock.data[idx];
+        let mut with_id = Self::Id::new(old.id(), data);
+        if old != &with_id {
             std::mem::swap(old, &mut with_id);
-            with_id
-        })
+            lock.last_modified = std::time::SystemTime::now();
+        }
+        Ok((with_id, lock.last_modified))
     }
 
-    fn delete(&mut self, id: Id) -> Result<WithId<D>, Error> {
-        self.find(id).ok_or(Error::NotFound(id)).map(|i| {
-            self.last_modified = std::time::SystemTime::now();
-            self.data.remove(i)
-        })
+    fn delete_inner(
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserContainer<Self>>,
+        id: Id,
+    ) -> Response<Self::Id> {
+        let response = lock.find(id).ok_or(Error::NotFound(id)).map(|i| {
+            lock.last_modified = std::time::SystemTime::now();
+            (lock.data.remove(i), lock.last_modified)
+        })?;
+        lock.next_id = lock.data.last().map_or(0, WithId::id) + 1;
+        Ok(response)
     }
 
-    fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
-        Ok(self.last_modified)
+    fn find_index(
+        lock: &std::sync::RwLockWriteGuard<'_, UserContainer<Self>>,
+        id: Id,
+    ) -> Result<usize, Error> {
+        lock.find(id).ok_or(Error::NotFound(id))
+    }
+
+    fn has_skull(
+        lock: &std::sync::RwLockReadGuard<'_, UserContainer<Skull>>,
+        skull: Id,
+    ) -> Result<(), Error> {
+        if lock.data.iter().any(|d| d.id() == skull) {
+            Ok(())
+        } else {
+            Err(Error::Constraint)
+        }
+    }
+
+    fn as_read(
+        store: &UserStore,
+    ) -> Result<std::sync::RwLockReadGuard<'_, UserContainer<Self>>, Error> {
+        Ok(Self::get(store).read()?)
+    }
+
+    fn as_write(
+        store: &UserStore,
+    ) -> Result<std::sync::RwLockWriteGuard<'_, UserContainer<Self>>, Error> {
+        Ok(Self::get(store).write()?)
+    }
+}
+
+impl MemoryData for Skull {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>> {
+        &store.skull
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let lock = Self::as_read(store)?;
+        Self::list_inner(&lock, limit)
+    }
+
+    fn create(store: &UserStore, data: Self) -> Response<Id> {
+        let mut lock = Self::as_write(store)?;
+        if lock.data.iter().any(|d| data.conflicts(d)) {
+            Err(Error::Conflict)
+        } else {
+            Self::create_inner(&mut lock, data)
+        }
+    }
+
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        let idx = Self::find_index(&lock, id)?;
+
+        if lock
+            .data
+            .iter()
+            .filter(|d| d.id != id)
+            .any(|d| data.conflicts(d))
+        {
+            Err(Error::Conflict)
+        } else {
+            Self::update_inner(&mut lock, idx, data)
+        }
+    }
+
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        let occurrence_lock = Occurrence::as_read(store)?;
+
+        if occurrence_lock.data.iter().any(|d| d.skull == id) {
+            Err(Error::Constraint)
+        } else {
+            let mut quick_lock = Quick::as_write(store)?;
+            let response = Self::delete_inner(&mut lock, id)?;
+            quick_lock.data.retain(|d| d.skull != id);
+            quick_lock.last_modified = std::time::SystemTime::now();
+            Ok(response)
+        }
+    }
+
+    fn conflicts(&self, other: &Self::Id) -> bool {
+        self.name == other.name || self.color == other.color || self.icon == other.icon
+    }
+}
+
+impl MemoryData for Quick {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>> {
+        &store.quick
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let lock = Self::as_read(store)?;
+        Self::list_inner(&lock, limit)
+    }
+
+    fn create(store: &UserStore, data: Self) -> Response<Id> {
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        if lock.data.iter().any(|d| data.conflicts(d)) {
+            Err(Error::Conflict)
+        } else {
+            Self::create_inner(&mut lock, data)
+        }
+    }
+
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        let idx = Self::find_index(&lock, id)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        if lock
+            .data
+            .iter()
+            .filter(|d| d.id != id)
+            .any(|d| data.conflicts(d))
+        {
+            Err(Error::Conflict)
+        } else {
+            Self::update_inner(&mut lock, idx, data)
+        }
+    }
+
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        Self::delete_inner(&mut lock, id)
+    }
+
+    fn conflicts(&self, other: &Self::Id) -> bool {
+        self.skull == other.skull && (self.amount - other.amount).abs() < f32::EPSILON
+    }
+}
+
+#[async_trait::async_trait]
+impl MemoryData for Occurrence {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>> {
+        &store.occurrence
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let (mut occurrences, last_modified) = {
+            let lock = Self::as_read(store)?;
+            Self::list_inner(&lock, None)?
+        };
+        occurrences.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
+            std::cmp::Ordering::Equal => b.id.cmp(&a.id),
+            c => c,
+        });
+        if let Some(limit) = limit {
+            let limit = usize::try_from(limit).unwrap_or(occurrences.len());
+            occurrences = occurrences.into_iter().take(limit).collect();
+        }
+        Ok((occurrences, last_modified))
+    }
+
+    fn create(store: &UserStore, data: Self) -> Response<Id> {
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        Self::has_skull(&skull_lock, data.skull)?;
+        Self::create_inner(&mut lock, data)
+    }
+
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        let idx = Self::find_index(&lock, id)?;
+
+        Self::has_skull(&skull_lock, data.skull)?;
+        Self::update_inner(&mut lock, idx, data)
+    }
+
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        Self::delete_inner(&mut lock, id)
+    }
+
+    fn conflicts(&self, _other: &Self::Id) -> bool {
+        false
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::store::{Quick, Selector};
+    use crate::store::test::USER;
 
-    use super::{Crud, Error, InMemory, Skull, UserContainer, WithId};
+    use super::{Error, InMemory, MemoryData, Skull, UserContainer};
 
-    const USER: &str = "bloink";
+    crate::impl_crud_tests!(InMemory, InMemory::new(&[USER]));
 
     mod construction {
         use super::InMemory;
@@ -188,368 +397,63 @@ mod test {
         #[test]
         fn direct_slice() {
             let store = InMemory::new(&["0", "1", "2"]);
-            assert_eq!(store.skull.data.keys().len(), 3);
+            assert_eq!(store.users.keys().len(), 3);
         }
 
         #[test]
         fn vec_str() {
             let store = InMemory::new(vec!["0", "1", "2"]);
-            assert_eq!(store.skull.data.keys().len(), 3);
+            assert_eq!(store.users.keys().len(), 3);
         }
 
         #[test]
         fn vec_string() {
             let store = InMemory::new(vec!["0".to_string(), "1".to_string(), "2".to_string()]);
-            assert_eq!(store.skull.data.keys().len(), 3);
+            assert_eq!(store.users.keys().len(), 3);
         }
 
         #[test]
         fn ref_vec_str() {
             let v = vec!["0", "1", "2"];
             let store = InMemory::new(&v);
-            assert_eq!(store.skull.data.keys().len(), 3);
+            assert_eq!(store.users.keys().len(), 3);
         }
 
         #[test]
         fn slice_str() {
             let v = vec!["0", "1", "2"];
             let store = InMemory::new(v.as_slice());
-            assert_eq!(store.skull.data.keys().len(), 3);
+            assert_eq!(store.users.keys().len(), 3);
         }
 
         #[test]
         fn iter_str() {
             let v = vec!["0", "1", "2"];
             let store = InMemory::new(v.iter());
-            assert_eq!(store.skull.data.keys().len(), 3);
+            assert_eq!(store.users.keys().len(), 3);
         }
-    }
-
-    fn new_skull(name: &str, unit_price: f32) -> Skull {
-        Skull {
-            name: String::from(name),
-            color: String::from("red"),
-            icon: String::new(),
-            unit_price,
-            limit: None,
-        }
-    }
-
-    #[test]
-    fn fetches_user_container() {
-        let mut store = InMemory::new(&[USER]);
-        let skull = new_skull("skull", 0.4);
-        let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
-
-        assert!(store.skull.data.len() == 1);
-        assert!(
-            store
-                .skull
-                .data
-                .remove(USER)
-                .unwrap()
-                .into_inner()
-                .unwrap()
-                .data
-                .len()
-                == 1
-        );
-        assert!(id == 0);
-    }
-
-    #[test]
-    fn reject_unknown_user() {
-        let store = InMemory::new(&[USER]);
-        assert_eq!(
-            Skull::read(&store, "unknown")
-                .map(|_| ())
-                .unwrap_err()
-                .to_string(),
-            Error::NoSuchUser(String::from("unknown")).to_string()
-        );
-    }
-
-    #[test]
-    fn last_modified() {
-        let mut store = InMemory::new(&[USER]);
-
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // List [no change]
-        Skull::read(&store, USER).unwrap().list(None).unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Filter list [no change]
-        Skull::read(&store, USER)
-            .unwrap()
-            .filter_list(Box::new(|_| true))
-            .unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Create [change]
-        Skull::write(&store, USER)
-            .unwrap()
-            .create(new_skull("bla", 1.0))
-            .unwrap();
-        assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // Read [no change]
-        Skull::read(&store, USER).unwrap().read(0).unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Update [change]
-        Skull::write(&store, USER)
-            .unwrap()
-            .update(0, new_skull("bla", 2.0))
-            .unwrap();
-        assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // Delete [change]
-        Skull::write(&store, USER).unwrap().delete(0).unwrap();
-        assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // Create failure [no change]
-        store
-            .skull
-            .data
-            .get_mut(USER)
-            .unwrap()
-            .write()
-            .unwrap()
-            .count = u32::MAX;
-        assert!(Skull::write(&store, USER)
-            .unwrap()
-            .create(new_skull("bla", 1.0))
-            .is_err());
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Update failure [no change]
-        assert!(Skull::write(&store, USER)
-            .unwrap()
-            .update(3, new_skull("bla", 1.0))
-            .is_err());
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Delete failure [no change]
-        assert!(Skull::write(&store, USER).unwrap().delete(5).is_err());
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Stores don't affect each other
-        Quick::write(&store, USER)
-            .unwrap()
-            .create(Quick {
-                skull: 0,
-                amount: 3.0,
-            })
-            .unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        assert_ne!(
-            Quick::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-    }
-
-    #[test]
-    fn list() {
-        let store = InMemory::new(&[USER]);
-
-        Skull::write(&store, USER)
-            .unwrap()
-            .create(new_skull("skull", 0.1))
-            .unwrap();
-        Skull::write(&store, USER)
-            .unwrap()
-            .create(new_skull("skull", 0.2))
-            .unwrap();
-        Skull::write(&store, USER)
-            .unwrap()
-            .create(new_skull("skull", 0.3))
-            .unwrap();
-
-        {
-            let skulls = Skull::read(&store, USER).unwrap().list(None).unwrap().len();
-            assert_eq!(skulls, 3);
-        }
-        {
-            let skulls = Skull::read(&store, USER)
-                .unwrap()
-                .list(Some(1))
-                .unwrap()
-                .into_iter()
-                .map(std::borrow::Cow::into_owned)
-                .collect::<Vec<_>>();
-            assert_eq!(skulls, vec![WithId::new(2, new_skull("skull", 0.3))]);
-        }
-        {
-            let skulls = Skull::read(&store, USER)
-                .unwrap()
-                .list(Some(0))
-                .unwrap()
-                .len();
-            assert_eq!(skulls, 0);
-        }
-    }
-
-    #[test]
-    fn create() {
-        let mut container = UserContainer::default();
-        let skull = new_skull("skull", 0.4);
-        let id = container.create(skull).unwrap();
-
-        assert!(container.data.len() == 1);
-        assert!(id == 0);
     }
 
     #[test]
     fn create_store_full() {
-        let mut container = UserContainer {
-            count: u32::MAX,
+        let container = std::sync::RwLock::new(UserContainer {
+            next_id: u32::MAX,
             data: Vec::new(),
             last_modified: std::time::SystemTime::now(),
+        });
+        let skull = Skull {
+            name: String::from("skull"),
+            color: String::from("red"),
+            icon: String::new(),
+            unit_price: 1.,
+            limit: None,
         };
-        let skull = new_skull("skull", 0.4);
 
         assert_eq!(
-            container.create(skull).unwrap_err().to_string(),
+            Skull::create_inner(&mut container.write().unwrap(), skull)
+                .unwrap_err()
+                .to_string(),
             Error::StoreFull.to_string()
         );
-    }
-
-    #[test]
-    fn read() {
-        let mut container = UserContainer::default();
-        let skull = WithId::new(3, new_skull("skull", 0.4));
-        let expected = skull.clone();
-        container.data.push(skull);
-
-        assert_eq!(container.read(3).unwrap().as_ref(), &expected);
-    }
-
-    #[test]
-    fn read_not_found() {
-        let container = UserContainer::<Skull>::default();
-        let id = 3;
-        assert_eq!(
-            container.read(id).unwrap_err().to_string(),
-            Error::NotFound(id).to_string()
-        );
-    }
-
-    #[test]
-    fn update() {
-        let mut container = UserContainer::default();
-        let old = WithId::new(3, new_skull("skull", 0.4));
-        let new = new_skull("bla", 0.7);
-        let expected = WithId::new(3, new.clone());
-        container.data.push(old.clone());
-
-        assert_eq!(container.update(3, new).unwrap(), old);
-        assert_eq!(container.data[0], expected);
-    }
-
-    #[test]
-    fn update_not_found() {
-        let mut container = UserContainer::default();
-        let new = new_skull("bla", 0.7);
-        assert!(matches!(container.update(3, new), Err(Error::NotFound(3))));
-    }
-
-    #[test]
-    fn delete() {
-        let mut container = UserContainer::default();
-        let skull = WithId::new(3, new_skull("skull", 0.4));
-        container.data.push(skull.clone());
-
-        assert_eq!(container.delete(3).unwrap(), skull);
-        assert!(container.data.is_empty());
-    }
-
-    #[test]
-    fn delete_not_found() {
-        let mut container = UserContainer::<Skull>::default();
-        assert!(matches!(container.delete(3), Err(Error::NotFound(3))));
-    }
-
-    #[test]
-    fn id_always_grows() {
-        let mut container = UserContainer::default();
-        let skull = new_skull("skull", 0.4);
-
-        let mut id = container.create(skull.clone()).unwrap();
-        assert_eq!(id, 0);
-        assert!(container.delete(id).is_ok());
-        assert!(container.data.is_empty());
-
-        id = container.create(skull).unwrap();
-        assert_eq!(id, 1);
-    }
-
-    #[test]
-    #[allow(clippy::cast_precision_loss)]
-    fn find() {
-        let mut container = UserContainer::default();
-        for i in 0..30 {
-            container.create(new_skull("skull", i as f32)).unwrap();
-        }
-
-        container.data.retain(|d| d.id % 3 != 0 && d.id % 4 != 0);
-
-        for i in 0..30 {
-            assert_eq!(container.read(i).is_ok(), i % 3 != 0 && i % 4 != 0);
-        }
-    }
-
-    #[test]
-    #[allow(clippy::cast_precision_loss)]
-    fn delete_from_list() {
-        let mut container = UserContainer::default();
-        for i in 0..30 {
-            container.create(new_skull("skull", i as f32)).unwrap();
-        }
-
-        let mut reference = container.data.clone();
-
-        reference.retain(|d| d.id % 3 != 0 && d.id % 4 != 0);
-
-        for i in 0..30 {
-            if i % 3 == 0 || i % 4 == 0 {
-                container.delete(i).unwrap();
-            }
-        }
-
-        assert_eq!(container.data, reference);
     }
 }

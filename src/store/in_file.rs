@@ -1,5 +1,7 @@
-use super::{Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
+use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
 
+#[cfg(all(test, nightly))]
+mod bench;
 #[cfg(all(test, nightly))]
 mod serde;
 
@@ -64,119 +66,78 @@ pub struct InFile {
 }
 
 impl InFile {
-    pub fn new<S, I, P>(path: P, users: I) -> anyhow::Result<Self>
-    where
-        S: AsRef<str>,
-        I: std::iter::IntoIterator<Item = S>,
-        P: AsRef<std::path::Path>,
-    {
-        let path = std::path::PathBuf::from(path.as_ref());
-
-        if !path.exists() {
-            anyhow::bail!(
-                "Store directory does not exist: {}",
-                std::fs::canonicalize(&path).unwrap_or(path).display()
-            );
-        }
-
-        if !path.is_dir() {
-            anyhow::bail!(
-                "Store path is not a directory: {}",
-                std::fs::canonicalize(&path).unwrap_or(path).display()
-            );
-        }
-
-        let dir_reader = path
-            .read_dir()
-            .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {}", e))?;
-
-        let users = users
-            .into_iter()
-            .map(|user| path.join(user.as_ref()))
-            .chain(
-                dir_reader
-                    .filter_map(Result::ok)
-                    .map(|dir| dir.path())
-                    .filter(|dir| dir.is_dir()),
-            )
-            .filter_map(|root| {
-                root.file_name()
-                    .and_then(std::ffi::OsStr::to_str)
-                    .map(String::from)
-                    .map(|name| (name, root))
-            })
-            .collect::<std::collections::HashSet<_>>();
-
-        for (user, path) in &users {
-            if !path.exists() {
-                log::debug!("Creating {}", path.display());
-                std::fs::create_dir(&path).map_err(|e| {
-                    anyhow::anyhow!("Could not create user directory {}: {}", path.display(), e)
-                })?;
-            } else if !path.is_dir() {
-                anyhow::bail!("User path is not a directory {}", path.display());
-            }
-
-            for file in
-                [Skull::name(), Quick::name(), Occurrence::name()].map(|name| path.join(name))
-            {
-                if !file.exists() {
-                    log::debug!("Creating {}", path.display());
-                    std::fs::File::create(&file).map_err(|e| {
-                        anyhow::anyhow!("Could not create {}: {}", file.display(), e)
-                    })?;
-                } else if file.is_dir() {
-                    anyhow::bail!("Path {} is not a file", file.display());
-                }
-            }
-            log::info!("Allowing {}", user);
-        }
-
+    pub fn new(
+        users: std::collections::HashMap<String, std::path::PathBuf>,
+    ) -> anyhow::Result<Self> {
         let users = users
             .into_iter()
             .map(|(user, path)| {
+                if !path.exists() {
+                    log::debug!("Creating {}", path.display());
+                    std::fs::create_dir(&path).map_err(|e| {
+                        anyhow::anyhow!("Could not create user directory {}: {e}", path.display())
+                    })?;
+                } else if !path.is_dir() {
+                    anyhow::bail!("User path is not a directory {}", path.display());
+                }
+
+                for file in
+                    [Skull::name(), Quick::name(), Occurrence::name()].map(|name| path.join(name))
+                {
+                    if !file.exists() {
+                        log::debug!("Creating {}", path.display());
+                        std::fs::File::create(&file).map_err(|e| {
+                            anyhow::anyhow!("Could not create {}: {e}", file.display())
+                        })?;
+                    } else if file.is_dir() {
+                        anyhow::bail!("Path {} is not a file", file.display());
+                    }
+                }
+
+                log::info!("Allowing {user}");
+
                 let skull = std::sync::RwLock::new(UserFile::new(path.join(Skull::name())));
                 let quick = std::sync::RwLock::new(UserFile::new(path.join(Quick::name())));
                 let occurrence =
                     std::sync::RwLock::new(UserFile::new(path.join(Occurrence::name())));
-                (
+                Ok((
                     user,
                     UserStore {
                         skull,
                         quick,
                         occurrence,
                     },
-                )
+                ))
             })
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         Ok(Self { users })
     }
 }
 
 impl Store for InFile {
-    fn skull(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Skull>>, Error> {
-        let user = self
+    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error> {
+        let user_file = self
             .users
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))?;
-        Ok(&user.skull)
+        Ok(user_file)
     }
 
-    fn quick(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Quick>>, Error> {
-        let user = self
+    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error> {
+        let user_file = self
             .users
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))?;
-        Ok(&user.quick)
+        Ok(user_file)
     }
 
-    fn occurrence(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Occurrence>>, Error> {
-        let user = self
+    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error> {
+        let user_file = self
             .users
             .get(user)
             .ok_or_else(|| Error::NoSuchUser(String::from(user)))?;
-        Ok(&user.occurrence)
+        Ok(user_file)
     }
 }
 
@@ -186,8 +147,36 @@ struct UserStore {
     occurrence: std::sync::RwLock<UserFile<Occurrence>>,
 }
 
+#[async_trait::async_trait]
+impl<D: FileData> Crud<D> for UserStore {
+    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
+        D::list(self, limit)
+    }
+
+    async fn create(&self, data: D) -> Response<Id> {
+        D::create(self, data)
+    }
+
+    async fn read(&self, id: Id) -> Response<D::Id> {
+        D::read(self, id)
+    }
+
+    async fn update(&self, id: Id, data: D) -> Response<D::Id> {
+        D::update(self, id, data)
+    }
+
+    async fn delete(&self, id: Id) -> Response<D::Id> {
+        D::delete(self, id)
+    }
+
+    async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
+        D::last_modified(self)
+    }
+}
+
 struct UserFile<D: Data> {
     file: std::path::PathBuf,
+    next_id: u32,
     _marker: std::marker::PhantomData<D>,
 }
 
@@ -195,18 +184,54 @@ impl<D: FileData> UserFile<D> {
     fn new(file: std::path::PathBuf) -> Self {
         Self {
             file,
+            next_id: 0,
             _marker: std::marker::PhantomData,
         }
     }
 
-    fn lines(&self) -> Result<impl Iterator<Item = std::io::Result<String>>, Error> {
+    fn lines(&self) -> Result<impl Iterator<Item = D::Id> + '_, Error> {
         use std::io::BufRead;
-        let iter = std::io::BufReader::new(std::fs::File::open(&self.file)?).lines();
+        let iter = std::io::BufReader::new(std::fs::File::open(&self.file)?)
+            .lines()
+            .map(D::read_tsv)
+            .enumerate()
+            .filter_map(|line| match line.1 {
+                Ok(line) => Some(line),
+                Err(err) => {
+                    log::error!("Failed to read {}:{}: {err}", self.file.display(), line.0);
+                    None
+                }
+            });
         Ok(iter)
     }
 
-    fn replace(&mut self, entries: Vec<WithId<D>>) -> Result<(), Error> {
+    fn ids(&self) -> Result<impl Iterator<Item = Id>, Error> {
+        use std::io::BufRead;
+        let iter = std::io::BufReader::new(std::fs::File::open(&self.file)?)
+            .lines()
+            .map(D::id)
+            .filter_map(Result::ok);
+        Ok(iter)
+    }
+
+    fn append(&mut self, data: D) -> Result<(Id, std::time::SystemTime), Error> {
+        if self.next_id == 0 {
+            self.next_id = self.ids()?.max().unwrap_or(1);
+        } else if self.next_id == u32::MAX {
+            return Err(Error::StoreFull);
+        }
+        let mut file = std::fs::File::options().append(true).open(&self.file)?;
+        let id = self.next_id;
+        D::write_tsv(D::Id::new(id, data), &mut file)?;
+        self.next_id += 1;
+
+        Ok((id, self.last_modified()?))
+    }
+
+    fn replace(&mut self, entries: Vec<D::Id>) -> Result<std::time::SystemTime, Error> {
         use std::io::Write;
+
+        self.next_id = entries.last().map_or(0, WithId::id) + 1;
 
         let mut buffer = vec![];
         for entry in entries {
@@ -217,130 +242,9 @@ impl<D: FileData> UserFile<D> {
             .truncate(true)
             .write(true)
             .open(&self.file)?
-            .write_all(buffer.as_slice())
-            .map_err(Error::Io)
-    }
+            .write_all(buffer.as_slice())?;
 
-    fn good_line<T>(&self, line: (usize, Result<T, Error>)) -> Option<T> {
-        match line.1 {
-            Ok(line) => Some(line),
-            Err(err) => {
-                log::error!("Failed to read {}:{}: {err}", self.file.display(), line.0);
-                None
-            }
-        }
-    }
-
-    fn good_line_with_index(
-        &self,
-        line: (usize, Result<WithId<D>, Error>),
-        id: Id,
-        index: &mut Option<usize>,
-    ) -> Option<WithId<D>> {
-        match line.1 {
-            Ok(entry) => {
-                if entry.id == id {
-                    *index = Some(line.0);
-                }
-                Some(entry)
-            }
-            Err(err) => {
-                log::error!("Failed to read {}:{}: {err}", self.file.display(), line.0);
-                None
-            }
-        }
-    }
-}
-
-impl<D: FileData> Crud<D> for UserFile<D> {
-    fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
-        let entries = self
-            .lines()?
-            .map(D::read_tsv)
-            .enumerate()
-            .filter_map(|line| self.good_line(line))
-            .map(std::borrow::Cow::Owned)
-            .collect::<Vec<_>>();
-        if let Some(limit) = limit {
-            let len = entries.len();
-            Ok(entries.into_iter().skip(len - limit).collect())
-        } else {
-            Ok(entries)
-        }
-    }
-
-    fn filter_list(
-        &self,
-        filter: Box<dyn Fn(&WithId<D>) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
-        Ok(self
-            .lines()?
-            .map(D::read_tsv)
-            .enumerate()
-            .filter_map(|line| self.good_line(line))
-            .filter(|d| filter(d))
-            .map(std::borrow::Cow::Owned)
-            .collect())
-    }
-
-    fn create(&mut self, data: D) -> Result<Id, Error> {
-        let id = self
-            .lines()?
-            .map(D::id)
-            .enumerate()
-            .filter_map(|line| self.good_line(line))
-            .max()
-            .map_or(0, |id| id + 1);
-
-        let mut file = std::fs::File::options().append(true).open(&self.file)?;
-        D::write_tsv(WithId::new(id, data), &mut file)?;
-
-        Ok(id)
-    }
-
-    fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
-        self.lines()?
-            .map(D::read_tsv)
-            .enumerate()
-            .filter_map(|line| self.good_line(line))
-            .find(|d| d.id == id)
-            .map(std::borrow::Cow::Owned)
-            .ok_or(Error::NotFound(id))
-    }
-
-    fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error> {
-        let mut index = None;
-        let mut entries = self
-            .lines()?
-            .map(D::read_tsv)
-            .enumerate()
-            .filter_map(|line| self.good_line_with_index(line, id, &mut index))
-            .collect::<Vec<_>>();
-
-        let index = index.ok_or(Error::NotFound(id))?;
-
-        let old = &mut entries[index];
-        let mut new = WithId::new(id, data);
-        std::mem::swap(old, &mut new);
-
-        self.replace(entries)?;
-        Ok(new)
-    }
-
-    fn delete(&mut self, id: Id) -> Result<WithId<D>, Error> {
-        let mut index = None;
-        let mut entries = self
-            .lines()?
-            .map(D::read_tsv)
-            .enumerate()
-            .filter_map(|line| self.good_line_with_index(line, id, &mut index))
-            .collect::<Vec<_>>();
-
-        let index = index.ok_or(Error::NotFound(id))?;
-        let old = entries.remove(index);
-
-        self.replace(entries)?;
-        Ok(old)
+        self.last_modified()
     }
 
     fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
@@ -350,14 +254,279 @@ impl<D: FileData> Crud<D> for UserFile<D> {
     }
 }
 
-pub trait FileData: super::Data {
-    fn name() -> &'static str;
-    fn id(string: std::io::Result<String>) -> Result<Id, Error>;
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error>;
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error>;
+trait FileData: Serializable + 'static {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>>;
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>>;
+    fn create(store: &UserStore, data: Self) -> Response<Id>;
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id>;
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id>;
+    fn conflicts(&self, other: &Self::Id) -> bool;
+
+    fn read(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let lock = Self::as_read(store)?;
+        let data = lock
+            .lines()?
+            .find(|d| d.id() == id)
+            .ok_or(Error::NotFound(id))?;
+        Ok((data, lock.last_modified()?))
+    }
+
+    fn last_modified(store: &UserStore) -> Result<std::time::SystemTime, Error> {
+        Self::as_read(store)?.last_modified()
+    }
+
+    fn list_inner(
+        lock: &std::sync::RwLockReadGuard<'_, UserFile<Self>>,
+        limit: Option<u32>,
+    ) -> Response<Vec<Self::Id>> {
+        let entries = lock.lines()?.collect::<Vec<_>>();
+
+        if let Some(limit) = limit.map(usize::try_from).and_then(Result::ok) {
+            let len = entries.len();
+            Ok((
+                entries.into_iter().skip(len - limit.min(len)).collect(),
+                lock.last_modified()?,
+            ))
+        } else {
+            Ok((entries, lock.last_modified()?))
+        }
+    }
+
+    fn update_inner(
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserFile<Self>>,
+        index: usize,
+        mut entries: Vec<Self::Id>,
+        mut data: Self::Id,
+    ) -> Response<Self::Id> {
+        let left = &mut entries[index];
+        let last_modified = if left == &data {
+            lock.last_modified()
+        } else {
+            std::mem::swap(left, &mut data);
+            lock.replace(entries)
+        }?;
+        Ok((data, last_modified))
+    }
+
+    fn delete_inner(
+        lock: &mut std::sync::RwLockWriteGuard<'_, UserFile<Self>>,
+        id: Id,
+    ) -> Response<Self::Id> {
+        let (index, mut entries) = Self::entries_with_index(lock, id)?;
+
+        let old = entries.remove(index);
+
+        let last_modified = lock.replace(entries)?;
+        Ok((old, last_modified))
+    }
+
+    fn has_skull(
+        lock: &std::sync::RwLockReadGuard<'_, UserFile<Skull>>,
+        skull: Id,
+    ) -> Result<(), Error> {
+        lock.ids()?
+            .find(|id| *id == skull)
+            .map(|_| ())
+            .ok_or(Error::Constraint)
+    }
+
+    fn entries_with_index(
+        lock: &std::sync::RwLockWriteGuard<'_, UserFile<Self>>,
+        id: Id,
+    ) -> Result<(usize, Vec<Self::Id>), Error> {
+        let mut index = None;
+        let entries = lock
+            .lines()?
+            .enumerate()
+            .map(|line| {
+                if line.1.id() == id {
+                    index = Some(line.0);
+                }
+                line.1
+            })
+            .collect::<Vec<_>>();
+        index.map(|i| (i, entries)).ok_or(Error::NotFound(id))
+    }
+
+    fn as_read(store: &UserStore) -> Result<std::sync::RwLockReadGuard<'_, UserFile<Self>>, Error> {
+        Ok(Self::get(store).read()?)
+    }
+
+    fn as_write(
+        store: &UserStore,
+    ) -> Result<std::sync::RwLockWriteGuard<'_, UserFile<Self>>, Error> {
+        Ok(Self::get(store).write()?)
+    }
 }
 
 impl FileData for Skull {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>> {
+        &store.skull
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let lock = Self::as_read(store)?;
+        Self::list_inner(&lock, limit)
+    }
+
+    fn create(store: &UserStore, data: Self) -> Response<Id> {
+        let mut lock = Self::as_write(store)?;
+        if lock.lines()?.any(|d| data.conflicts(&d)) {
+            Err(Error::Conflict)
+        } else {
+            lock.append(data)
+        }
+    }
+
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        let (index, entries) = Self::entries_with_index(&lock, id)?;
+
+        if entries
+            .iter()
+            .filter(|d| d.id != id)
+            .any(|d| data.conflicts(d))
+        {
+            Err(Error::Conflict)
+        } else {
+            Self::update_inner(&mut lock, index, entries, Self::Id::new(id, data))
+        }
+    }
+
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        let occurrence_lock = Occurrence::as_read(store)?;
+
+        if occurrence_lock.lines()?.any(|d| d.skull == id) {
+            Err(Error::Constraint)
+        } else {
+            let mut quick_lock = Quick::as_write(store)?;
+            let quicks = quick_lock.lines()?.filter(|d| d.skull != id).collect();
+
+            let (old, last_modified) = {
+                let (index, mut entries) = Self::entries_with_index(&lock, id)?;
+                let old = entries.remove(index);
+                let last_modified = lock.replace(entries)?;
+                (old, last_modified)
+            };
+            quick_lock.replace(quicks)?;
+
+            Ok((old, last_modified))
+        }
+    }
+
+    fn conflicts(&self, other: &Self::Id) -> bool {
+        self.name == other.name || self.color == other.color || self.icon == other.icon
+    }
+}
+
+impl FileData for Quick {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>> {
+        &store.quick
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let lock = Self::as_read(store)?;
+        Self::list_inner(&lock, limit)
+    }
+
+    fn create(store: &UserStore, data: Self) -> Response<Id> {
+        let skull_lock = Skull::as_read(store)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        let mut lock = Self::as_write(store)?;
+        if lock.lines()?.any(|d| data.conflicts(&d)) {
+            Err(Error::Conflict)
+        } else {
+            lock.append(data)
+        }
+    }
+
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        let (index, entries) = Self::entries_with_index(&lock, id)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        if entries
+            .iter()
+            .filter(|d| d.id != id)
+            .any(|d| data.conflicts(d))
+        {
+            Err(Error::Conflict)
+        } else {
+            Self::update_inner(&mut lock, index, entries, Self::Id::new(id, data))
+        }
+    }
+
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        Self::delete_inner(&mut lock, id)
+    }
+
+    fn conflicts(&self, other: &Self::Id) -> bool {
+        self.skull == other.skull && (self.amount - other.amount).abs() < f32::EPSILON
+    }
+}
+
+impl FileData for Occurrence {
+    fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>> {
+        &store.occurrence
+    }
+
+    fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>> {
+        let (mut occurrences, last_modified) = {
+            let lock = Self::as_read(store)?;
+            Self::list_inner(&lock, None)?
+        };
+        occurrences.sort_unstable_by(|a, b| match b.millis.cmp(&a.millis) {
+            std::cmp::Ordering::Equal => b.id.cmp(&a.id),
+            c => c,
+        });
+        if let Some(limit) = limit {
+            let limit = usize::try_from(limit).unwrap_or(occurrences.len());
+            occurrences = occurrences.into_iter().take(limit).collect();
+        }
+        Ok((occurrences, last_modified))
+    }
+
+    fn create(store: &UserStore, data: Self) -> Response<Id> {
+        let skull_lock = Skull::as_read(store)?;
+        Self::has_skull(&skull_lock, data.skull)?;
+        let mut lock = Self::as_write(store)?;
+        lock.append(data)
+    }
+
+    fn update(store: &UserStore, id: Id, data: Self) -> Response<Self::Id> {
+        let skull_lock = Skull::as_read(store)?;
+        let mut lock = Self::as_write(store)?;
+
+        let (index, entries) = Self::entries_with_index(&lock, id)?;
+
+        Self::has_skull(&skull_lock, data.skull)?;
+
+        Self::update_inner(&mut lock, index, entries, Self::Id::new(id, data))
+    }
+
+    fn delete(store: &UserStore, id: Id) -> Response<Self::Id> {
+        let mut lock = Self::as_write(store)?;
+        Self::delete_inner(&mut lock, id)
+    }
+
+    fn conflicts(&self, _other: &Self::Id) -> bool {
+        false
+    }
+}
+
+trait Serializable: Data {
+    fn name() -> &'static str;
+    fn id(string: std::io::Result<String>) -> Result<Id, Error>;
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error>;
+    fn write_tsv<W: std::io::Write>(with_id: Self::Id, writer: &mut W) -> Result<(), Error>;
+}
+
+impl Serializable for Skull {
     fn name() -> &'static str {
         "skull"
     }
@@ -367,7 +536,7 @@ impl FileData for Skull {
         parse!(number, string.split('\t'), "id", "Skull")
     }
 
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -384,7 +553,7 @@ impl FileData for Skull {
         };
         parse!(end, split, "Skull");
 
-        Ok(WithId::new(
+        Ok(Self::Id::new(
             id,
             Self {
                 name,
@@ -396,9 +565,8 @@ impl FileData for Skull {
         ))
     }
 
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-        write_number!(itoa, writer, with_id.id, "id", "Skull")?;
+    fn write_tsv<W: std::io::Write>(data: Self::Id, writer: &mut W) -> Result<(), Error> {
+        write_number!(itoa, writer, data.id(), "id", "Skull")?;
 
         writer.write_all(b"\t")?;
         writer.write_all(data.name.as_bytes())?;
@@ -419,7 +587,7 @@ impl FileData for Skull {
     }
 }
 
-impl FileData for Quick {
+impl Serializable for Quick {
     fn name() -> &'static str {
         "quick"
     }
@@ -429,7 +597,7 @@ impl FileData for Quick {
         parse!(number, string.split('\t'), "id", "Quick")
     }
 
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -438,13 +606,11 @@ impl FileData for Quick {
         let amount = parse!(number, split, "amount", "Quick")?;
         parse!(end, split, "Quick");
 
-        Ok(WithId::new(id, Self { skull, amount }))
+        Ok(Self::Id::new(id, Self { skull, amount }))
     }
 
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-
-        write_number!(itoa, writer, with_id.id, "id", "Quick")?;
+    fn write_tsv<W: std::io::Write>(data: Self::Id, writer: &mut W) -> Result<(), Error> {
+        write_number!(itoa, writer, data.id(), "id", "Quick")?;
         writer.write_all(b"\t")?;
         write_number!(itoa, writer, data.skull, "skull", "Quick")?;
         writer.write_all(b"\t")?;
@@ -453,7 +619,7 @@ impl FileData for Quick {
     }
 }
 
-impl FileData for Occurrence {
+impl Serializable for Occurrence {
     fn name() -> &'static str {
         "occurrence"
     }
@@ -463,7 +629,7 @@ impl FileData for Occurrence {
         parse!(number, string.split('\t'), "id", "Occurrence")
     }
 
-    fn read_tsv(string: std::io::Result<String>) -> Result<WithId<Self>, Error> {
+    fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error> {
         let string = string?;
         let mut split = string.split('\t');
 
@@ -473,7 +639,7 @@ impl FileData for Occurrence {
         let millis = parse!(number, split, "millis", "Occurrence")?;
         parse!(end, split, "Occurrence");
 
-        Ok(WithId::new(
+        Ok(Self::Id::new(
             id,
             Self {
                 skull,
@@ -485,10 +651,8 @@ impl FileData for Occurrence {
 
     // Allowed because u64 millis is already many times the age of the universe
     #[allow(clippy::cast_possible_truncation)]
-    fn write_tsv<W: std::io::Write>(with_id: WithId<Self>, writer: &mut W) -> Result<(), Error> {
-        let data = &with_id.data;
-
-        write_number!(itoa, writer, with_id.id, "id", "Occurrence")?;
+    fn write_tsv<W: std::io::Write>(data: Self::Id, writer: &mut W) -> Result<(), Error> {
+        write_number!(itoa, writer, data.id(), "id", "Occurrence")?;
         writer.write_all(b"\t")?;
         write_number!(itoa, writer, data.skull, "skull", "Occurrence")?;
         writer.write_all(b"\t")?;
@@ -501,416 +665,82 @@ impl FileData for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::store::{Quick, Selector};
+    use crate::{
+        store::{data::SkullId, test::USER, WithId},
+        test_util::TestPath,
+    };
 
-    use super::{Error, FileData, InFile, Skull, Store, WithId};
+    use super::{Error, FileData, InFile, Serializable, Skull, Store, UserFile, UserStore};
 
-    const USER: &str = "bloink";
-    const SKULLS: &str = r#"0	skull	0		0.1	
-4	skool	0		0.3	
-10	skrut	0		43	
-"#;
+    crate::impl_crud_tests!(InFile, TestStore::new());
 
     struct TestStore {
         store: InFile,
-        path: std::path::PathBuf,
+        _path: TestPath,
     }
 
     impl TestStore {
-        pub fn new() -> Self {
-            use rand::Rng;
+        fn new() -> Self {
+            let path = TestPath::new();
+            let store = InFile::new(
+                Some((String::from(USER), path.join(USER)))
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap();
 
-            let name = format!("{:016x}", rand::thread_rng().gen::<u64>());
-            let path = std::env::temp_dir().join("skull-test");
-            if path.exists() {
-                assert!(path.is_dir(), "Cannot use {} as test path", path.display());
-            } else {
-                std::fs::create_dir(&path).unwrap();
-            }
-            let path = path.join(name);
-            assert!(
-                !path.exists(),
-                "Cannot use {} as test path as it already exists",
-                path.display()
-            );
-            std::fs::create_dir(&path).unwrap();
-            let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
-                drop(std::fs::remove_dir_all(&path));
-                panic!("{}", e);
-            });
-
-            Self { store, path }
-        }
-
-        pub fn with_data(self) -> Self {
-            std::fs::write(self.path.join(USER).join("skull"), SKULLS).unwrap();
-            self
-        }
-
-        pub fn verify_skull(&self, payload: &str) {
-            let data =
-                String::from_utf8(std::fs::read(self.path.join(USER).join("skull")).unwrap())
-                    .unwrap();
-            assert_eq!(data.as_str(), payload);
-        }
-    }
-
-    impl std::ops::Deref for TestStore {
-        type Target = InFile;
-
-        fn deref(&self) -> &Self::Target {
-            &self.store
-        }
-    }
-
-    impl std::ops::DerefMut for TestStore {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.store
+            Self { store, _path: path }
         }
     }
 
     impl Store for TestStore {
-        fn skull(
-            &self,
-            user: &str,
-        ) -> Result<&std::sync::RwLock<dyn crate::store::Crud<Skull>>, Error> {
+        fn skull(&self, user: &str) -> Result<&dyn crate::store::Crud<Skull>, Error> {
             self.store.skull(user)
         }
 
-        fn quick(
-            &self,
-            user: &str,
-        ) -> Result<&std::sync::RwLock<dyn crate::store::Crud<crate::store::Quick>>, Error>
-        {
+        fn quick(&self, user: &str) -> Result<&dyn crate::store::Crud<crate::store::Quick>, Error> {
             self.store.quick(user)
         }
 
         fn occurrence(
             &self,
             user: &str,
-        ) -> Result<&std::sync::RwLock<dyn crate::store::Crud<crate::store::Occurrence>>, Error>
-        {
+        ) -> Result<&dyn crate::store::Crud<crate::store::Occurrence>, Error> {
             self.store.occurrence(user)
         }
     }
 
-    impl Drop for TestStore {
-        fn drop(&mut self) {
-            drop(std::fs::remove_dir_all(&self.path));
-        }
-    }
-
-    fn new_skull(name: &str, unit_price: f32) -> Skull {
-        Skull {
-            name: String::from(name),
-            color: String::from('0'),
-            icon: String::new(),
-            unit_price,
-            limit: None,
-        }
-    }
-
     #[test]
-    fn reject_unknown_user() {
-        let store = TestStore::new();
-        assert_eq!(
-            Skull::read(&store, "unknown")
-                .map(|_| ())
-                .unwrap_err()
-                .to_string(),
-            Error::NoSuchUser(String::from("unknown")).to_string()
-        );
-    }
-
-    #[test]
-    fn last_modified() {
-        let store = TestStore::new().with_data();
-
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // List [no change]
-        Skull::read(&store, USER).unwrap().list(None).unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Filter list [no change]
-        Skull::read(&store, USER)
-            .unwrap()
-            .filter_list(Box::new(|_| true))
-            .unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Create [change]
-        Skull::write(&store, USER)
-            .unwrap()
-            .create(new_skull("bla", 1.0))
-            .unwrap();
-        assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // Read [no change]
-        Skull::read(&store, USER).unwrap().read(0).unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Update [change]
-        Skull::write(&store, USER)
-            .unwrap()
-            .update(0, new_skull("bla", 2.0))
-            .unwrap();
-        assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // Delete [change]
-        Skull::write(&store, USER).unwrap().delete(0).unwrap();
-        assert_ne!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
-
-        // Update failure [no change]
-        assert!(Skull::write(&store, USER)
-            .unwrap()
-            .update(3, new_skull("bla", 1.0))
-            .is_err());
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Delete failure [no change]
-        assert!(Skull::write(&store, USER).unwrap().delete(5).is_err());
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-
-        // Stores don't affect each other
-        Quick::write(&store, USER)
-            .unwrap()
-            .create(Quick {
-                skull: 0,
-                amount: 3.0,
+    fn create_store_full() {
+        fn full_container<D: FileData>(file: std::path::PathBuf) -> std::sync::RwLock<UserFile<D>> {
+            std::sync::RwLock::new(UserFile {
+                next_id: u32::MAX,
+                ..UserFile::new(file)
             })
-            .unwrap();
-        assert_eq!(
-            Skull::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-        assert_ne!(
-            Quick::read(&store, USER).unwrap().last_modified().unwrap(),
-            last_modified
-        );
-    }
-
-    #[test]
-    fn list() {
-        let store = TestStore::new().with_data();
-        let skulls = Skull::read(&store, USER).unwrap().list(None).unwrap().len();
-        assert_eq!(skulls, 3);
-
-        let skulls = Skull::read(&store, USER)
-            .unwrap()
-            .list(Some(1))
-            .unwrap()
-            .into_iter()
-            .map(std::borrow::Cow::into_owned)
-            .collect::<Vec<_>>();
-        assert_eq!(skulls, vec![WithId::new(10, new_skull("skrut", 43.0))]);
-
-        let skulls = Skull::read(&store, USER)
-            .unwrap()
-            .list(Some(0))
-            .unwrap()
-            .len();
-        assert_eq!(skulls, 0);
-    }
-
-    #[test]
-    fn create() {
-        let store = TestStore::new().with_data();
-        {
-            let skull = new_skull("skull", 0.1);
-            let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
-            assert!(id == 11);
-        }
-        {
-            let skull = new_skull("skull", 0.3);
-            let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
-            assert!(id == 12);
         }
 
-        store.verify_skull(
-            r#"0	skull	0		0.1	
-4	skool	0		0.3	
-10	skrut	0		43	
-11	skull	0		0.1	
-12	skull	0		0.3	
-"#,
-        );
-    }
+        let path = TestPath::new();
+        let file = path.join("yo");
+        std::fs::File::create(&file).unwrap();
 
-    #[test]
-    fn read() {
-        let store = TestStore::new().with_data();
-
-        let expected = WithId::new(4, new_skull("skool", 0.3));
-        let read = Skull::read(&store, USER)
-            .unwrap()
-            .read(4)
-            .unwrap()
-            .into_owned();
-        assert_eq!(read, expected);
-        store.verify_skull(SKULLS);
-    }
-
-    #[test]
-    fn read_not_found() {
-        let store = TestStore::new().with_data();
-
-        assert_eq!(
-            Skull::read(&store, USER)
-                .unwrap()
-                .read(1)
-                .unwrap_err()
-                .to_string(),
-            Error::NotFound(1).to_string()
-        );
-        store.verify_skull(SKULLS);
-    }
-
-    #[test]
-    fn update() {
-        let store = TestStore::new().with_data();
-
-        let old = WithId::new(4, new_skull("skool", 0.3));
-        let new = new_skull("bla", 0.7);
-
-        assert_eq!(
-            Skull::write(&store, USER).unwrap().update(4, new).unwrap(),
-            old
-        );
-
-        store.verify_skull(
-            r#"0	skull	0		0.1	
-4	bla	0		0.7	
-10	skrut	0		43.0	
-"#,
-        );
-    }
-
-    #[test]
-    fn update_not_found() {
-        let store = TestStore::new().with_data();
-
-        let new = new_skull("bla", 0.7);
-
-        assert_eq!(
-            Skull::write(&store, USER)
-                .unwrap()
-                .update(1, new)
-                .unwrap_err()
-                .to_string(),
-            Error::NotFound(1).to_string()
-        );
-        store.verify_skull(SKULLS);
-    }
-
-    #[test]
-    fn delete() {
-        let store = TestStore::new().with_data();
-
-        let old = WithId::new(4, new_skull("skool", 0.3));
-
-        assert_eq!(Skull::write(&store, USER).unwrap().delete(4).unwrap(), old);
-
-        store.verify_skull(
-            r#"0	skull	0		0.1	
-10	skrut	0		43.0	
-"#,
-        );
-    }
-
-    #[test]
-    fn delete_not_found() {
-        let store = TestStore::new().with_data();
-
-        assert_eq!(
-            Skull::write(&store, USER)
-                .unwrap()
-                .delete(1)
-                .unwrap_err()
-                .to_string(),
-            Error::NotFound(1).to_string()
-        );
-
-        store.verify_skull(SKULLS);
-    }
-
-    #[test]
-    #[allow(clippy::cast_precision_loss)]
-    fn find() {
-        let store = TestStore::new();
-        {
-            let mut file = std::fs::File::create(store.path.join(USER).join("skull")).unwrap();
-            (0..30)
-                .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| FileData::write_tsv(s, &mut file).unwrap());
-        }
-
-        for i in 0..30 {
-            assert_eq!(
-                Skull::read(&store, USER).unwrap().read(i).is_ok(),
-                i % 3 != 0 && i % 4 != 0
-            );
-        }
-    }
-
-    #[test]
-    #[allow(clippy::cast_precision_loss)]
-    fn delete_from_list() {
-        let store = TestStore::new();
-
-        for i in 0..30 {
-            Skull::write(&store, USER)
-                .unwrap()
-                .create(new_skull("skull", i as f32))
-                .unwrap();
-        }
-
-        for i in 0..30 {
-            if i % 3 == 0 || i % 4 == 0 {
-                Skull::write(&store, USER).unwrap().delete(i).unwrap();
-            }
-        }
-
-        let expected = {
-            let mut expected = vec![];
-            (0..30)
-                .filter(|i| i % 3 != 0 && i % 4 != 0)
-                .map(|i| WithId::new(i, new_skull("skull", i as f32)))
-                .for_each(|s| FileData::write_tsv(s, &mut expected).unwrap());
-            expected
+        let store = UserStore {
+            skull: full_container(file.clone()),
+            quick: full_container(file.clone()),
+            occurrence: full_container(file),
         };
 
-        let actual = std::fs::read(store.path.join(USER).join("skull")).unwrap();
+        let skull = Skull {
+            name: String::from("skull"),
+            color: String::from("red"),
+            icon: String::new(),
+            unit_price: 1.,
+            limit: None,
+        };
 
-        assert_eq!(actual, expected);
+        assert_eq!(
+            Skull::create(&store, skull).unwrap_err().to_string(),
+            Error::StoreFull.to_string()
+        );
     }
 
     #[test]
@@ -958,113 +788,34 @@ mod test {
             String::from("Serde error: Too many fields for Skull")
         );
 
-        let skull = WithId::new(0, new_skull("skull", 0.0));
+        let skull = SkullId::new(
+            0,
+            Skull {
+                name: String::from("skull"),
+                color: String::from('0'),
+                icon: String::new(),
+                unit_price: 1.,
+                limit: None,
+            },
+        );
         let mut writer = FailedWriter;
         assert_eq!(
-            FileData::write_tsv(skull, &mut writer)
+            Skull::write_tsv(skull, &mut writer)
                 .unwrap_err()
                 .to_string(),
             String::from("Serde error: Could not serialize `id` for Skull: Serde error: write")
         );
     }
-}
-
-#[cfg(all(test, nightly))]
-mod bench {
-
-    mod handwritten {
-        extern crate test;
-        use super::super::{FileData, Occurrence, Skull, WithId};
-
-        #[bench]
-        fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = Skull {
-                name: String::from("xnamex"),
-                color: String::from("xcolorx"),
-                icon: String::from("xiconx"),
-                unit_price: 0.1,
-                limit: None,
-            };
-
-            bench.iter(|| {
-                let mut buffer = vec![];
-
-                (0..100)
-                    .map(|i| WithId::new(i, skull.clone()))
-                    .for_each(|s| FileData::write(&s, &mut buffer).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_skull(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|i| format!("{}\txnamex\txcolorx\txiconx\t1.2\t{}", i, i))
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                for (i, string) in data.into_iter().enumerate() {
-                    let s = <Skull as FileData>::read(string).unwrap();
-                    assert_eq!(s.id, i as u32);
-                    let s = s.data;
-                    assert_eq!(s.name, "xnamex");
-                    assert_eq!(s.color, "xcolorx");
-                    assert_eq!(s.icon, "xiconx");
-                    assert_eq!(s.unit_price, 1.2);
-                    assert_eq!(s.limit.unwrap(), i as f32);
-                }
-            });
-        }
-
-        #[bench]
-        fn serialize_occurrence(bench: &mut test::Bencher) {
-            let occurrence = Occurrence {
-                skull: 0,
-                amount: 1.2,
-                millis: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-            };
-
-            bench.iter(|| {
-                let mut buffer = vec![];
-
-                (0..100)
-                    .map(|i| WithId::new(i, occurrence.clone()))
-                    .for_each(|s| FileData::write(&s, &mut buffer).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_occurrence(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|i| format!("{}\t0\t1.2\t4", i))
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                for (i, string) in data.into_iter().enumerate() {
-                    let s = <Occurrence as FileData>::read(string).unwrap();
-                    assert_eq!(s.id, i as u32);
-                    let s = s.data;
-                    assert_eq!(s.skull, 0);
-                    assert_eq!(s.amount, 1.2);
-                    assert_eq!(s.millis, 4);
-                }
-            });
-        }
-    }
 
     mod serde {
-        extern crate test;
-        use super::super::{serde::Serde, Occurrence, Skull, WithId};
 
-        #[bench]
-        fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = Skull {
+        use super::super::Serializable;
+        use crate::store::data::{Occurrence, OccurrenceId, Quick, QuickId, Skull, SkullId};
+
+        #[test]
+        fn serialize_skull() {
+            let skull = SkullId {
+                id: 3,
                 name: String::from("xnamex"),
                 color: String::from("xcolorx"),
                 icon: String::from("xiconx"),
@@ -1072,155 +823,108 @@ mod bench {
                 limit: None,
             };
 
-            bench.iter(|| {
-                let mut buffer = vec![];
-                let mut serder = Serde::new(&mut buffer);
-
-                (0..100)
-                    .map(|i| WithId::new(i, skull.clone()))
-                    .for_each(|s| {
-                        serde::Serialize::serialize(&s, &mut serder).unwrap();
-                    });
-            });
+            let mut buffer = Vec::new();
+            Skull::write_tsv(skull, &mut buffer).unwrap();
+            assert_eq!(buffer, b"3\txnamex\txcolorx\txiconx\t0.1\t\n");
         }
 
-        #[bench]
-        fn serialize_occurrence(bench: &mut test::Bencher) {
-            let occurrence = Occurrence {
-                skull: 0,
-                amount: 1.2,
-                millis: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
+        #[test]
+        fn deserialize_skull() {
+            let tsv = String::from("3\txnamex\txcolorx\txiconx\t0.1");
+
+            assert_eq!(
+                Skull::read_tsv(Ok(tsv)).unwrap(),
+                SkullId {
+                    id: 3,
+                    name: String::from("xnamex"),
+                    color: String::from("xcolorx"),
+                    icon: String::from("xiconx"),
+                    unit_price: 0.1,
+                    limit: None,
+                }
+            );
+
+            let tsv = String::from("3\txnamex\txcolorx\txiconx\t0.1\t");
+
+            assert_eq!(
+                Skull::read_tsv(Ok(tsv)).unwrap(),
+                SkullId {
+                    id: 3,
+                    name: String::from("xnamex"),
+                    color: String::from("xcolorx"),
+                    icon: String::from("xiconx"),
+                    unit_price: 0.1,
+                    limit: None,
+                }
+            );
+
+            let tsv = String::from("3\txnamex\txcolorx\txiconx\t0.1\t0.2");
+
+            assert_eq!(
+                Skull::read_tsv(Ok(tsv)).unwrap(),
+                SkullId {
+                    id: 3,
+                    name: String::from("xnamex"),
+                    color: String::from("xcolorx"),
+                    icon: String::from("xiconx"),
+                    unit_price: 0.1,
+                    limit: Some(0.2),
+                }
+            );
+        }
+
+        #[test]
+        fn serialize_quick() {
+            let quick = QuickId {
+                id: 3,
+                skull: 1,
+                amount: 2.0,
             };
 
-            bench.iter(|| {
-                let mut buffer = vec![];
-                let mut serder = super::super::serde::Serde::new(&mut buffer);
-
-                (0..100)
-                    .map(|i| WithId::new(i, occurrence.clone()))
-                    .for_each(|s| {
-                        serde::Serialize::serialize(&s, &mut serder).unwrap();
-                    });
-            });
+            let mut buffer = Vec::new();
+            Quick::write_tsv(quick, &mut buffer).unwrap();
+            assert_eq!(buffer, b"3\t1\t2.0\n");
         }
-    }
 
-    mod csv {
-        extern crate test;
-        use super::super::{Occurrence, Skull};
+        #[test]
+        fn deserialize_quick() {
+            let tsv = String::from("3\t1\t2.0");
 
-        #[bench]
-        fn serialize_skull(bench: &mut test::Bencher) {
-            let skull = Skull {
-                name: String::from("xnamex"),
-                color: String::from("xcolorx"),
-                icon: String::from("xiconx"),
-                unit_price: 0.1,
-                limit: None,
+            assert_eq!(
+                Quick::read_tsv(Ok(tsv)).unwrap(),
+                Quick {
+                    skull: 1,
+                    amount: 2.0,
+                }
+            );
+        }
+
+        #[test]
+        fn serialize_occurrence() {
+            let occurrence = OccurrenceId {
+                id: 3,
+                skull: 1,
+                amount: 2.0,
+                millis: 4,
             };
 
-            bench.iter(|| {
-                let buffer = vec![];
-
-                let mut writer = csv::WriterBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_writer(buffer);
-
-                (0..100)
-                    .map(|i| {
-                        let mut s = skull.clone();
-                        s.unit_price = i as f32;
-                        s
-                    })
-                    .for_each(|s| writer.serialize(s).unwrap());
-            });
+            let mut buffer = Vec::new();
+            Occurrence::write_tsv(occurrence, &mut buffer).unwrap();
+            assert_eq!(buffer, b"3\t1\t2.0\t4\n");
         }
 
-        #[bench]
-        fn deserialize_skull(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|i| format!("xnamex\txcolorx\txiconx\t1.2\t{}\n", i))
-                .map(|s| s.into_bytes())
-                .flatten()
-                .collect::<Vec<_>>();
+        #[test]
+        fn deserialize_occurrence() {
+            let tsv = String::from("3\t1\t2.0\t4");
 
-            bench.iter(|| {
-                let data = data.clone();
-
-                let mut reader = csv::ReaderBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_reader(data.as_slice());
-
-                reader
-                    .deserialize::<Skull>()
-                    .enumerate()
-                    .for_each(|(i, s)| {
-                        let s = s.unwrap();
-                        assert_eq!(s.name, "xnamex");
-                        assert_eq!(s.color, "xcolorx");
-                        assert_eq!(s.icon, "xiconx");
-                        assert_eq!(s.unit_price, 1.2);
-                        assert_eq!(s.limit.unwrap(), i as f32);
-                    })
-            });
-        }
-
-        #[bench]
-        fn serialize_occurrence(bench: &mut test::Bencher) {
-            let occurrence = Occurrence {
-                skull: 0,
-                amount: 1.2,
-                millis: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-            };
-
-            bench.iter(|| {
-                let buffer = vec![];
-
-                let mut writer = csv::WriterBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_writer(buffer);
-
-                (0..100)
-                    .map(|_| occurrence.clone())
-                    .for_each(|s| writer.serialize(s).unwrap());
-            });
-        }
-
-        #[bench]
-        fn deserialize_occurrence(bench: &mut test::Bencher) {
-            let data = (0..100)
-                .map(|_| format!("0\t1.2\t4\n"))
-                .map(|s| s.into_bytes())
-                .flatten()
-                .collect::<Vec<_>>();
-
-            bench.iter(|| {
-                let data = data.clone();
-
-                let mut reader = csv::ReaderBuilder::new()
-                    .delimiter(b'\t')
-                    .has_headers(false)
-                    .from_reader(data.as_slice());
-
-                reader
-                    .deserialize::<Occurrence>()
-                    .enumerate()
-                    .for_each(|(_, s)| {
-                        let s = s.unwrap();
-                        assert_eq!(s.skull, 0);
-                        assert_eq!(s.amount, 1.2);
-                        assert_eq!(s.millis, 4);
-                    })
-            });
+            assert_eq!(
+                Occurrence::read_tsv(Ok(tsv)).unwrap(),
+                Occurrence {
+                    skull: 1,
+                    amount: 2.0,
+                    millis: 4,
+                }
+            );
         }
     }
 }

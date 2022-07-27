@@ -48,7 +48,7 @@ impl<D: store::Selector> LastModified<D> {
         let user = mapper::request::User::borrow_from(state)?;
         let last_modified = {
             let store = middleware::Store::borrow_from(state).get();
-            D::read(store, user)?.last_modified()?
+            D::select(store, user)?.last_modified().await?
         };
 
         let response = gotham::hyper::Response::builder()
@@ -80,13 +80,11 @@ impl<D: store::Selector> List<D> {
 
         let limit = mapper::request::Limit::take_from(state);
         let user = mapper::request::User::borrow_from(state)?;
-        let (last_modified, json) = {
-            let store = middleware::Store::borrow_from(state).get();
-            let crud = D::read(store, user)?;
+        let store = middleware::Store::borrow_from(state).get();
+        let crud = D::select(store, user)?;
 
-            let data = crud.list(limit.limit)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
-        };
+        let (body, last_modified) = crud.list(limit.limit).await?;
+        let body = serde_json::to_vec(&body)?;
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -99,7 +97,7 @@ impl<D: store::Selector> List<D> {
                 gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
-            .body(gotham::hyper::Body::from(json))?;
+            .body(gotham::hyper::Body::from(body))?;
 
         Ok(response)
     }
@@ -117,14 +115,11 @@ impl<D: store::Selector> Create<D> {
 
         let data = mapper::request::Body::take_from(state).await?;
         let user = mapper::request::User::borrow_from(state)?;
+        let store = middleware::Store::borrow_from(state).get();
+        let crud = D::select(store, user)?;
 
-        let (last_modified, id) = {
-            let store = middleware::Store::borrow_from(state).get();
-            let mut crud = D::write(store, user)?;
-
-            let data = crud.create(data)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
-        };
+        let (body, last_modified) = crud.create(data).await?;
+        let body = serde_json::to_vec(&body)?;
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "text/plain")
@@ -137,7 +132,7 @@ impl<D: store::Selector> Create<D> {
                 gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::CREATED)
-            .body(gotham::hyper::Body::from(id))?;
+            .body(gotham::hyper::Body::from(body))?;
 
         Ok(response)
     }
@@ -155,14 +150,11 @@ impl<D: store::Selector> Read<D> {
 
         let user = mapper::request::User::borrow_from(state)?;
         let id = mapper::request::Id::borrow_from(state).id;
+        let store = middleware::Store::borrow_from(state).get();
+        let crud = D::select(store, user)?;
 
-        let (last_modified, json) = {
-            let store = middleware::Store::borrow_from(state).get();
-            let crud = D::read(store, user)?;
-
-            let data = crud.read(id)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
-        };
+        let (body, last_modified) = crud.read(id).await?;
+        let body = serde_json::to_vec(&body)?;
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -175,7 +167,7 @@ impl<D: store::Selector> Read<D> {
                 gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
-            .body(gotham::hyper::Body::from(json))?;
+            .body(gotham::hyper::Body::from(body))?;
 
         Ok(response)
     }
@@ -195,18 +187,23 @@ impl<D: store::Selector> Update<D> {
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
         let data = mapper::request::Body::take_from(state).await?;
         let user = mapper::request::User::borrow_from(state)?;
+        let store = middleware::Store::borrow_from(state).get();
+        let crud = D::select(store, user)?;
 
-        let (last_modified, json) = {
-            let store = middleware::Store::borrow_from(state).get();
-            let mut crud = D::write(store, user)?;
+        // TODO:
+        // 1 - Move this responsibility to Crud
+        // 2 - Update unit tests to cover this
+        // -- so far no API breaking changes --
+        // 3 - Receive a full object to ensure request is what it is
+        // 4 - Update front-end to match
+        // -- so far smaller effort --
+        // 5 - Create websockets to push modifications
+        if crud.last_modified().await? > unmodified_since {
+            return Err(Error::OutOfSync);
+        }
 
-            if crud.last_modified()? > unmodified_since {
-                return Err(Error::OutOfSync);
-            }
-
-            let data = crud.update(id, data)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
-        };
+        let (body, last_modified) = crud.update(id, data).await?;
+        let body = serde_json::to_vec(&body)?;
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -219,7 +216,7 @@ impl<D: store::Selector> Update<D> {
                 gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
-            .body(gotham::hyper::Body::from(json))?;
+            .body(gotham::hyper::Body::from(body))?;
 
         Ok(response)
     }
@@ -238,18 +235,15 @@ impl<D: store::Selector> Delete<D> {
         let user = mapper::request::User::borrow_from(state)?;
         let id = mapper::request::Id::borrow_from(state).id;
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
+        let store = middleware::Store::borrow_from(state).get();
+        let crud = D::select(store, user)?;
 
-        let (last_modified, json) = {
-            let store = middleware::Store::borrow_from(state).get();
-            let mut crud = D::write(store, user)?;
+        if crud.last_modified().await? > unmodified_since {
+            return Err(Error::OutOfSync);
+        }
 
-            if crud.last_modified()? > unmodified_since {
-                return Err(Error::OutOfSync);
-            }
-
-            let data = crud.delete(id)?;
-            (crud.last_modified()?, serde_json::to_vec(&data)?)
-        };
+        let (body, last_modified) = crud.delete(id).await?;
+        let body = serde_json::to_vec(&body)?;
 
         let response = gotham::hyper::Response::builder()
             .header(gotham::hyper::header::CONTENT_TYPE, "application/json")
@@ -262,7 +256,7 @@ impl<D: store::Selector> Delete<D> {
                 gotham::state::request_id(state),
             )
             .status(gotham::hyper::StatusCode::OK)
-            .body(gotham::hyper::Body::from(json))?;
+            .body(gotham::hyper::Body::from(body))?;
 
         Ok(response)
     }

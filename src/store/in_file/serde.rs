@@ -40,6 +40,7 @@ impl<'w, W: std::io::Write> Serde<'w, W> {
     }
 
     fn step_in(&mut self) -> &mut Self {
+        self.filled = false;
         self.depth += 1;
         self
     }
@@ -76,69 +77,77 @@ impl<'w, W: std::io::Write> serde::Serializer for &mut Serde<'w, W> {
     }
 
     fn serialize_i8(self, value: i8) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_i16(self, value: i16) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_i32(self, value: i32) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_i64(self, value: i64) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_u8(self, value: u8) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_u16(self, value: u16) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_u32(self, value: u32) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_u64(self, value: u64) -> Result<Self::Ok, Self::Error> {
-        itoa::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(itoa::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_f32(self, value: f32) -> Result<Self::Ok, Self::Error> {
-        ryu::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(ryu::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_f64(self, value: f64) -> Result<Self::Ok, Self::Error> {
-        ryu::write(self.writer as &mut W, value)?;
-        Ok(())
+        self.writer
+            .write_all(ryu::Buffer::new().format(value).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
         self.writer
-            .write_all(value.encode_utf8(&mut [0; 4]).as_bytes())?;
-        Ok(())
+            .write_all(value.encode_utf8(&mut [0; 4]).as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
-        self.writer.write_all(value.as_bytes())?;
-        Ok(())
+        self.writer.write_all(value.as_bytes()).map_err(Into::into)
     }
 
     fn serialize_bytes(self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
-        self.writer.write_all(value)?;
-        Ok(())
+        self.writer.write_all(value).map_err(Into::into)
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
@@ -166,8 +175,9 @@ impl<'w, W: std::io::Write> serde::Serializer for &mut Serde<'w, W> {
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        self.writer.write_all(variant.as_bytes())?;
-        Ok(())
+        self.writer
+            .write_all(variant.as_bytes())
+            .map_err(Into::into)
     }
 
     fn serialize_newtype_struct<T: ?Sized + serde::ser::Serialize>(
@@ -245,9 +255,9 @@ impl<'w, W: std::io::Write> serde::ser::SerializeSeq for &mut Serde<'w, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -266,9 +276,9 @@ impl<'w, W: std::io::Write> serde::ser::SerializeTuple for &mut Serde<'w, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -287,9 +297,9 @@ impl<'w, W: std::io::Write> serde::ser::SerializeTupleStruct for &mut Serde<'w, 
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -308,9 +318,9 @@ impl<'w, W: std::io::Write> serde::ser::SerializeTupleVariant for &mut Serde<'w,
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -329,29 +339,25 @@ impl<'w, W: std::io::Write> serde::ser::SerializeMap for &mut Serde<'w, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error>
+    fn serialize_key<T>(&mut self, _key: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         Ok(())
     }
 
-    fn serialize_entry<K: ?Sized, V: ?Sized>(
-        &mut self,
-        _key: &K,
-        value: &V,
-    ) -> Result<(), Self::Error>
+    fn serialize_entry<K, V>(&mut self, _key: &K, value: &V) -> Result<(), Self::Error>
     where
-        K: serde::Serialize,
-        V: serde::Serialize,
+        K: ?Sized + serde::Serialize,
+        V: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
     }
 
-    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -370,13 +376,9 @@ impl<'w, W: std::io::Write> serde::ser::SerializeStruct for &mut Serde<'w, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -395,13 +397,9 @@ impl<'w, W: std::io::Write> serde::ser::SerializeStructVariant for &mut Serde<'w
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        _key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<(), Self::Error>
     where
-        T: serde::Serialize,
+        T: ?Sized + serde::Serialize,
     {
         self.separate()?;
         value.serialize(&mut **self)
@@ -421,9 +419,11 @@ mod test {
     use super::super::{Skull, WithId};
     use super::Serde;
 
+    type SkullId = <Skull as super::super::Data>::Id;
+
     #[test]
     fn serialize_flat() {
-        let skull = WithId::new(
+        let skull = SkullId::new(
             2,
             Skull {
                 name: String::from("xnamex"),
@@ -439,7 +439,7 @@ mod test {
 
         serde::Serialize::serialize(&skull, &mut serder).unwrap();
         let output = String::from_utf8(buffer).unwrap();
-        assert_eq!(output.as_str(), "2\txnamex\txcolorx\txiconx\t0.1\t\n");
+        assert_eq!(output.as_str(), "2\txnamex\txcolorx\txiconx\t0.1\n");
     }
 
     #[test]
