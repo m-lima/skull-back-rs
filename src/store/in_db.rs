@@ -39,13 +39,6 @@ impl InDb {
                     anyhow::bail!("User path is not a file {}", path.display());
                 }
 
-                // let pool = sqlx::sqlite::SqlitePoolOptions::new()
-                //     .max_connections(1)
-                //     .connect_lazy_with(
-                //         sqlx::sqlite::SqliteConnectOptions::new()
-                //             .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-                //             .filename(path),
-                //     );
                 let pool = sqlx::SqlitePool::connect_lazy(
                     format!("sqlite://{}", path.display()).as_str(),
                 )?;

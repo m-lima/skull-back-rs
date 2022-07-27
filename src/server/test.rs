@@ -4,6 +4,7 @@ use crate::{
 };
 
 const USER: &str = "bloink";
+const FULL_RESPONSE: &str = r#"[{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3}]"#;
 
 #[derive(Copy, Clone)]
 struct CopiablePath {
@@ -340,7 +341,7 @@ fn list() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        FULL_RESPONSE
     ));
 }
 
@@ -363,7 +364,7 @@ fn list_limited() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3}]"#,
+        r#"[{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
     ));
 
     let response = server
@@ -483,7 +484,7 @@ fn update() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull4","color":"","icon":"","unitPrice":0.4},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        r#"[{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1},{"id":2,"name":"skull4","color":"","icon":"","unitPrice":0.4},{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3}]"#,
     ));
 }
 
@@ -539,7 +540,7 @@ fn update_not_found() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        FULL_RESPONSE
     ));
 }
 
@@ -592,7 +593,7 @@ fn delete() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        r#"[{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1},{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3}]"#,
     ));
 }
 
@@ -639,7 +640,7 @@ fn delete_not_found() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        FULL_RESPONSE
     ));
 }
 
@@ -695,7 +696,7 @@ fn no_modified_since() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        FULL_RESPONSE
     ));
 }
 
@@ -759,7 +760,7 @@ fn out_of_sync() {
         response,
         200,
         LastModified::Eq(last_modified),
-        r#"[{"id":3,"name":"skull3","color":"color3","icon":"icon3","unitPrice":0.3},{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2},{"id":1,"name":"skull1","color":"color1","icon":"icon1","unitPrice":0.1}]"#,
+        FULL_RESPONSE
     ));
 }
 
