@@ -184,7 +184,7 @@ impl<D: FileData> UserFile<D> {
     fn new(file: std::path::PathBuf) -> Self {
         Self {
             file,
-            next_id: 1,
+            next_id: 0,
             _marker: std::marker::PhantomData,
         }
     }
@@ -205,16 +205,19 @@ impl<D: FileData> UserFile<D> {
         Ok(iter)
     }
 
-    fn ids(&self) -> Result<impl Iterator<Item = Result<Id, Error>>, Error> {
+    fn ids(&self) -> Result<impl Iterator<Item = Id>, Error> {
         use std::io::BufRead;
         let iter = std::io::BufReader::new(std::fs::File::open(&self.file)?)
             .lines()
-            .map(D::id);
+            .map(D::id)
+            .filter_map(Result::ok);
         Ok(iter)
     }
 
     fn append(&mut self, data: D) -> Result<(Id, std::time::SystemTime), Error> {
-        if self.next_id == u32::MAX {
+        if self.next_id == 0 {
+            self.next_id = self.ids()?.max().unwrap_or(1);
+        } else if self.next_id == u32::MAX {
             return Err(Error::StoreFull);
         }
         let mut file = std::fs::File::options().append(true).open(&self.file)?;
@@ -322,7 +325,6 @@ trait FileData: Serializable + 'static {
         skull: Id,
     ) -> Result<(), Error> {
         lock.ids()?
-            .filter_map(Result::ok)
             .find(|id| *id == skull)
             .map(|_| ())
             .ok_or(Error::Constraint)
