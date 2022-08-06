@@ -41,29 +41,6 @@ where
     in_db::InDb::new(gather_users(path, users)?)
 }
 
-fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
-    if !path.exists() {
-        anyhow::bail!(
-            "Store directory does not exist: {}",
-            std::fs::canonicalize(&path)
-                .unwrap_or_else(|_| path.clone())
-                .display()
-        );
-    }
-
-    if !path.is_dir() {
-        anyhow::bail!(
-            "Store path is not a directory: {}",
-            std::fs::canonicalize(&path)
-                .unwrap_or_else(|_| path.clone())
-                .display()
-        );
-    }
-
-    path.read_dir()
-        .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))
-}
-
 fn gather_users<S, I, P>(
     path: P,
     users: I,
@@ -87,4 +64,27 @@ where
                 .map(|name| (name, root))
         })
         .collect())
+}
+
+fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
+    if !path.exists() {
+        anyhow::bail!(
+            "Store directory does not exist: {}",
+            std::fs::canonicalize(&path)
+                .unwrap_or_else(|_| path.clone())
+                .display()
+        );
+    }
+
+    if !path.is_dir() {
+        anyhow::bail!(
+            "Store path is not a directory: {}",
+            std::fs::canonicalize(&path)
+                .unwrap_or_else(|_| path.clone())
+                .display()
+        );
+    }
+
+    path.read_dir()
+        .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))
 }

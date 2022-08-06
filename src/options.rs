@@ -15,7 +15,7 @@ pub struct Options {
     pub threads: u8,
 
     /// Sets the 'allow-origin' header
-    #[clap(short, long, parse(try_from_str = to_cors), conflicts_with = "web-path")]
+    #[clap(short, long, parse(try_from_str = to_cors), conflicts_with = "web-path", name = "ORIGIN")]
     pub cors: Option<gotham::hyper::header::HeaderValue>,
 
     /// Sets file storage location

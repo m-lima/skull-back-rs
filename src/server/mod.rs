@@ -2,9 +2,9 @@ mod error;
 mod handler;
 mod mapper;
 mod middleware;
-mod route;
+mod router;
 
-pub use route::route;
+pub use router::Builder;
 
 #[cfg(test)]
 mod test;
