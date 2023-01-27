@@ -4,7 +4,9 @@ use super::{Occurrence, Selector, Skull, Store};
 
 extern crate test;
 
-const USER: &str = "bloink";
+const USER1: &str = "bloinker";
+const USER2: &str = "bloinkee";
+const USER3: &str = "bloinked";
 
 struct Sender<T>(usize, std::marker::PhantomData<T>);
 
@@ -35,51 +37,62 @@ const OCCURRENCE: Occurrence = Occurrence {
     millis: 0,
 };
 
-async fn migrate_db(path: &std::path::Path) {
-    let path = path.join(USER);
-    let pool = sqlx::SqlitePool::connect(&format!("sqlite://{}", path.display()))
-        .await
-        .unwrap();
-    sqlx::migrate!().run(&pool).await.unwrap();
+async fn migrate_db<const N: usize>(path: &std::path::Path, users: [&str; N]) {
+    async fn inner(path: std::path::PathBuf) {
+        let pool = sqlx::SqlitePool::connect(&format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
+    }
+    for user in users {
+        inner(path.join(user)).await;
+    }
 }
 
-async fn setup_skull<S: Store>(store: S) -> S {
-    Skull::select(&store, USER)
-        .unwrap()
-        .create(Skull {
-            name: String::from("skull"),
-            color: String::from("color"),
-            icon: String::from("icon"),
-            unit_price: 1.,
-            limit: None,
-        })
-        .await
-        .unwrap();
+async fn setup_skull<S: Store, const N: usize>(store: S, users: [&str; N]) -> S {
+    async fn inner<S: Store>(store: &S, user: &str) {
+        Skull::select(store, user)
+            .unwrap()
+            .create(Skull {
+                name: String::from("skull"),
+                color: String::from("color"),
+                icon: String::from("icon"),
+                unit_price: 1.,
+                limit: None,
+            })
+            .await
+            .unwrap();
+    }
+    for user in users {
+        inner(&store, user).await;
+    }
     store
 }
 
-async fn spawn<T: Store>(sender: Sender<T>) {
-    let mut tasks = Vec::with_capacity(30);
+async fn spawn<T: Store, const N: usize>(sender: Sender<T>, users: [&'static str; N]) {
+    let mut tasks = Vec::with_capacity(4 * N);
 
-    for i in 0..20 {
-        if i >= 5 && i < 15 {
+    for i in 0..4_u8 {
+        for user in users {
+            if i >= 1 && i < 3 {
+                tasks.push(tokio::spawn(async move {
+                    let store = sender.get();
+                    Occurrence::select(store, user)
+                        .unwrap()
+                        .create(OCCURRENCE)
+                        .await
+                        .unwrap();
+                }));
+            }
             tasks.push(tokio::spawn(async move {
                 let store = sender.get();
-                Occurrence::select(store, USER)
+                Occurrence::select(store, user)
                     .unwrap()
-                    .create(OCCURRENCE)
+                    .list(Some(10))
                     .await
                     .unwrap();
             }));
         }
-        tasks.push(tokio::spawn(async move {
-            let store = sender.get();
-            Occurrence::select(store, USER)
-                .unwrap()
-                .list(Some(10))
-                .await
-                .unwrap();
-        }));
     }
 
     for t in tasks {
@@ -95,56 +108,121 @@ fn build_runtime() -> tokio::runtime::Runtime {
 }
 
 #[bench]
-fn in_memory(bench: &mut test::Bencher) {
-    let store = build_runtime().block_on(async {
-        let store = super::in_memory::InMemory::new([USER]);
+fn in_memory_single(bench: &mut test::Bencher) {
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_memory::InMemory::new([USER1]);
 
-        setup_skull(store).await
+        setup_skull(store, [USER1]).await
     });
 
     let sender = Sender::new(&store);
     bench.iter(|| {
-        build_runtime().block_on(spawn(sender));
+        runtime.block_on(spawn(sender, [USER1]));
     });
 }
 
 #[bench]
-fn in_file(bench: &mut test::Bencher) {
+fn in_file_single(bench: &mut test::Bencher) {
     let path = TestPath::new();
-    let store = build_runtime().block_on(async {
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
         let store = super::in_file::InFile::new(
-            Some((String::from(USER), path.join(USER)))
+            [USER1]
+                .map(|u| (String::from(u), path.join(u)))
                 .into_iter()
                 .collect(),
         )
         .unwrap();
 
-        setup_skull(store).await
+        setup_skull(store, [USER1]).await
     });
 
     let sender = Sender::new(&store);
     bench.iter(|| {
-        build_runtime().block_on(spawn(sender));
+        runtime.block_on(spawn(sender, [USER1]));
     });
 }
 
 #[bench]
-fn in_db(bench: &mut test::Bencher) {
+fn in_db_single(bench: &mut test::Bencher) {
     let path = TestPath::new();
-    let store = build_runtime().block_on(async {
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
         let store = super::in_db::InDb::new(
-            Some((String::from(USER), path.join(USER)))
+            [USER1]
+                .map(|u| (String::from(u), path.join(u)))
                 .into_iter()
                 .collect(),
         )
         .unwrap();
 
-        migrate_db(&path).await;
-        setup_skull(store).await
+        migrate_db(&path, [USER1]).await;
+        setup_skull(store, [USER1]).await
     });
 
     let sender = Sender::new(&store);
     bench.iter(|| {
-        build_runtime().block_on(spawn(sender));
+        runtime.block_on(spawn(sender, [USER1]));
+    });
+}
+
+#[bench]
+fn in_memory_multi(bench: &mut test::Bencher) {
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_memory::InMemory::new([USER1, USER2, USER3]);
+
+        setup_skull(store, [USER1, USER2, USER3]).await
+    });
+
+    let sender = Sender::new(&store);
+    bench.iter(|| {
+        runtime.block_on(spawn(sender, [USER1, USER2, USER3]));
+    });
+}
+
+#[bench]
+fn in_file_multi(bench: &mut test::Bencher) {
+    let path = TestPath::new();
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_file::InFile::new(
+            [USER1, USER2, USER3]
+                .map(|u| (String::from(u), path.join(u)))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+
+        setup_skull(store, [USER1, USER2, USER3]).await
+    });
+
+    let sender = Sender::new(&store);
+    bench.iter(|| {
+        runtime.block_on(spawn(sender, [USER1, USER2, USER3]));
+    });
+}
+
+#[bench]
+fn in_db_multi(bench: &mut test::Bencher) {
+    let path = TestPath::new();
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_db::InDb::new(
+            [USER1, USER2, USER3]
+                .map(|u| (String::from(u), path.join(u)))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+
+        migrate_db(&path, [USER1, USER2, USER3]).await;
+        setup_skull(store, [USER1, USER2, USER3]).await
+    });
+
+    let sender = Sender::new(&store);
+    bench.iter(|| {
+        runtime.block_on(spawn(sender, [USER1, USER2, USER3]));
     });
 }
