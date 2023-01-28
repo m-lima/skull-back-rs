@@ -100,6 +100,26 @@ async fn spawn<T: Store, const N: usize>(sender: Sender<T>, users: [&'static str
     }
 }
 
+async fn spawn_seq<T: Store>(sender: Sender<T>, i: usize) {
+    let user = match i % 3 {
+        0 => USER1,
+        1 => USER2,
+        2 => USER3,
+        _ => unreachable!(),
+    };
+
+    Occurrence::select(sender.get(), user)
+        .unwrap()
+        .create(OCCURRENCE)
+        .await
+        .unwrap();
+    Occurrence::select(sender.get(), user)
+        .unwrap()
+        .list(Some(10))
+        .await
+        .unwrap();
+}
+
 fn build_runtime() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -224,5 +244,71 @@ fn in_db_multi(bench: &mut test::Bencher) {
     let sender = Sender::new(&store);
     bench.iter(|| {
         runtime.block_on(spawn(sender, [USER1, USER2, USER3]));
+    });
+}
+
+#[bench]
+fn in_memory_seq(bench: &mut test::Bencher) {
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_memory::InMemory::new([USER1, USER2, USER3]);
+
+        setup_skull(store, [USER1, USER2, USER3]).await
+    });
+
+    let sender = Sender::new(&store);
+    let mut i = 0;
+    bench.iter(|| {
+        runtime.block_on(spawn_seq(sender, i));
+        i += 1;
+    });
+}
+
+#[bench]
+fn in_file_seq(bench: &mut test::Bencher) {
+    let path = TestPath::new();
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_file::InFile::new(
+            [USER1, USER2, USER3]
+                .map(|u| (String::from(u), path.join(u)))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+
+        setup_skull(store, [USER1, USER2, USER3]).await
+    });
+
+    let sender = Sender::new(&store);
+    let mut i = 0;
+    bench.iter(|| {
+        runtime.block_on(spawn_seq(sender, i));
+        i += 1;
+    });
+}
+
+#[bench]
+fn in_db_seq(bench: &mut test::Bencher) {
+    let path = TestPath::new();
+    let runtime = build_runtime();
+    let store = runtime.block_on(async {
+        let store = super::in_db::InDb::new(
+            [USER1, USER2, USER3]
+                .map(|u| (String::from(u), path.join(u)))
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+
+        migrate_db(&path, [USER1, USER2, USER3]).await;
+        setup_skull(store, [USER1, USER2, USER3]).await
+    });
+
+    let sender = Sender::new(&store);
+    let mut i = 0;
+    bench.iter(|| {
+        runtime.block_on(spawn_seq(sender, i));
+        i += 1;
     });
 }
