@@ -154,7 +154,7 @@ macro_rules! impl_crud_tests {
 }
 use crate::check;
 
-use super::{Error, Id, Occurrence, Quick, Selector, Skull, Store, WithId};
+use super::{Crud, Error, Id, Occurrence, Quick, Selector, Skull, Store, WithId};
 use helper::{Poller, TesterData};
 
 pub const USER: &str = "bloink";
@@ -353,7 +353,7 @@ impl<D: TesterData> Tester<D> {
                 store.read(Id::from(i)).await.unwrap(),
                 last_modified
             ));
-            assert_eq!(response, D::id(i));
+            assert_eq!(response, D::ided(i));
         }
     }
 
@@ -410,7 +410,7 @@ impl<D: TesterData> Tester<D> {
             store.update(2, data.clone()).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::id(2));
+        assert_eq!(response, D::ided(2));
 
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
@@ -428,7 +428,7 @@ impl<D: TesterData> Tester<D> {
             store.update(2, D::new(2)).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::id(2));
+        assert_eq!(response, D::ided(2));
 
         let response = store.list(None).await.unwrap().0;
         check!(D::compare_with_range(response, 1..=3));
@@ -775,12 +775,12 @@ pub async fn multiple_polled_handles(store: impl Store) {
 mod helper {
     use crate::test_util::Assertion;
 
-    use super::{check, Id, Occurrence, Quick, Selector, Skull, Store, WithId, USER};
+    use super::{check, Crud, Id, Occurrence, Quick, Selector, Skull, Store, WithId, USER};
 
     pub trait TesterData: Selector {
         fn new(i: u8) -> Self;
 
-        fn id(i: u8) -> Self::Id {
+        fn ided(i: u8) -> Self::Id {
             Self::new(i).with_id(i)
         }
 
@@ -1048,7 +1048,7 @@ mod helper {
     }
 
     pub fn from_range<D: TesterData>(range: std::ops::RangeInclusive<u8>) -> Vec<D::Id> {
-        range.map(D::id).collect()
+        range.map(D::ided).collect()
     }
 
     pub async fn make_futures<S: Store>(
@@ -1074,7 +1074,7 @@ mod helper {
                     crud.list(None).await.unwrap().0,
                     1..=4
                 ));
-                assert_eq!(crud.delete(4).await.unwrap().0, Skull::id(4));
+                assert_eq!(crud.delete(4).await.unwrap().0, Skull::ided(4));
                 check!(Skull::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3

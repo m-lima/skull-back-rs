@@ -1,9 +1,11 @@
 use super::{Data, Error, Id, Occurrence, Quick, Skull};
 
 pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
-    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error>;
-    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error>;
-    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error>;
+    type Crud<D: Selector>: Crud<D>;
+
+    fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error>;
+    fn quick(&self, user: &str) -> Result<&Self::Crud<Quick>, Error>;
+    fn occurrence(&self, user: &str) -> Result<&Self::Crud<Occurrence>, Error>;
 }
 
 pub type Response<T> = Result<(T, std::time::SystemTime), Error>;
@@ -18,14 +20,16 @@ pub trait Crud<D: Data>: Send + Sync {
     async fn last_modified(&self) -> Result<std::time::SystemTime, Error>;
 }
 
-pub trait Selector: Data {
-    fn select<'a>(store: &'a dyn Store, user: &str) -> Result<&'a dyn Crud<Self>, Error>;
+pub trait Selector:
+    Data + super::in_db::SqlData + super::in_file::FileData + super::in_memory::MemoryData
+{
+    fn select<'a, S: Store>(store: &'a S, user: &str) -> Result<&'a S::Crud<Self>, Error>;
 }
 
 macro_rules! impl_selector {
     ($name:ty, $fn:ident) => {
         impl Selector for $name {
-            fn select<'a>(store: &'a dyn Store, user: &str) -> Result<&'a dyn Crud<Self>, Error> {
+            fn select<'a, S: Store>(store: &'a S, user: &str) -> Result<&'a S::Crud<Self>, Error> {
                 store.$fn(user)
             }
         }

@@ -1,6 +1,6 @@
 use crate::test_util::TestPath;
 
-use super::{Occurrence, Selector, Skull, Store};
+use super::{Crud, Occurrence, Selector, Skull, Store};
 
 extern crate test;
 

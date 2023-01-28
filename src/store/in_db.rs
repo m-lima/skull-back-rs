@@ -53,7 +53,9 @@ impl InDb {
 }
 
 impl Store for InDb {
-    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error> {
+    type Crud<D: super::Selector> = std::sync::RwLock<sqlx::SqlitePool>;
+
+    fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let lock = self
             .users
             .get(user)
@@ -61,7 +63,7 @@ impl Store for InDb {
         Ok(lock)
     }
 
-    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error> {
+    fn quick(&self, user: &str) -> Result<&Self::Crud<Quick>, Error> {
         let lock = self
             .users
             .get(user)
@@ -69,7 +71,7 @@ impl Store for InDb {
         Ok(lock)
     }
 
-    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error> {
+    fn occurrence(&self, user: &str) -> Result<&Self::Crud<Occurrence>, Error> {
         let lock = self
             .users
             .get(user)
@@ -112,7 +114,7 @@ impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
 }
 
 #[async_trait::async_trait]
-trait SqlData: Data + 'static {
+pub trait SqlData: Data + 'static {
     const TABLE_ID: u32;
     async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>>;
     async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id>;
@@ -612,7 +614,10 @@ impl SqlData for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::{store::test::USER, test_util::TestPath};
+    use crate::{
+        store::{test::USER, Selector},
+        test_util::TestPath,
+    };
 
     use super::{InDb, Store};
 
@@ -640,25 +645,20 @@ mod test {
     }
 
     impl Store for TestStore {
-        fn skull(
-            &self,
-            user: &str,
-        ) -> Result<&dyn crate::store::Crud<crate::store::Skull>, crate::store::Error> {
+        type Crud<D: Selector> = <InDb as Store>::Crud<D>;
+
+        fn skull(&self, user: &str) -> Result<&Self::Crud<super::Skull>, crate::store::Error> {
             self.0.skull(user)
         }
 
-        fn quick(
-            &self,
-            user: &str,
-        ) -> Result<&dyn crate::store::Crud<crate::store::Quick>, crate::store::Error> {
+        fn quick(&self, user: &str) -> Result<&Self::Crud<super::Quick>, crate::store::Error> {
             self.0.quick(user)
         }
 
         fn occurrence(
             &self,
             user: &str,
-        ) -> Result<&dyn crate::store::Crud<crate::store::Occurrence>, crate::store::Error>
-        {
+        ) -> Result<&Self::Crud<super::Occurrence>, crate::store::Error> {
             self.0.occurrence(user)
         }
     }

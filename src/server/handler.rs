@@ -45,6 +45,7 @@ impl<D: store::Selector, S: store::Store> LastModified<D, S> {
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
+        use store::Crud;
 
         let user = mapper::request::User::borrow_from(state)?;
         let last_modified = {
@@ -78,6 +79,7 @@ impl<D: store::Selector, S: store::Store> List<D, S> {
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
+        use store::Crud;
 
         let limit = mapper::request::Limit::take_from(state);
         let user = mapper::request::User::borrow_from(state)?;
@@ -113,6 +115,7 @@ impl<D: store::Selector, S: store::Store> Create<D, S> {
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
+        use store::Crud;
 
         let data = mapper::request::Body::take_from(state).await?;
         let user = mapper::request::User::borrow_from(state)?;
@@ -148,6 +151,7 @@ impl<D: store::Selector, S: store::Store> Read<D, S> {
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
+        use store::Crud;
 
         let user = mapper::request::User::borrow_from(state)?;
         let id = mapper::request::Id::borrow_from(state).id;
@@ -183,6 +187,7 @@ impl<D: store::Selector, S: store::Store> Update<D, S> {
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
+        use store::Crud;
 
         let id = mapper::request::Id::borrow_from(state).id;
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
@@ -232,6 +237,7 @@ impl<D: store::Selector, S: store::Store> Delete<D, S> {
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
         use gotham::state::FromState;
+        use store::Crud;
 
         let user = mapper::request::User::borrow_from(state)?;
         let id = mapper::request::Id::borrow_from(state).id;
