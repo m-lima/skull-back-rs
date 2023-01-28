@@ -156,7 +156,7 @@ impl<S: store::Store> Store<S> {
     }
 
     pub fn get(&self) -> &S {
-        &*self.0
+        &self.0
     }
 }
 

@@ -27,7 +27,9 @@ impl InMemory {
 }
 
 impl Store for InMemory {
-    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error> {
+    type Crud<D: super::Selector> = UserStore;
+
+    fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let user_container = self
             .users
             .get(user)
@@ -35,7 +37,7 @@ impl Store for InMemory {
         Ok(user_container)
     }
 
-    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error> {
+    fn quick(&self, user: &str) -> Result<&Self::Crud<Quick>, Error> {
         let user_container = self
             .users
             .get(user)
@@ -43,7 +45,7 @@ impl Store for InMemory {
         Ok(user_container)
     }
 
-    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error> {
+    fn occurrence(&self, user: &str) -> Result<&Self::Crud<Occurrence>, Error> {
         let user_container = self
             .users
             .get(user)
@@ -53,7 +55,7 @@ impl Store for InMemory {
 }
 
 #[derive(Debug)]
-struct UserStore {
+pub struct UserStore {
     skull: std::sync::RwLock<UserContainer<Skull>>,
     quick: std::sync::RwLock<UserContainer<Quick>>,
     occurrence: std::sync::RwLock<UserContainer<Occurrence>>,
@@ -87,7 +89,7 @@ impl<D: MemoryData> Crud<D> for UserStore {
 }
 
 #[derive(Debug)]
-pub(super) struct UserContainer<D: Data> {
+pub struct UserContainer<D: Data> {
     next_id: u32,
     data: Vec<D::Id>,
     last_modified: std::time::SystemTime,
@@ -112,7 +114,7 @@ impl<D: Data> UserContainer<D> {
     }
 }
 
-trait MemoryData: Data + 'static {
+pub trait MemoryData: Data + 'static {
     fn get(store: &UserStore) -> &std::sync::RwLock<UserContainer<Self>>;
     fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>>;
     fn create(store: &UserStore, data: Self) -> Response<Id>;
@@ -389,14 +391,14 @@ mod test {
 
     use super::{Error, InMemory, MemoryData, Skull, UserContainer};
 
-    crate::impl_crud_tests!(InMemory, InMemory::new(&[USER]));
+    crate::impl_crud_tests!(InMemory, InMemory::new([USER]));
 
     mod construction {
         use super::InMemory;
 
         #[test]
         fn direct_slice() {
-            let store = InMemory::new(&["0", "1", "2"]);
+            let store = InMemory::new(["0", "1", "2"]);
             assert_eq!(store.users.keys().len(), 3);
         }
 
@@ -415,7 +417,7 @@ mod test {
         #[test]
         fn ref_vec_str() {
             let v = vec!["0", "1", "2"];
-            let store = InMemory::new(&v);
+            let store = InMemory::new(v);
             assert_eq!(store.users.keys().len(), 3);
         }
 

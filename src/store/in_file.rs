@@ -116,7 +116,9 @@ impl InFile {
 }
 
 impl Store for InFile {
-    fn skull(&self, user: &str) -> Result<&dyn Crud<Skull>, Error> {
+    type Crud<D: super::Selector> = UserStore;
+
+    fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let user_file = self
             .users
             .get(user)
@@ -124,7 +126,7 @@ impl Store for InFile {
         Ok(user_file)
     }
 
-    fn quick(&self, user: &str) -> Result<&dyn Crud<Quick>, Error> {
+    fn quick(&self, user: &str) -> Result<&Self::Crud<Quick>, Error> {
         let user_file = self
             .users
             .get(user)
@@ -132,7 +134,7 @@ impl Store for InFile {
         Ok(user_file)
     }
 
-    fn occurrence(&self, user: &str) -> Result<&dyn Crud<Occurrence>, Error> {
+    fn occurrence(&self, user: &str) -> Result<&Self::Crud<Occurrence>, Error> {
         let user_file = self
             .users
             .get(user)
@@ -141,7 +143,7 @@ impl Store for InFile {
     }
 }
 
-struct UserStore {
+pub struct UserStore {
     skull: std::sync::RwLock<UserFile<Skull>>,
     quick: std::sync::RwLock<UserFile<Quick>>,
     occurrence: std::sync::RwLock<UserFile<Occurrence>>,
@@ -174,7 +176,7 @@ impl<D: FileData> Crud<D> for UserStore {
     }
 }
 
-struct UserFile<D: Data> {
+pub struct UserFile<D: Data> {
     file: std::path::PathBuf,
     next_id: u32,
     _marker: std::marker::PhantomData<D>,
@@ -254,7 +256,7 @@ impl<D: FileData> UserFile<D> {
     }
 }
 
-trait FileData: Serializable + 'static {
+pub trait FileData: Data + Serializable + 'static {
     fn get(store: &UserStore) -> &std::sync::RwLock<UserFile<Self>>;
     fn list(store: &UserStore, limit: Option<u32>) -> Response<Vec<Self::Id>>;
     fn create(store: &UserStore, data: Self) -> Response<Id>;
@@ -519,7 +521,7 @@ impl FileData for Occurrence {
     }
 }
 
-trait Serializable: Data {
+pub trait Serializable: Data {
     fn name() -> &'static str;
     fn id(string: std::io::Result<String>) -> Result<Id, Error>;
     fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error>;
@@ -666,7 +668,7 @@ impl Serializable for Occurrence {
 #[cfg(test)]
 mod test {
     use crate::{
-        store::{data::SkullId, test::USER, WithId},
+        store::{data::SkullId, test::USER, Selector, WithId},
         test_util::TestPath,
     };
 
@@ -694,18 +696,17 @@ mod test {
     }
 
     impl Store for TestStore {
-        fn skull(&self, user: &str) -> Result<&dyn crate::store::Crud<Skull>, Error> {
+        type Crud<D: Selector> = <InFile as Store>::Crud<D>;
+
+        fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
             self.store.skull(user)
         }
 
-        fn quick(&self, user: &str) -> Result<&dyn crate::store::Crud<crate::store::Quick>, Error> {
+        fn quick(&self, user: &str) -> Result<&Self::Crud<super::Quick>, Error> {
             self.store.quick(user)
         }
 
-        fn occurrence(
-            &self,
-            user: &str,
-        ) -> Result<&dyn crate::store::Crud<crate::store::Occurrence>, Error> {
+        fn occurrence(&self, user: &str) -> Result<&Self::Crud<super::Occurrence>, Error> {
             self.store.occurrence(user)
         }
     }

@@ -45,7 +45,7 @@ fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
     if !path.exists() {
         anyhow::bail!(
             "Store directory does not exist: {}",
-            std::fs::canonicalize(&path)
+            std::fs::canonicalize(path)
                 .unwrap_or_else(|_| path.clone())
                 .display()
         );
@@ -54,7 +54,7 @@ fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
     if !path.is_dir() {
         anyhow::bail!(
             "Store path is not a directory: {}",
-            std::fs::canonicalize(&path)
+            std::fs::canonicalize(path)
                 .unwrap_or_else(|_| path.clone())
                 .display()
         );
