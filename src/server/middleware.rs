@@ -147,20 +147,26 @@ impl gotham::middleware::Middleware for Log {
     }
 }
 
-#[derive(Clone, gotham_derive::StateData, gotham_derive::NewMiddleware)]
-pub struct Store(std::sync::Arc<dyn store::Store>);
+#[derive(gotham_derive::StateData, gotham_derive::NewMiddleware)]
+pub struct Store<S: store::Store>(std::sync::Arc<S>);
 
-impl Store {
-    pub fn new(store: impl store::Store) -> Self {
+impl<S: store::Store> Store<S> {
+    pub fn new(store: S) -> Self {
         Self(std::sync::Arc::new(store))
     }
 
-    pub fn get(&self) -> &dyn store::Store {
+    pub fn get(&self) -> &S {
         &*self.0
     }
 }
 
-impl gotham::middleware::Middleware for Store {
+impl<S: store::Store> Clone for Store<S> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<S: store::Store> gotham::middleware::Middleware for Store<S> {
     fn call<Chain>(
         self,
         mut state: gotham::state::State,

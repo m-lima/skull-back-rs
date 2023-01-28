@@ -5,23 +5,27 @@ use crate::options;
 use crate::store;
 
 pub fn route(options: options::Options) -> anyhow::Result<gotham::router::Router> {
-    let store = match options.db_path {
-        Some(path) => middleware::Store::new(store::in_db(path, options.users)?),
-        None => match options.store_path {
-            Some(path) => middleware::Store::new(store::in_file(path, options.users)?),
-            None => middleware::Store::new(store::in_memory(options.users)),
-        },
-    };
+    macro_rules! cors {
+        ($store: expr) => {
+            if let Some(cors) = options.cors {
+                Ok(with_cors($store, cors))
+            } else {
+                Ok(without_cors($store, options.web_path))
+            }
+        };
+    }
 
-    if let Some(cors) = options.cors {
-        Ok(with_cors(store, cors))
-    } else {
-        Ok(without_cors(store, options.web_path))
+    match options.db_path {
+        Some(path) => cors!(middleware::Store::new(store::in_db(path, options.users)?)),
+        None => match options.store_path {
+            Some(path) => cors!(middleware::Store::new(store::in_file(path, options.users)?)),
+            None => cors!(middleware::Store::new(store::in_memory(options.users))),
+        },
     }
 }
 
-fn with_cors(
-    store: middleware::Store,
+fn with_cors<S: store::Store>(
+    store: middleware::Store<S>,
     cors: gotham::hyper::http::HeaderValue,
 ) -> gotham::router::Router {
     let pipeline = gotham::pipeline::new_pipeline()
@@ -42,12 +46,12 @@ fn with_cors(
         route
             .options("/occurrence/:id:[0-9]+")
             .to(|state| (state, ""));
-        setup_resources(route);
+        setup_resources::<_, _, S>(route);
     })
 }
 
-fn without_cors(
-    store: middleware::Store,
+fn without_cors<S: store::Store>(
+    store: middleware::Store<S>,
     web_path: Option<std::path::PathBuf>,
 ) -> gotham::router::Router {
     let pipeline = gotham::pipeline::new_pipeline()
@@ -67,26 +71,30 @@ fn without_cors(
             route
                 .get("/*")
                 .to_dir(gotham::handler::FileOptions::new(web_path).build());
-            route.scope("/api", |route| setup_resources(route));
+            route.scope("/api", |route| setup_resources::<_, _, S>(route));
         } else {
-            setup_resources(route);
+            setup_resources::<_, _, S>(route);
         }
     })
 }
 
-fn setup_resources<C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
+fn setup_resources<C, P, S>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
 where
     C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
     P: std::panic::RefUnwindSafe + Send + Sync + 'static,
+    S: store::Store,
 {
-    route.scope("/skull", Resource::<store::Skull>::setup);
-    route.scope("/quick", Resource::<store::Quick>::setup);
-    route.scope("/occurrence", Resource::<store::Occurrence>::setup);
+    route.scope("/skull", Resource::<store::Skull, S>::setup);
+    route.scope("/quick", Resource::<store::Quick, S>::setup);
+    route.scope("/occurrence", Resource::<store::Occurrence, S>::setup);
 }
 
-struct Resource<D: store::Selector>(std::marker::PhantomData<D>);
+struct Resource<D: store::Selector, S: store::Store>(
+    std::marker::PhantomData<D>,
+    std::marker::PhantomData<S>,
+);
 
-impl<D: store::Selector> Resource<D> {
+impl<D: store::Selector, S: store::Store> Resource<D, S> {
     fn setup<C, P>(route: &mut gotham::router::builder::ScopeBuilder<'_, C, P>)
     where
         C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
@@ -95,23 +103,23 @@ impl<D: store::Selector> Resource<D> {
     {
         use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
 
-        route.head("/").to(handler::LastModified::<D>::new());
+        route.head("/").to(handler::LastModified::<D, S>::new());
         route
             .get("/")
             .with_query_string_extractor::<mapper::request::Limit>()
-            .to(handler::List::<D>::new());
-        route.post("/").to(handler::Create::<D>::new());
+            .to(handler::List::<D, S>::new());
+        route.post("/").to(handler::Create::<D, S>::new());
         route
             .get("/:id:[0-9]+")
             .with_path_extractor::<mapper::request::Id>()
-            .to(handler::Read::<D>::new());
+            .to(handler::Read::<D, S>::new());
         route
             .put("/:id:[0-9]+")
             .with_path_extractor::<mapper::request::Id>()
-            .to(handler::Update::<D>::new());
+            .to(handler::Update::<D, S>::new());
         route
             .delete("/:id:[0-9]+")
             .with_path_extractor::<mapper::request::Id>()
-            .to(handler::Delete::<D>::new());
+            .to(handler::Delete::<D, S>::new());
     }
 }

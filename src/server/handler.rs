@@ -4,23 +4,24 @@ use super::middleware;
 use crate::store;
 
 macro_rules! impl_handler {
-    ($handler: ty, $param: tt) => {
-        impl<$param> $handler {
+    ($handler: ident) => {
+        impl<D, S> $handler<D, S> {
             pub fn new() -> Self {
-                Self(Default::default())
+                Self(Default::default(), Default::default())
             }
         }
 
-        impl<$param> Clone for $handler {
+        impl<D, S> Clone for $handler<D, S> {
             fn clone(&self) -> Self {
-                Self(self.0)
+                Self(self.0, self.1)
             }
         }
-        impl<$param> Copy for $handler {}
+        impl<D, S> Copy for $handler<D, S> {}
 
-        impl<$param: store::Selector> gotham::handler::Handler for $handler
+        impl<D, S> gotham::handler::Handler for $handler<D, S>
         where
-            $param: 'static + Send + Sync,
+            D: 'static + store::Selector + Send + Sync,
+            S: store::Store,
         {
             fn handle(
                 self,
@@ -37,9 +38,9 @@ macro_rules! impl_handler {
     };
 }
 
-pub struct LastModified<D>(std::marker::PhantomData<D>);
+pub struct LastModified<D, S>(std::marker::PhantomData<D>, std::marker::PhantomData<S>);
 
-impl<D: store::Selector> LastModified<D> {
+impl<D: store::Selector, S: store::Store> LastModified<D, S> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -47,7 +48,7 @@ impl<D: store::Selector> LastModified<D> {
 
         let user = mapper::request::User::borrow_from(state)?;
         let last_modified = {
-            let store = middleware::Store::borrow_from(state).get();
+            let store = middleware::Store::<S>::borrow_from(state).get();
             D::select(store, user)?.last_modified().await?
         };
 
@@ -68,11 +69,11 @@ impl<D: store::Selector> LastModified<D> {
     }
 }
 
-impl_handler!(LastModified<D>, D);
+impl_handler!(LastModified);
 
-pub struct List<D>(std::marker::PhantomData<D>);
+pub struct List<D, S>(std::marker::PhantomData<D>, std::marker::PhantomData<S>);
 
-impl<D: store::Selector> List<D> {
+impl<D: store::Selector, S: store::Store> List<D, S> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -80,7 +81,7 @@ impl<D: store::Selector> List<D> {
 
         let limit = mapper::request::Limit::take_from(state);
         let user = mapper::request::User::borrow_from(state)?;
-        let store = middleware::Store::borrow_from(state).get();
+        let store = middleware::Store::<S>::borrow_from(state).get();
         let crud = D::select(store, user)?;
 
         let (body, last_modified) = crud.list(limit.limit).await?;
@@ -103,11 +104,11 @@ impl<D: store::Selector> List<D> {
     }
 }
 
-impl_handler!(List<D>, D);
+impl_handler!(List);
 
-pub struct Create<D>(std::marker::PhantomData<D>);
+pub struct Create<D, S>(std::marker::PhantomData<D>, std::marker::PhantomData<S>);
 
-impl<D: store::Selector> Create<D> {
+impl<D: store::Selector, S: store::Store> Create<D, S> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -115,7 +116,7 @@ impl<D: store::Selector> Create<D> {
 
         let data = mapper::request::Body::take_from(state).await?;
         let user = mapper::request::User::borrow_from(state)?;
-        let store = middleware::Store::borrow_from(state).get();
+        let store = middleware::Store::<S>::borrow_from(state).get();
         let crud = D::select(store, user)?;
 
         let (body, last_modified) = crud.create(data).await?;
@@ -138,11 +139,11 @@ impl<D: store::Selector> Create<D> {
     }
 }
 
-impl_handler!(Create<D>, D);
+impl_handler!(Create);
 
-pub struct Read<D>(std::marker::PhantomData<D>);
+pub struct Read<D, S>(std::marker::PhantomData<D>, std::marker::PhantomData<S>);
 
-impl<D: store::Selector> Read<D> {
+impl<D: store::Selector, S: store::Store> Read<D, S> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -150,7 +151,7 @@ impl<D: store::Selector> Read<D> {
 
         let user = mapper::request::User::borrow_from(state)?;
         let id = mapper::request::Id::borrow_from(state).id;
-        let store = middleware::Store::borrow_from(state).get();
+        let store = middleware::Store::<S>::borrow_from(state).get();
         let crud = D::select(store, user)?;
 
         let (body, last_modified) = crud.read(id).await?;
@@ -173,11 +174,11 @@ impl<D: store::Selector> Read<D> {
     }
 }
 
-impl_handler!(Read<D>, D);
+impl_handler!(Read);
 
-pub struct Update<D>(std::marker::PhantomData<D>);
+pub struct Update<D, S>(std::marker::PhantomData<D>, std::marker::PhantomData<S>);
 
-impl<D: store::Selector> Update<D> {
+impl<D: store::Selector, S: store::Store> Update<D, S> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -187,7 +188,7 @@ impl<D: store::Selector> Update<D> {
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
         let data = mapper::request::Body::take_from(state).await?;
         let user = mapper::request::User::borrow_from(state)?;
-        let store = middleware::Store::borrow_from(state).get();
+        let store = middleware::Store::<S>::borrow_from(state).get();
         let crud = D::select(store, user)?;
 
         // TODO:
@@ -222,11 +223,11 @@ impl<D: store::Selector> Update<D> {
     }
 }
 
-impl_handler!(Update<D>, D);
+impl_handler!(Update);
 
-pub struct Delete<D>(std::marker::PhantomData<D>);
+pub struct Delete<D, S>(std::marker::PhantomData<D>, std::marker::PhantomData<S>);
 
-impl<D: store::Selector> Delete<D> {
+impl<D: store::Selector, S: store::Store> Delete<D, S> {
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -235,7 +236,7 @@ impl<D: store::Selector> Delete<D> {
         let user = mapper::request::User::borrow_from(state)?;
         let id = mapper::request::Id::borrow_from(state).id;
         let unmodified_since = mapper::request::UnmodifiedSince::borrow_from(state)?;
-        let store = middleware::Store::borrow_from(state).get();
+        let store = middleware::Store::<S>::borrow_from(state).get();
         let crud = D::select(store, user)?;
 
         if crud.last_modified().await? > unmodified_since {
@@ -262,4 +263,4 @@ impl<D: store::Selector> Delete<D> {
     }
 }
 
-impl_handler!(Delete<D>, D);
+impl_handler!(Delete);
