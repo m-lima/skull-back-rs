@@ -1,4 +1,7 @@
-use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId};
+use super::{
+    crud::{Response, SyncResponse},
+    Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId,
+};
 
 #[cfg(all(test, nightly))]
 mod bench;
@@ -149,30 +152,31 @@ pub struct UserStore {
     occurrence: std::sync::RwLock<UserFile<Occurrence>>,
 }
 
-#[async_trait::async_trait]
 impl<D: FileData> Crud<D> for UserStore {
-    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
-        D::list(self, limit)
+    type Future<T: Send + Unpin> = SyncResponse<T>;
+
+    fn list(&self, limit: Option<u32>) -> Self::Future<Response<Vec<D::Id>>> {
+        Self::Future::new(D::list(self, limit))
     }
 
-    async fn create(&self, data: D) -> Response<Id> {
-        D::create(self, data)
+    fn create(&self, data: D) -> Self::Future<Response<Id>> {
+        Self::Future::new(D::create(self, data))
     }
 
-    async fn read(&self, id: Id) -> Response<D::Id> {
-        D::read(self, id)
+    fn read(&self, id: Id) -> Self::Future<Response<D::Id>> {
+        Self::Future::new(D::read(self, id))
     }
 
-    async fn update(&self, id: Id, data: D) -> Response<D::Id> {
-        D::update(self, id, data)
+    fn update(&self, id: Id, data: D) -> Self::Future<Response<D::Id>> {
+        Self::Future::new(D::update(self, id, data))
     }
 
-    async fn delete(&self, id: Id) -> Response<D::Id> {
-        D::delete(self, id)
+    fn delete(&self, id: Id) -> Self::Future<Response<D::Id>> {
+        Self::Future::new(D::delete(self, id))
     }
 
-    async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
-        D::last_modified(self)
+    fn last_modified(&self) -> Self::Future<Result<std::time::SystemTime, Error>> {
+        Self::Future::new(D::last_modified(self))
     }
 }
 

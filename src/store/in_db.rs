@@ -80,48 +80,58 @@ impl Store for InDb {
     }
 }
 
-#[async_trait::async_trait]
+macro_rules! get_pool {
+    ($lock: ident) => {
+        match $lock.read().map_err(Error::from) {
+            Ok(pool) => pool.clone(),
+            Err(err) => return Box::pin(async { Err(err) }),
+        }
+    };
+}
+
 impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
-    async fn list(&self, limit: Option<u32>) -> Response<Vec<D::Id>> {
-        let pool = self.read()?.clone();
-        D::list(limit, &pool).await
+    type Future<T: Send + Unpin> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send>>;
+
+    fn list(&self, limit: Option<u32>) -> Self::Future<Response<Vec<D::Id>>> {
+        let pool = get_pool!(self);
+        D::list(limit, pool)
     }
 
-    async fn create(&self, data: D) -> Response<Id> {
-        let pool = self.read()?.clone();
-        D::create(data, &pool).await
+    fn create(&self, data: D) -> Self::Future<Response<Id>> {
+        let pool = get_pool!(self);
+        D::create(data, pool)
     }
 
-    async fn read(&self, id: Id) -> Response<D::Id> {
-        let pool = self.read()?.clone();
-        D::read(id, &pool).await
+    fn read(&self, id: Id) -> Self::Future<Response<D::Id>> {
+        let pool = get_pool!(self);
+        D::read(id, pool)
     }
 
-    async fn update(&self, id: Id, data: D) -> Response<D::Id> {
-        let pool = self.read()?.clone();
-        D::update(data, id, &pool).await
+    fn update(&self, id: Id, data: D) -> Self::Future<Response<D::Id>> {
+        let pool = get_pool!(self);
+        D::update(data, id, pool)
     }
 
-    async fn delete(&self, id: Id) -> Response<D::Id> {
-        let pool = self.read()?.clone();
-        D::delete(id, &pool).await
+    fn delete(&self, id: Id) -> Self::Future<Response<D::Id>> {
+        let pool = get_pool!(self);
+        D::delete(id, pool)
     }
 
-    async fn last_modified(&self) -> Result<std::time::SystemTime, Error> {
-        let pool = self.read()?.clone();
-        D::last_modified(&pool).await
+    fn last_modified(&self) -> Self::Future<Result<std::time::SystemTime, Error>> {
+        let pool = get_pool!(self);
+        D::last_modified(pool)
     }
 }
 
 #[async_trait::async_trait]
 pub trait SqlData: Data + 'static {
     const TABLE_ID: u32;
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>>;
-    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id>;
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id>;
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id>;
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id>;
-    async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error>;
+    async fn list(limit: Option<u32>, pool: sqlx::SqlitePool) -> Response<Vec<Self::Id>>;
+    async fn create(self, pool: sqlx::SqlitePool) -> Response<Id>;
+    async fn read(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id>;
+    async fn update(self, id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id>;
+    async fn delete(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id>;
+    async fn last_modified(pool: sqlx::SqlitePool) -> Result<std::time::SystemTime, Error>;
 }
 
 macro_rules! query {
@@ -219,7 +229,7 @@ macro_rules! query {
 impl SqlData for Skull {
     const TABLE_ID: u32 = 0;
 
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
+    async fn list(limit: Option<u32>, pool: sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
         query!(
             list,
             limit,
@@ -239,7 +249,7 @@ impl SqlData for Skull {
         )
     }
 
-    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id> {
+    async fn create(self, pool: sqlx::SqlitePool) -> Response<Id> {
         query!(
             create,
             pool,
@@ -268,7 +278,7 @@ impl SqlData for Skull {
         )
     }
 
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn read(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             read,
             id,
@@ -288,7 +298,7 @@ impl SqlData for Skull {
         )
     }
 
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn update(self, id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             update,
             self,
@@ -324,7 +334,7 @@ impl SqlData for Skull {
         )
     }
 
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn delete(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             delete,
             id,
@@ -344,7 +354,7 @@ impl SqlData for Skull {
         )
     }
 
-    async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
+    async fn last_modified(pool: sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
         sqlx::query_as!(
             transient::Time,
             r#"
@@ -355,7 +365,7 @@ impl SqlData for Skull {
                 "table" = 0
             "#
         )
-        .fetch_one(pool)
+        .fetch_one(&pool)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
@@ -366,7 +376,7 @@ impl SqlData for Skull {
 impl SqlData for Quick {
     const TABLE_ID: u32 = 1;
 
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
+    async fn list(limit: Option<u32>, pool: sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
         query!(
             list,
             limit,
@@ -383,7 +393,7 @@ impl SqlData for Quick {
         )
     }
 
-    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id> {
+    async fn create(self, pool: sqlx::SqlitePool) -> Response<Id> {
         query!(
             create,
             pool,
@@ -403,7 +413,7 @@ impl SqlData for Quick {
         )
     }
 
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn read(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             read,
             id,
@@ -420,7 +430,7 @@ impl SqlData for Quick {
         )
     }
 
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn update(self, id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             update,
             self,
@@ -447,7 +457,7 @@ impl SqlData for Quick {
         )
     }
 
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn delete(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             delete,
             id,
@@ -464,7 +474,7 @@ impl SqlData for Quick {
         )
     }
 
-    async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
+    async fn last_modified(pool: sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
         sqlx::query_as!(
             transient::Time,
             r#"
@@ -475,7 +485,7 @@ impl SqlData for Quick {
                 "table" = 1
             "#
         )
-        .fetch_one(pool)
+        .fetch_one(&pool)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
@@ -486,7 +496,7 @@ impl SqlData for Quick {
 impl SqlData for Occurrence {
     const TABLE_ID: u32 = 2;
 
-    async fn list(limit: Option<u32>, pool: &sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
+    async fn list(limit: Option<u32>, pool: sqlx::SqlitePool) -> Response<Vec<Self::Id>> {
         query!(
             list,
             limit,
@@ -505,7 +515,7 @@ impl SqlData for Occurrence {
         )
     }
 
-    async fn create(self, pool: &sqlx::SqlitePool) -> Response<Id> {
+    async fn create(self, pool: sqlx::SqlitePool) -> Response<Id> {
         query!(
             create,
             pool,
@@ -528,7 +538,7 @@ impl SqlData for Occurrence {
         )
     }
 
-    async fn read(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn read(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             read,
             id,
@@ -546,7 +556,7 @@ impl SqlData for Occurrence {
         )
     }
 
-    async fn update(self, id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn update(self, id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             update,
             self,
@@ -576,7 +586,7 @@ impl SqlData for Occurrence {
         )
     }
 
-    async fn delete(id: Id, pool: &sqlx::SqlitePool) -> Response<Self::Id> {
+    async fn delete(id: Id, pool: sqlx::SqlitePool) -> Response<Self::Id> {
         query!(
             delete,
             id,
@@ -594,7 +604,7 @@ impl SqlData for Occurrence {
         )
     }
 
-    async fn last_modified(pool: &sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
+    async fn last_modified(pool: sqlx::SqlitePool) -> Result<std::time::SystemTime, Error> {
         sqlx::query_as!(
             transient::Time,
             r#"
@@ -605,7 +615,7 @@ impl SqlData for Occurrence {
                 "table" = 2
             "#
         )
-        .fetch_one(pool)
+        .fetch_one(&pool)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)
