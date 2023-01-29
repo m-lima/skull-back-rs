@@ -526,17 +526,12 @@ impl FileData for Occurrence {
 }
 
 pub trait Serializable: Data {
-    fn name() -> &'static str;
     fn id(string: std::io::Result<String>) -> Result<Id, Error>;
     fn read_tsv(string: std::io::Result<String>) -> Result<Self::Id, Error>;
     fn write_tsv<W: std::io::Write>(with_id: Self::Id, writer: &mut W) -> Result<(), Error>;
 }
 
 impl Serializable for Skull {
-    fn name() -> &'static str {
-        "skull"
-    }
-
     fn id(string: std::io::Result<String>) -> Result<Id, Error> {
         let string = string?;
         parse!(number, string.split('\t'), "id", "Skull")
@@ -594,10 +589,6 @@ impl Serializable for Skull {
 }
 
 impl Serializable for Quick {
-    fn name() -> &'static str {
-        "quick"
-    }
-
     fn id(string: std::io::Result<String>) -> Result<Id, Error> {
         let string = string?;
         parse!(number, string.split('\t'), "id", "Quick")
@@ -626,10 +617,6 @@ impl Serializable for Quick {
 }
 
 impl Serializable for Occurrence {
-    fn name() -> &'static str {
-        "occurrence"
-    }
-
     fn id(string: std::io::Result<String>) -> Result<Id, Error> {
         let string = string?;
         parse!(number, string.split('\t'), "id", "Occurrence")

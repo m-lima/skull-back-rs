@@ -36,17 +36,7 @@ fn with_cors<S: store::Store>(
 
     let (chain, pipelines) = gotham::pipeline::single_pipeline(pipeline);
     gotham::router::builder::build_router(chain, pipelines, |route| {
-        use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
-
-        route.options("/skull").to(|state| (state, ""));
-        route.options("/skull/:id:[0-9]+").to(|state| (state, ""));
-        route.options("/quick").to(|state| (state, ""));
-        route.options("/quick/:id:[0-9]+").to(|state| (state, ""));
-        route.options("/occurrence").to(|state| (state, ""));
-        route
-            .options("/occurrence/:id:[0-9]+")
-            .to(|state| (state, ""));
-        setup_resources::<S, _, _>(route);
+        Resource::<S, true>::setup(route);
     })
 }
 
@@ -71,40 +61,58 @@ fn without_cors<S: store::Store>(
             route
                 .get("/*")
                 .to_dir(gotham::handler::FileOptions::new(web_path).build());
-            route.scope("/api", |route| setup_resources::<S, _, _>(route));
+            route.scope("/api", |route| {
+                Resource::<S, false>::setup(route);
+            });
         } else {
-            setup_resources::<S, _, _>(route);
+            Resource::<S, false>::setup(route);
         }
     })
 }
 
-fn setup_resources<S, C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
+struct Resource<S: store::Store, const CORS: bool>(std::marker::PhantomData<S>);
+
+impl<S, const CORS: bool> Resource<S, CORS>
 where
     S: store::Store,
-    C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
-    P: std::panic::RefUnwindSafe + Send + Sync + 'static,
 {
-    route.scope("/skull", Resource::<S, store::Skull>::setup);
-    route.scope("/quick", Resource::<S, store::Quick>::setup);
-    route.scope("/occurrence", Resource::<S, store::Occurrence>::setup);
-}
-
-struct Resource<S: store::Store, M: store::Model>(
-    std::marker::PhantomData<S>,
-    std::marker::PhantomData<M>,
-);
-
-impl<S: store::Store, M: store::Model> Resource<S, M>
-where
-    M: 'static + Send + Sync + std::panic::RefUnwindSafe,
-{
-    fn setup<C, P>(route: &mut gotham::router::builder::ScopeBuilder<'_, C, P>)
+    fn setup<C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
     where
+        C: 'static + gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync,
+        P: 'static + std::panic::RefUnwindSafe + Send + Sync,
+    {
+        let (m1, m2, m3) = store::MODELS;
+        Self::route_model(route, m1);
+        Self::route_model(route, m2);
+        Self::route_model(route, m3);
+    }
+
+    fn route_model<M, C, P>(
+        route: &mut impl gotham::router::builder::DrawRoutes<C, P>,
+        _: std::marker::PhantomData<M>,
+    ) where
+        M: store::Model + std::panic::RefUnwindSafe,
         C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
         P: std::panic::RefUnwindSafe + Send + Sync + 'static,
     {
+        route.scope(
+            format!("/{name}", name = M::name()).as_str(),
+            Self::route::<M, _, _>,
+        );
+    }
+
+    fn route<M, C, P>(route: &mut gotham::router::builder::ScopeBuilder<'_, C, P>)
+    where
+        M: store::Model + std::panic::RefUnwindSafe,
+        C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync,
+        P: std::panic::RefUnwindSafe + Send + Sync,
+    {
         use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
 
+        if CORS {
+            route.options("/").to(|state| (state, ""));
+            route.options("/:id:[0-9]+").to(|state| (state, ""));
+        }
         route.head("/").to(handler::LastModified::<S, M>::new());
         route
             .get("/")
