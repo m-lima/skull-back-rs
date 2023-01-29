@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::{crud::Response, Crud, Data, Error, Id, Occurrence, Quick, Skull, Store};
+use super::{crud::Response, Crud, Data, Error, Id, Model, Occurrence, Quick, Skull, Store};
 
 mod transient {
     pub(super) struct Id {
@@ -53,7 +53,7 @@ impl InDb {
 }
 
 impl Store for InDb {
-    type Crud<D: super::Selector> = std::sync::RwLock<sqlx::SqlitePool>;
+    type Crud<M: Model> = std::sync::RwLock<sqlx::SqlitePool>;
 
     fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let lock = self
@@ -625,7 +625,7 @@ impl SqlData for Occurrence {
 #[cfg(test)]
 mod test {
     use crate::{
-        store::{test::USER, Selector},
+        store::{test::USER, Model},
         test_util::TestPath,
     };
 
@@ -655,7 +655,7 @@ mod test {
     }
 
     impl Store for TestStore {
-        type Crud<D: Selector> = <InDb as Store>::Crud<D>;
+        type Crud<M: Model> = <InDb as Store>::Crud<M>;
 
         fn skull(&self, user: &str) -> Result<&Self::Crud<super::Skull>, crate::store::Error> {
             self.0.skull(user)

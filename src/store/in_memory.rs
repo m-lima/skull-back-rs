@@ -1,6 +1,6 @@
 use super::{
     crud::{Response, SyncResponse},
-    Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId,
+    Crud, Data, Error, Id, Model, Occurrence, Quick, Skull, Store, WithId,
 };
 
 #[derive(Debug, Default)]
@@ -30,7 +30,7 @@ impl InMemory {
 }
 
 impl Store for InMemory {
-    type Crud<D: super::Selector> = UserStore;
+    type Crud<M: Model> = UserStore;
 
     fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let user_container = self

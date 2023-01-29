@@ -1,35 +1,6 @@
-use super::{
-    in_db::SqlData, in_file::FileData, in_memory::MemoryData, Data, Error, Id, Occurrence, Quick,
-    Skull,
-};
-
-pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
-    type Crud<D: Selector>: Crud<D>;
-
-    fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error>;
-    fn quick(&self, user: &str) -> Result<&Self::Crud<Quick>, Error>;
-    fn occurrence(&self, user: &str) -> Result<&Self::Crud<Occurrence>, Error>;
-}
+use super::{Data, Error, Id};
 
 pub type Response<T> = Result<(T, std::time::SystemTime), Error>;
-
-pub trait Selector: Data + SqlData + FileData + MemoryData {
-    fn select<'a, S: Store>(store: &'a S, user: &str) -> Result<&'a S::Crud<Self>, Error>;
-}
-
-macro_rules! impl_selector {
-    ($name:ty, $fn:ident) => {
-        impl Selector for $name {
-            fn select<'a, S: Store>(store: &'a S, user: &str) -> Result<&'a S::Crud<Self>, Error> {
-                store.$fn(user)
-            }
-        }
-    };
-}
-
-impl_selector!(Skull, skull);
-impl_selector!(Quick, quick);
-impl_selector!(Occurrence, occurrence);
 
 pub struct SyncResponse<T>(Option<T>);
 
