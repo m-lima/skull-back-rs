@@ -1,4 +1,4 @@
-use super::Id;
+pub type Id = u32;
 
 pub trait Data:
     Clone + Send + Sync + Unpin + PartialEq + std::fmt::Debug + for<'de> serde::Deserialize<'de>

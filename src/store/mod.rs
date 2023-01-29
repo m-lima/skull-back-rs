@@ -10,10 +10,11 @@ mod bench;
 #[cfg(test)]
 mod test;
 
-pub type Id = u32;
 pub use crud::{Crud, Selector, Store};
-pub use data::{Data, Occurrence, Quick, Skull, WithId};
+pub use data::{Id, Occurrence, Quick, Skull};
 pub use error::Error;
+
+use data::{Data, WithId};
 
 pub fn in_memory<S, I>(users: I) -> impl Store
 where
@@ -41,29 +42,6 @@ where
     in_db::InDb::new(gather_users(path, users)?)
 }
 
-fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
-    if !path.exists() {
-        anyhow::bail!(
-            "Store directory does not exist: {}",
-            std::fs::canonicalize(path)
-                .unwrap_or_else(|_| path.clone())
-                .display()
-        );
-    }
-
-    if !path.is_dir() {
-        anyhow::bail!(
-            "Store path is not a directory: {}",
-            std::fs::canonicalize(path)
-                .unwrap_or_else(|_| path.clone())
-                .display()
-        );
-    }
-
-    path.read_dir()
-        .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))
-}
-
 fn gather_users<S, I, P>(
     path: P,
     users: I,
@@ -73,6 +51,28 @@ where
     I: std::iter::IntoIterator<Item = S>,
     P: AsRef<std::path::Path>,
 {
+    fn open_dir(path: &std::path::PathBuf) -> anyhow::Result<std::fs::ReadDir> {
+        if !path.exists() {
+            anyhow::bail!(
+                "Store directory does not exist: {}",
+                std::fs::canonicalize(path)
+                    .unwrap_or_else(|_| path.clone())
+                    .display()
+            );
+        }
+
+        if !path.is_dir() {
+            anyhow::bail!(
+                "Store path is not a directory: {}",
+                std::fs::canonicalize(path)
+                    .unwrap_or_else(|_| path.clone())
+                    .display()
+            );
+        }
+
+        path.read_dir()
+            .map_err(|e| anyhow::anyhow!("Store directory cannot be read: {e}"))
+    }
     let path = std::path::PathBuf::from(path.as_ref());
     let open_dir = open_dir(&path)?;
 
