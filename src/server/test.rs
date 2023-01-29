@@ -185,16 +185,26 @@ impl TestServer {
             new_time
         };
 
-        assert_eq!(
-            serde_json::from_str::<Vec<crate::store::Skull>>(
-                response.read_utf8_body().unwrap().as_str(),
-            )
-            .unwrap()
-            .len(),
-            3
-        );
+        let data = serde_json::from_str(response.read_utf8_body().unwrap().as_str()).unwrap();
+        Self::check_population(&data);
 
         last_modified
+    }
+
+    fn check_population(data: &Vec<std::collections::HashMap<String, serde_json::Value>>) {
+        assert_eq!(data.len(), 3);
+        for (i, d) in data.iter().enumerate() {
+            let i = i + 1;
+            assert_eq!(d["name"], serde_json::Value::String(format!("skull{i}")));
+            assert_eq!(d["color"], serde_json::Value::String(format!("color{i}")));
+            assert_eq!(d["icon"], serde_json::Value::String(format!("icon{i}")));
+            assert_eq!(
+                d["unitPrice"],
+                serde_json::Value::Number(
+                    serde_json::Number::from_f64(format!("0.{i}").parse().unwrap()).unwrap()
+                )
+            );
+        }
     }
 }
 

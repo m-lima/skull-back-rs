@@ -11,10 +11,10 @@ mod bench;
 mod test;
 
 pub use crud::Crud;
-pub use data::{Id, Occurrence, Quick, Skull};
+pub use data::Id;
 pub use error::Error;
 
-use data::{Data, WithId};
+use data::{Data, Occurrence, Quick, Skull, WithId};
 
 pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
     type Crud<M: Model>: Crud<M>;
@@ -25,12 +25,17 @@ pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
 }
 
 pub trait Model: Data + in_db::SqlData + in_file::FileData + in_memory::MemoryData {
+    fn name() -> &'static str;
     fn select<'a, S: Store>(store: &'a S, user: &str) -> Result<&'a S::Crud<Self>, Error>;
 }
 
 macro_rules! impl_model {
-    ($name:ty, $fn:ident) => {
+    ($name: ty, $fn: ident) => {
         impl Model for $name {
+            fn name() -> &'static str {
+                stringify!($fn)
+            }
+
             fn select<'a, S: Store>(store: &'a S, user: &str) -> Result<&'a S::Crud<Self>, Error> {
                 store.$fn(user)
             }
@@ -41,6 +46,16 @@ macro_rules! impl_model {
 impl_model!(Skull, skull);
 impl_model!(Quick, quick);
 impl_model!(Occurrence, occurrence);
+
+pub const MODELS: (
+    std::marker::PhantomData<Skull>,
+    std::marker::PhantomData<Quick>,
+    std::marker::PhantomData<Occurrence>,
+) = (
+    std::marker::PhantomData,
+    std::marker::PhantomData,
+    std::marker::PhantomData,
+);
 
 pub fn in_memory<S, I>(users: I) -> impl Store
 where
