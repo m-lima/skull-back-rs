@@ -1,6 +1,6 @@
 use super::{
     crud::{Response, SyncResponse},
-    Crud, Data, Error, Id, Occurrence, Quick, Skull, Store, WithId,
+    Crud, Data, Error, Id, Model, Occurrence, Quick, Skull, Store, WithId,
 };
 
 #[cfg(all(test, nightly))]
@@ -119,7 +119,7 @@ impl InFile {
 }
 
 impl Store for InFile {
-    type Crud<D: super::Selector> = UserStore;
+    type Crud<M: Model> = UserStore;
 
     fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let user_file = self
@@ -672,11 +672,11 @@ impl Serializable for Occurrence {
 #[cfg(test)]
 mod test {
     use crate::{
-        store::{data::SkullId, test::USER, Selector, WithId},
+        store::{data::SkullId, test::USER, Error, Model, Skull, Store, WithId},
         test_util::TestPath,
     };
 
-    use super::{Error, FileData, InFile, Serializable, Skull, Store, UserFile, UserStore};
+    use super::{FileData, InFile, Serializable, UserFile, UserStore};
 
     crate::impl_crud_tests!(InFile, TestStore::new());
 
@@ -700,7 +700,7 @@ mod test {
     }
 
     impl Store for TestStore {
-        type Crud<D: Selector> = <InFile as Store>::Crud<D>;
+        type Crud<M: Model> = <InFile as Store>::Crud<M>;
 
         fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
             self.store.skull(user)

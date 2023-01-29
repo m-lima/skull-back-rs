@@ -154,12 +154,12 @@ macro_rules! impl_crud_tests {
 }
 use crate::check;
 
-use super::{Crud, Error, Id, Occurrence, Quick, Selector, Skull, Store, WithId};
+use super::{Crud, Error, Id, Model, Occurrence, Quick, Skull, Store, WithId};
 use helper::{Poller, TesterData};
 
 pub const USER: &str = "bloink";
 
-pub struct Tester<D: Selector>(std::marker::PhantomData<D>);
+pub struct Tester<M: Model>(std::marker::PhantomData<M>);
 
 impl<D: TesterData> Tester<D> {
     pub async fn selectable(store: &impl Store) {
@@ -775,9 +775,9 @@ pub async fn multiple_polled_handles(store: impl Store) {
 mod helper {
     use crate::test_util::Assertion;
 
-    use super::{check, Crud, Id, Occurrence, Quick, Selector, Skull, Store, WithId, USER};
+    use super::{check, Crud, Id, Model, Occurrence, Quick, Skull, Store, WithId, USER};
 
-    pub trait TesterData: Selector {
+    pub trait TesterData: Model {
         fn new(i: u8) -> Self;
 
         fn ided(i: u8) -> Self::Id {

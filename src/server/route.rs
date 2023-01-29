@@ -46,7 +46,7 @@ fn with_cors<S: store::Store>(
         route
             .options("/occurrence/:id:[0-9]+")
             .to(|state| (state, ""));
-        setup_resources::<_, _, S>(route);
+        setup_resources::<S, _, _>(route);
     })
 }
 
@@ -71,55 +71,57 @@ fn without_cors<S: store::Store>(
             route
                 .get("/*")
                 .to_dir(gotham::handler::FileOptions::new(web_path).build());
-            route.scope("/api", |route| setup_resources::<_, _, S>(route));
+            route.scope("/api", |route| setup_resources::<S, _, _>(route));
         } else {
-            setup_resources::<_, _, S>(route);
+            setup_resources::<S, _, _>(route);
         }
     })
 }
 
-fn setup_resources<C, P, S>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
+fn setup_resources<S, C, P>(route: &mut impl gotham::router::builder::DrawRoutes<C, P>)
 where
+    S: store::Store,
     C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
     P: std::panic::RefUnwindSafe + Send + Sync + 'static,
-    S: store::Store,
 {
-    route.scope("/skull", Resource::<store::Skull, S>::setup);
-    route.scope("/quick", Resource::<store::Quick, S>::setup);
-    route.scope("/occurrence", Resource::<store::Occurrence, S>::setup);
+    route.scope("/skull", Resource::<S, store::Skull>::setup);
+    route.scope("/quick", Resource::<S, store::Quick>::setup);
+    route.scope("/occurrence", Resource::<S, store::Occurrence>::setup);
 }
 
-struct Resource<D: store::Selector, S: store::Store>(
-    std::marker::PhantomData<D>,
+struct Resource<S: store::Store, M: store::Model>(
     std::marker::PhantomData<S>,
+    std::marker::PhantomData<M>,
 );
 
-impl<D: store::Selector, S: store::Store> Resource<D, S> {
+impl<S: store::Store, M: store::Model> Resource<S, M>
+where
+    M: 'static + Send + Sync + std::panic::RefUnwindSafe,
+{
     fn setup<C, P>(route: &mut gotham::router::builder::ScopeBuilder<'_, C, P>)
     where
         C: gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync + 'static,
         P: std::panic::RefUnwindSafe + Send + Sync + 'static,
-        D: 'static + Send + Sync + std::panic::RefUnwindSafe,
     {
         use gotham::router::builder::{DefineSingleRoute, DrawRoutes};
 
-        route.head("/").to(handler::LastModified::<D, S>::new());
+        route.head("/").to(handler::LastModified::<S, M>::new());
         route
             .get("/")
             .with_query_string_extractor::<mapper::request::Limit>()
-            .to(handler::List::<D, S>::new());
-        route.post("/").to(handler::Create::<D, S>::new());
+            .to(handler::List::<S, M>::new());
+        route.post("/").to(handler::Create::<S, M>::new());
         route
             .get("/:id:[0-9]+")
             .with_path_extractor::<mapper::request::Id>()
-            .to(handler::Read::<D, S>::new());
+            .to(handler::Read::<S, M>::new());
         route
             .put("/:id:[0-9]+")
             .with_path_extractor::<mapper::request::Id>()
-            .to(handler::Update::<D, S>::new());
+            .to(handler::Update::<S, M>::new());
         route
             .delete("/:id:[0-9]+")
             .with_path_extractor::<mapper::request::Id>()
-            .to(handler::Delete::<D, S>::new());
+            .to(handler::Delete::<S, M>::new());
     }
 }

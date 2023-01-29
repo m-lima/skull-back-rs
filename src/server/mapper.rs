@@ -75,9 +75,9 @@ pub mod request {
     pub struct Body;
 
     impl Body {
-        pub async fn take_from<D: store::Selector>(
+        pub async fn take_from<M: store::Model>(
             state: &mut gotham::state::State,
-        ) -> Result<D, Error> {
+        ) -> Result<M, Error> {
             use gotham::hyper;
             use gotham::state::FromState;
 
