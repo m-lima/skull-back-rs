@@ -81,10 +81,11 @@ where
         C: 'static + gotham::pipeline::PipelineHandleChain<P> + Copy + Send + Sync,
         P: 'static + std::panic::RefUnwindSafe + Send + Sync,
     {
-        let (m1, m2, m3) = store::MODELS;
-        Self::route_model(route, m1);
-        Self::route_model(route, m2);
-        Self::route_model(route, m3);
+        store::models(|m1, m2, m3| {
+            Self::route_model(route, m1);
+            Self::route_model(route, m2);
+            Self::route_model(route, m3);
+        });
     }
 
     fn route_model<M, C, P>(
