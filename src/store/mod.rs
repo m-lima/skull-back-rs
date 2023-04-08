@@ -47,19 +47,15 @@ impl_model!(Skull, skull);
 impl_model!(Quick, quick);
 impl_model!(Occurrence, occurrence);
 
-pub fn models(
-    f: impl FnOnce(
-        std::marker::PhantomData<Skull>,
-        std::marker::PhantomData<Quick>,
-        std::marker::PhantomData<Occurrence>,
-    ),
-) {
-    f(
-        std::marker::PhantomData,
-        std::marker::PhantomData,
-        std::marker::PhantomData,
-    );
-}
+pub const MODELS: (
+    std::marker::PhantomData<Skull>,
+    std::marker::PhantomData<Quick>,
+    std::marker::PhantomData<Occurrence>,
+) = (
+    std::marker::PhantomData,
+    std::marker::PhantomData,
+    std::marker::PhantomData,
+);
 
 pub fn in_memory<S, I>(users: I) -> impl Store
 where
