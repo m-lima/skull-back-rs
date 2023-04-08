@@ -23,12 +23,22 @@ macro_rules! impl_crud_tests {
                 }
 
                 #[tokio::test(flavor = "multi_thread")]
-                async fn multiple_spawned_handles() {
+                async fn multi_thread_spawned_handles() {
                     $crate::store::test::multiple_spawned_handles($instance).await;
                 }
 
                 #[tokio::test(flavor = "multi_thread")]
-                async fn multiple_polled_handles() {
+                async fn multi_thread_polled_handles() {
+                    $crate::store::test::multiple_polled_handles($instance).await;
+                }
+
+                #[tokio::test(flavor = "current_thread")]
+                async fn single_thread_spawned_handles() {
+                    $crate::store::test::multiple_spawned_handles($instance).await;
+                }
+
+                #[tokio::test(flavor = "current_thread")]
+                async fn single_thread_polled_handles() {
                     $crate::store::test::multiple_polled_handles($instance).await;
                 }
             }
@@ -261,7 +271,7 @@ impl<D: TesterData> Tester<D> {
         let store = D::select(store, USER).unwrap();
 
         let last_modified = store.last_modified().await.unwrap();
-        let data = D::new(7).with_skull(1);
+        let data = D::mock(7).with_skull(1);
         let response = check!(helper::get_modified_data(
             store.create(data.clone()).await.unwrap(),
             last_modified
@@ -278,7 +288,7 @@ impl<D: TesterData> Tester<D> {
         helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        let initial = D::new(4).with_skull(1);
+        let initial = D::mock(4).with_skull(1);
         let last_modified = store.create(initial.clone()).await.unwrap().1;
         let mut expected = helper::from_range::<D>(1..=3);
         expected.push(D::Id::new(4, initial.clone()));
@@ -324,7 +334,7 @@ impl<D: TesterData> Tester<D> {
         let store = D::select(store, USER).unwrap();
 
         for i in 4..=21 {
-            store.create(D::new(i).with_skull(1)).await.unwrap();
+            store.create(D::mock(i).with_skull(1)).await.unwrap();
         }
 
         for i in 4..=21 {
@@ -336,7 +346,7 @@ impl<D: TesterData> Tester<D> {
         let last_modified = store.last_modified().await.unwrap();
 
         let response = check!(helper::get_modified_data(
-            store.create(D::new(4).with_skull(1)).await.unwrap(),
+            store.create(D::mock(4).with_skull(1)).await.unwrap(),
             last_modified
         ));
         assert_eq!(response, 20);
@@ -362,7 +372,7 @@ impl<D: TesterData> Tester<D> {
         let store = D::select(store, USER).unwrap();
 
         for i in 4..=20 {
-            store.create(D::new(i).with_skull(1)).await.unwrap();
+            store.create(D::mock(i).with_skull(1)).await.unwrap();
         }
 
         for i in 4..=20 {
@@ -377,7 +387,7 @@ impl<D: TesterData> Tester<D> {
             store.read(11).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::new(11).with_skull(1).with_id(11));
+        assert_eq!(response, D::mock(11).with_skull(1).with_id(11));
     }
 
     pub async fn read_not_found(store: &impl Store) {
@@ -405,7 +415,7 @@ impl<D: TesterData> Tester<D> {
 
         let last_modified = store.last_modified().await.unwrap();
 
-        let data = D::new(7).with_skull(1);
+        let data = D::mock(7).with_skull(1);
         let response = check!(helper::get_modified_data(
             store.update(2, data.clone()).await.unwrap(),
             last_modified
@@ -425,7 +435,7 @@ impl<D: TesterData> Tester<D> {
         let last_modified = store.last_modified().await.unwrap();
 
         let response = check!(helper::get_unchanged_data(
-            store.update(2, D::new(2)).await.unwrap(),
+            store.update(2, D::mock(2)).await.unwrap(),
             last_modified
         ));
         assert_eq!(response, D::ided(2));
@@ -440,7 +450,7 @@ impl<D: TesterData> Tester<D> {
 
         let last_modified = store.last_modified().await.unwrap();
 
-        let data = D::new(7);
+        let data = D::mock(7);
         let err = store.update(0, data.clone()).await.unwrap_err().to_string();
         assert_eq!(store.last_modified().await.unwrap(), last_modified);
         assert_eq!(err, "Entry not found for id `0`");
@@ -465,18 +475,18 @@ impl<D: TesterData> Tester<D> {
         helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        let initial = D::new(4).with_skull(1);
+        let initial = D::mock(4).with_skull(1);
 
         store.create(initial.clone()).await.unwrap();
-        let mut last_modified = store.create(D::new(5).with_skull(1)).await.unwrap().1;
+        let mut last_modified = store.create(D::mock(5).with_skull(1)).await.unwrap().1;
 
         let mut expected = helper::from_range::<D>(1..=3);
         expected.push(initial.clone().with_id(4));
-        expected.push(D::new(5).with_skull(1).with_id(5));
+        expected.push(D::mock(5).with_skull(1).with_id(5));
 
         for (i, _) in initial.make_non_conflicts().iter().enumerate() {
             last_modified = store
-                .create(D::new(u8::try_from(i + 6).unwrap()).with_skull(3))
+                .create(D::mock(u8::try_from(i + 6).unwrap()).with_skull(3))
                 .await
                 .unwrap()
                 .1;
@@ -495,7 +505,7 @@ impl<D: TesterData> Tester<D> {
                 store.update(id, non_conflicting.clone()).await.unwrap(),
                 last_modified
             ));
-            assert_eq!(response, D::new(id_u8).with_skull(3).with_id(id_u8));
+            assert_eq!(response, D::mock(id_u8).with_skull(3).with_id(id_u8));
             expected.push(D::Id::new(id, non_conflicting));
         }
 
@@ -527,18 +537,18 @@ impl<D: TesterData> Tester<D> {
         helper::populate(store).await;
         let store = D::select(store, USER).unwrap();
 
-        store.create(D::new(4).with_skull(1)).await.unwrap();
-        let last_modified = store.create(D::new(5).with_skull(1)).await.unwrap().1;
+        store.create(D::mock(4).with_skull(1)).await.unwrap();
+        let last_modified = store.create(D::mock(5).with_skull(1)).await.unwrap().1;
 
         let response = check!(helper::get_modified_data(
             store.delete(4).await.unwrap(),
             last_modified
         ));
-        assert_eq!(response, D::new(4).with_skull(1).with_id(4));
+        assert_eq!(response, D::mock(4).with_skull(1).with_id(4));
 
         let response = store.list(None).await.unwrap().0;
         let mut expected = helper::from_range::<D>(1..=3);
-        expected.push(D::new(5).with_skull(1).with_id(5));
+        expected.push(D::mock(5).with_skull(1).with_id(5));
         check!(D::compare(response, expected));
     }
 
@@ -587,7 +597,7 @@ pub async fn last_modified_does_not_leak(store: &impl Store) {
     let response = check!(helper::get_modified_data(
         Skull::select(store, USER)
             .unwrap()
-            .create(Skull::new(4))
+            .create(Skull::mock(4))
             .await
             .unwrap(),
         skull_last_modified
@@ -778,10 +788,10 @@ mod helper {
     use super::{check, Crud, Id, Model, Occurrence, Quick, Skull, Store, WithId, USER};
 
     pub trait TesterData: Model {
-        fn new(i: u8) -> Self;
+        fn mock(i: u8) -> Self;
 
         fn ided(i: u8) -> Self::Id {
-            Self::new(i).with_id(i)
+            Self::mock(i).with_id(i)
         }
 
         fn with_id(self, i: u8) -> Self::Id {
@@ -809,7 +819,7 @@ mod helper {
     }
 
     impl TesterData for Skull {
-        fn new(i: u8) -> Self {
+        fn mock(i: u8) -> Self {
             Skull {
                 name: format!("name{i}"),
                 color: format!("color{i}"),
@@ -828,15 +838,15 @@ mod helper {
                 self.clone(),
                 Self {
                     name: self.name.clone(),
-                    ..Self::new(7)
+                    ..Self::mock(7)
                 },
                 Self {
                     color: self.color.clone(),
-                    ..Self::new(7)
+                    ..Self::mock(7)
                 },
                 Self {
                     icon: self.icon.clone(),
-                    ..Self::new(7)
+                    ..Self::mock(7)
                 },
             ]
         }
@@ -845,7 +855,7 @@ mod helper {
             vec![Self {
                 unit_price: self.unit_price,
                 limit: self.limit,
-                ..Self::new(7)
+                ..Self::mock(7)
             }]
         }
 
@@ -878,7 +888,7 @@ mod helper {
     }
 
     impl TesterData for Quick {
-        fn new(i: u8) -> Quick {
+        fn mock(i: u8) -> Quick {
             Quick {
                 skull: u32::from(i),
                 amount: f32::from(i),
@@ -938,7 +948,7 @@ mod helper {
     }
 
     impl TesterData for Occurrence {
-        fn new(i: u8) -> Occurrence {
+        fn mock(i: u8) -> Occurrence {
             use rand::{RngCore, SeedableRng};
             Occurrence {
                 skull: u32::from(i),
@@ -1007,17 +1017,17 @@ mod helper {
     pub async fn populate(store: &impl Store) {
         let crud = Skull::select(store, USER).unwrap();
         for i in 1..=3 {
-            crud.create(Skull::new(i)).await.unwrap();
+            crud.create(Skull::mock(i)).await.unwrap();
         }
 
         let crud = Quick::select(store, USER).unwrap();
         for i in 1..=3 {
-            crud.create(Quick::new(i)).await.unwrap();
+            crud.create(Quick::mock(i)).await.unwrap();
         }
 
         let crud = Occurrence::select(store, USER).unwrap();
         for i in 1..=3 {
-            crud.create(Occurrence::new(i)).await.unwrap();
+            crud.create(Occurrence::mock(i)).await.unwrap();
         }
     }
 
@@ -1051,6 +1061,7 @@ mod helper {
         range.map(D::ided).collect()
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn make_futures<S: Store>(
         store: S,
     ) -> (
@@ -1065,16 +1076,32 @@ mod helper {
         let skull_task = async move {
             let crud = Skull::select(cloned_store.as_ref(), USER).unwrap();
             for _ in 1..=3 {
+                // Initial
                 check!(Skull::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3
                 ));
-                assert_eq!(crud.create(Skull::new(4)).await.unwrap().0, 4);
+
+                // Create
+                assert_eq!(crud.create(Skull::mock(4)).await.unwrap().0, 4);
                 check!(Skull::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=4
                 ));
-                assert_eq!(crud.delete(4).await.unwrap().0, Skull::ided(4));
+
+                // Update
+                assert_eq!(
+                    crud.update(4, Skull::mock(5)).await.unwrap().0,
+                    Skull::ided(4)
+                );
+                let mut expected = from_range::<Skull>(1..=5);
+                expected.remove(3);
+                expected[3].id = 4;
+                let removed = expected[3].clone();
+                check!(Skull::compare(crud.list(None).await.unwrap().0, expected));
+
+                // Delete
+                assert_eq!(crud.delete(4).await.unwrap().0, removed);
                 check!(Skull::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3
@@ -1084,23 +1111,39 @@ mod helper {
 
         let cloned_store = store.clone();
         let quick_task = async move {
-            use crate::store::data::QuickId;
             let crud = Quick::select(cloned_store.as_ref(), USER).unwrap();
             for _ in 1..=3 {
+                // Initial
                 check!(Quick::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3
                 ));
+
+                // Create
                 let data = Quick {
                     skull: 1,
                     amount: 7.,
                 };
                 assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
-                let data: QuickId = WithId::new(4, data);
+                let data = data.with_id(4);
                 let mut expected = from_range::<Quick>(1..=3);
                 expected.push(data.clone());
+                check!(Quick::compare(
+                    crud.list(None).await.unwrap().0,
+                    expected.clone()
+                ));
+
+                // Update
+                let new = Quick {
+                    skull: 1,
+                    amount: 9.,
+                };
+                assert_eq!(crud.update(4, new.clone()).await.unwrap().0, data);
+                expected[3] = new.clone().with_id(4);
                 check!(Quick::compare(crud.list(None).await.unwrap().0, expected));
-                assert_eq!(crud.delete(4).await.unwrap().0, data);
+
+                // Delete
+                assert_eq!(crud.delete(4).await.unwrap().0, new.with_id(4));
                 check!(Quick::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3
@@ -1110,27 +1153,44 @@ mod helper {
 
         let cloned_store = store.clone();
         let occurrence_task = async move {
-            use crate::store::data::OccurrenceId;
             let crud = Occurrence::select(cloned_store.as_ref(), USER).unwrap();
             for _ in 1..=3 {
+                // Initial
                 check!(Occurrence::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3
                 ));
+
+                // Create
                 let data = Occurrence {
                     skull: 1,
                     amount: 2.,
                     millis: 3,
                 };
                 assert_eq!(crud.create(data.clone()).await.unwrap().0, 4);
-                let data: OccurrenceId = WithId::new(4, data);
+                let data = data.with_id(4);
                 let mut expected = from_range::<Occurrence>(1..=3);
                 expected.push(data.clone());
                 check!(Occurrence::compare(
                     crud.list(None).await.unwrap().0,
+                    expected.clone()
+                ));
+
+                // Update
+                let new = Occurrence {
+                    skull: 1,
+                    amount: 7.,
+                    millis: 8,
+                };
+                assert_eq!(crud.update(4, new.clone()).await.unwrap().0, data);
+                expected[3] = new.clone().with_id(4);
+                check!(Occurrence::compare(
+                    crud.list(None).await.unwrap().0,
                     expected
                 ));
-                assert_eq!(crud.delete(4).await.unwrap().0, data);
+
+                // Delete
+                assert_eq!(crud.delete(4).await.unwrap().0, new.with_id(4));
                 check!(Occurrence::compare_with_range(
                     crud.list(None).await.unwrap().0,
                     1..=3
