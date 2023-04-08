@@ -1,5 +1,5 @@
 # Build
-FROM rust:1.62.0-buster as rust
+FROM rust:1.68.0-buster as rust
 WORKDIR /src
 COPY . .
 RUN cargo build --release
