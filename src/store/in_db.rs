@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::{crud::Response, Crud, Data, Error, Id, Model, Occurrence, Quick, Skull, Store};
 
 mod transient {
@@ -19,8 +17,13 @@ mod transient {
     }
 }
 
+pub struct Pools {
+    read: std::sync::RwLock<sqlx::SqlitePool>,
+    write: std::sync::RwLock<sqlx::SqlitePool>,
+}
+
 pub struct InDb {
-    users: std::collections::HashMap<String, std::sync::RwLock<sqlx::SqlitePool>>,
+    users: std::collections::HashMap<String, Pools>,
 }
 
 impl InDb {
@@ -39,13 +42,28 @@ impl InDb {
                     anyhow::bail!("User path is not a file {}", path.display());
                 }
 
-                let pool = sqlx::SqlitePool::connect_lazy(
-                    format!("sqlite://{}", path.display()).as_str(),
-                )?;
+                let options = format!("sqlite://{}", path.display())
+                    .parse::<sqlx::sqlite::SqliteConnectOptions>()?
+                    .pragma("query_only", "true")
+                    .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+                let read_pool = sqlx::SqlitePool::connect_lazy_with(options);
+
+                let options = format!("sqlite://{}", path.display())
+                    .parse::<sqlx::sqlite::SqliteConnectOptions>()?
+                    .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+                let write_pool = sqlx::sqlite::SqlitePoolOptions::new()
+                    .max_connections(1)
+                    .connect_lazy_with(options);
 
                 log::info!("Allowing {user}");
 
-                Ok((user, std::sync::RwLock::new(pool)))
+                Ok((
+                    user,
+                    Pools {
+                        read: std::sync::RwLock::new(read_pool),
+                        write: std::sync::RwLock::new(write_pool),
+                    },
+                ))
             })
             .collect::<Result<_, _>>()?;
         Ok(Self { users })
@@ -53,7 +71,7 @@ impl InDb {
 }
 
 impl Store for InDb {
-    type Crud<M: Model> = std::sync::RwLock<sqlx::SqlitePool>;
+    type Crud<M: Model> = Pools;
 
     fn skull(&self, user: &str) -> Result<&Self::Crud<Skull>, Error> {
         let lock = self
@@ -80,45 +98,49 @@ impl Store for InDb {
     }
 }
 
+// This RwLock is doing nothing besides allowing us to use it with Gotham
+//
+// The RAII lock guard gets immediately dropped and barely counts. However it allows the Store to
+// implement RefUnwindSafe to be used as a state
 macro_rules! get_pool {
-    ($lock: ident) => {
-        match $lock.read().map_err(Error::from) {
+    ($pool: ident, $lock: ident) => {
+        match $pool.$lock.read().map_err(Error::from) {
             Ok(pool) => pool.clone(),
             Err(err) => return Box::pin(async { Err(err) }),
         }
     };
 }
 
-impl<D: SqlData> Crud<D> for std::sync::RwLock<sqlx::SqlitePool> {
+impl<D: SqlData> Crud<D> for Pools {
     type Future<T: Send + Unpin> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send>>;
 
     fn list(&self, limit: Option<u32>) -> Self::Future<Response<Vec<D::Id>>> {
-        let pool = get_pool!(self);
+        let pool = get_pool!(self, read);
         D::list(limit, pool)
     }
 
     fn create(&self, data: D) -> Self::Future<Response<Id>> {
-        let pool = get_pool!(self);
+        let pool = get_pool!(self, write);
         D::create(data, pool)
     }
 
     fn read(&self, id: Id) -> Self::Future<Response<D::Id>> {
-        let pool = get_pool!(self);
+        let pool = get_pool!(self, read);
         D::read(id, pool)
     }
 
     fn update(&self, id: Id, data: D) -> Self::Future<Response<D::Id>> {
-        let pool = get_pool!(self);
+        let pool = get_pool!(self, write);
         D::update(data, id, pool)
     }
 
     fn delete(&self, id: Id) -> Self::Future<Response<D::Id>> {
-        let pool = get_pool!(self);
+        let pool = get_pool!(self, write);
         D::delete(id, pool)
     }
 
     fn last_modified(&self) -> Self::Future<Result<std::time::SystemTime, Error>> {
-        let pool = get_pool!(self);
+        let pool = get_pool!(self, read);
         D::last_modified(pool)
     }
 }

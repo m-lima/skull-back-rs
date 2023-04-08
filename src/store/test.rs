@@ -162,6 +162,7 @@ macro_rules! impl_crud_tests {
         }
     };
 }
+
 use crate::check;
 
 use super::{Crud, Error, Id, Model, Occurrence, Quick, Skull, Store, WithId};
@@ -1228,11 +1229,15 @@ mod helper {
                 }
 
                 let index = rand::random::<usize>() % unpinned.0.len();
+                let waker = cx.waker().clone();
                 match unpinned.0[index].as_mut().poll(cx) {
                     std::task::Poll::Ready(_) => {
                         unpinned.0.remove(index);
                     }
-                    std::task::Poll::Pending => return std::task::Poll::Pending,
+                    std::task::Poll::Pending => {
+                        waker.wake();
+                        return std::task::Poll::Pending;
+                    }
                 }
             }
         }
