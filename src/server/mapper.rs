@@ -78,7 +78,6 @@ pub mod request {
         pub async fn take_from<M: store::Model>(
             state: &mut gotham::state::State,
         ) -> Result<M, Error> {
-            use gotham::hyper;
             use gotham::state::FromState;
 
             let request_length = hyper::HeaderMap::borrow_from(state)

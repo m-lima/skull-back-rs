@@ -658,10 +658,8 @@ impl Serializable for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        store::{data::SkullId, test::USER, Error, Model, Skull, Store, WithId},
-        test_util::TestPath,
-    };
+    use crate::store::{data::SkullId, Error, Model, Skull, Store, WithId};
+    use test_utils::{TestPath, USER};
 
     use super::{FileData, InFile, Serializable, UserFile, UserStore};
 

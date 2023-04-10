@@ -390,7 +390,7 @@ impl MemoryData for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::store::test::USER;
+    use test_utils::USER;
 
     use super::{Error, InMemory, MemoryData, Skull, UserContainer};
 

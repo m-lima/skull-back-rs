@@ -5,6 +5,3 @@ mod middleware;
 mod route;
 
 pub use route::route;
-
-#[cfg(test)]
-mod test;
