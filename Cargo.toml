@@ -5,34 +5,41 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-anyhow = "1.0.70"
 async-trait = "0.1.56"
 clap = { version = "3.2.14", features = ["derive"] }
-colored = "2.0.0"
-gotham = "0.7.1"
-gotham_derive = "0.7.0"
-itoa = "1.0.6"
-log = "0.4.17"
-ryu = "1.0.13"
-serde = { version = "1.0.159", features = ["derive"] }
-serde_json = "1.0.95"
-simplelog = "0.12.1"
-skull_derive = { path = "./skull_derive" }
+skull_derive = { path = "./crates/skull_derive" }
 sqlx = { version = "0.6.3", features = ["sqlite", "runtime-tokio-native-tls"] }
-# Locked in to 0.6.0 due to regression starting at 0.6.1 and persistent until 0.6.2
-# sqlx = { version = "=0.6.0", features = ["sqlite", "runtime-tokio-native-tls"] }
-thiserror = "1.0.40"
-time = "0.3.20"
 tokio = "1.27.0"
 
+# Error
+anyhow = "1.0.70"
+thiserror = "1.0.40"
+
+# HTTP
+gotham = "0.7.1"
+gotham_derive = "0.7.0"
+hyper = "0.14.25"
 # axum = "0.6.12"
 # tower-http = { version = "0.4.0", features = ["cors", "fs"] }
 
+# Parsing
+itoa = "1.0.6"
+ryu = "1.0.13"
+serde = { version = "1.0.159", features = ["derive"] }
+serde_json = "1.0.95"
+
+# Logging
+colored = "2.0.0"
+log = "0.4.17"
+simplelog = "0.12.1"
+time = "0.3.20"
+
 [dev-dependencies]
 csv = "1.2.1"
-mime = "0.3.17"
+pwner = { version = "0.1.8", features = ["tokio"] }
 rand = "0.8.5"
-tokio = { version = "1.27.0", features = ["rt", "macros"] }
+test_utils = { path = "./crates/test_utils" }
+tokio = { version = "1.27.0", features = ["rt", "macros", "parking_lot"] }
 
 [build-dependencies]
 rustc_version = "0.4.0"

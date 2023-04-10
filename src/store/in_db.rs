@@ -646,14 +646,12 @@ impl SqlData for Occurrence {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        store::{test::USER, Model},
-        test_util::TestPath,
-    };
+    use crate::store::Model;
+    use test_utils::{TestPath, USER};
 
     use super::{InDb, Store};
 
-    struct TestStore(InDb, crate::test_util::TestPath);
+    struct TestStore(InDb, TestPath);
 
     impl TestStore {
         async fn new() -> TestStore {

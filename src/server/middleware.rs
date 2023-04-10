@@ -76,7 +76,6 @@ impl Log {
         tail: &str,
         start: std::time::Instant,
     ) {
-        use gotham::hyper;
         use gotham::state::FromState;
 
         let ip = hyper::HeaderMap::borrow_from(state)
@@ -201,7 +200,6 @@ impl gotham::middleware::Middleware for Cors {
             + Send,
     {
         Box::pin(async {
-            use gotham::hyper;
             use gotham::state::FromState;
 
             chain(state).await.map(|(state, mut response)| {

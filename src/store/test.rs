@@ -163,12 +163,10 @@ macro_rules! impl_crud_tests {
     };
 }
 
-use crate::check;
+use test_utils::{check_sync as check, USER};
 
 use super::{Crud, Error, Id, Model, Occurrence, Quick, Skull, Store, WithId};
 use helper::{Poller, TesterData};
-
-pub const USER: &str = "bloink";
 
 pub struct Tester<M: Model>(std::marker::PhantomData<M>);
 
@@ -784,7 +782,7 @@ pub async fn multiple_polled_handles(store: impl Store) {
 }
 
 mod helper {
-    use crate::test_util::Assertion;
+    use test_utils::Assertion;
 
     use super::{check, Crud, Id, Model, Occurrence, Quick, Skull, Store, WithId, USER};
 
