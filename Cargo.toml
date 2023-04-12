@@ -44,6 +44,11 @@ tokio = { version = "1.27.0", features = ["rt", "macros", "parking_lot"] }
 [build-dependencies]
 rustc_version = "0.4.0"
 
+[[test]]
+name = "api_test"
+path = "./api_test/main.rs"
+harness = false
+
 [profile.release]
 lto = true
 codegen-units = 1

@@ -144,6 +144,62 @@ impl<D: SqlData> Crud<D> for Pools {
         D::last_modified(pool)
     }
 }
+// impl<D: SqlData> Crud<D> for Pools {
+//     type Future<'a, T: Send + Unpin> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>
+//     where
+//         Self: 'a,
+//         T: 'a;
+//
+//     fn list(&self, limit: Option<u32>) -> Self::Future<'_, Response<Vec<D::Id>>> {
+//         Box::pin(async move {
+//             let lock = self.read.read().await;
+//             let pool = lock.clone();
+//             D::list(limit, pool).await
+//         })
+//     }
+//
+//     fn create(&self, data: D) -> Self::Future<'_, Response<Id>> {
+//         Box::pin(async {
+//             let lock = self.write.write().await;
+//             let pool = lock.clone();
+//             D::create(data, pool).await
+//         })
+//     }
+//
+//     fn read(&self, id: Id) -> Self::Future<'_, Response<D::Id>> {
+//         Box::pin(async move {
+//             let lock = self.read.read().await;
+//             let pool = lock.clone();
+//             D::read(id, pool).await
+//         })
+//     }
+//
+//     fn update(&self, id: Id, data: D) -> Self::Future<'_, Response<D::Id>> {
+//         Box::pin(async move {
+//             let lock = self.write.write().await;
+//             let pool = lock.clone();
+//             D::update(data, id, pool).await
+//         })
+//     }
+//
+//     fn delete(&self, id: Id) -> Self::Future<'_, Response<D::Id>> {
+//         Box::pin(async move {
+//             let lock = self.write.write().await;
+//             let pool = lock.clone();
+//             D::delete(id, pool).await
+//         })
+//     }
+//
+//     fn last_modified(&self) -> Self::Future<'_, Result<std::time::SystemTime, Error>> {
+//         Box::pin(async {
+//             // let pool = self.read.read().await.clone();
+//             // let pool = self.write.write().await.clone();
+//             let lock = self.write.write().await;
+//             let pool = lock.clone();
+//             D::last_modified(pool).await
+//         })
+//     }
+// }
 
 #[async_trait::async_trait]
 pub trait SqlData: Data + 'static {
