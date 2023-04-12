@@ -1,5 +1,3 @@
-pub mod server;
-
 use gotham::hyper;
 use test_utils::Assertion;
 

@@ -1,17 +1,13 @@
-mod helper;
-
-use helper::{
-    build_skull_payload, eq, extract_body, extract_last_modified, server::Server, LastModified,
-    EMPTY_USER, USER_HEADER,
-};
 use hyper::StatusCode;
 use test_utils::check_async as check;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn missing_user() {
-    let server = Server::instance().await;
+use crate::client::Client;
+use crate::helper::{
+    build_skull_payload, eq, extract_last_modified, LastModified, EMPTY_USER, USER_HEADER,
+};
 
-    let response = server
+pub async fn missing_user(client: Client<'_>) {
+    let response = client
         .get_with("/skull", |r| {
             r.headers_mut().remove(USER_HEADER);
         })
@@ -20,11 +16,8 @@ async fn missing_user() {
     check!(eq(response, StatusCode::FORBIDDEN, LastModified::None, ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn unknown_user() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn unknown_user(client: Client<'_>) {
+    let response = client
         .get_with("/skull", |r| {
             r.headers_mut()
                 .insert(USER_HEADER, "unknown".try_into().unwrap());
@@ -34,11 +27,8 @@ async fn unknown_user() {
     check!(eq(response, StatusCode::FORBIDDEN, LastModified::None, ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn method_not_allowed() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn method_not_allowed(client: Client<'_>) {
+    let response = client
         .get_with("/skull", |r| *r.method_mut() = hyper::Method::PATCH)
         .await;
 
@@ -50,30 +40,21 @@ async fn method_not_allowed() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn not_found() {
-    let server = Server::instance().await;
-
-    let response = server.get("/bloink").await;
+pub async fn not_found(client: Client<'_>) {
+    let response = client.get("/bloink").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn head() {
-    let server = Server::instance().await;
-
-    let response = server.head("/skull").await;
+pub async fn head(client: Client<'_>) {
+    let response = client.head("/skull").await;
 
     check!(eq(response, StatusCode::OK, LastModified::Gt(0), ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list() {
-    let server = Server::instance().await;
-
-    let last_modified = server.last_modified("/skull").await;
-    let response = server.get("/skull").await;
+pub async fn list(client: Client<'_>) {
+    let last_modified = client.last_modified("/skull").await;
+    let response = client.get("/skull").await;
 
     check!(eq(
         response,
@@ -83,18 +64,15 @@ async fn list() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_empty() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn list_empty(client: Client<'_>) {
+    let response = client
         .head_with("/skull", |r| {
             r.headers_mut()
                 .insert(USER_HEADER, EMPTY_USER.try_into().unwrap());
         })
         .await;
     let last_modified = extract_last_modified(&response).unwrap();
-    let response = server
+    let response = client
         .get_with("/skull", |r| {
             r.headers_mut()
                 .insert(USER_HEADER, EMPTY_USER.try_into().unwrap());
@@ -109,14 +87,11 @@ async fn list_empty() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_limited() {
-    let server = Server::instance().await;
-
-    let last_modified = server.last_modified("/skull").await;
+pub async fn list_limited(client: Client<'_>) {
+    let last_modified = client.last_modified("/skull").await;
 
     for i in 0..5 {
-        let response = server.get(format!("/skull?limit={i}")).await;
+        let response = client.get(format!("/skull?limit={i}")).await;
 
         let payload = match i {
             0 => build_skull_payload([]),
@@ -134,11 +109,8 @@ async fn list_limited() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn list_bad_request() {
-    let server = Server::instance().await;
-
-    let response = server.get("/skull?limit=").await;
+pub async fn list_bad_request(client: Client<'_>) {
+    let response = client.get("/skull?limit=").await;
 
     check!(eq(
         response,
@@ -148,13 +120,10 @@ async fn list_bad_request() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn create() {
-    let server = Server::instance().await;
+pub async fn create(client: Client<'_>) {
+    let last_modified = client.last_modified("/quick").await;
 
-    let last_modified = server.last_modified("/quick").await;
-
-    let response = server
+    let response = client
         .post(
             "/quick",
             r#"{
@@ -172,11 +141,8 @@ async fn create() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn create_constraint() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn create_constraint(client: Client<'_>) {
+    let response = client
         .post(
             "/quick",
             r#"{
@@ -194,11 +160,8 @@ async fn create_constraint() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn create_conflict() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn create_conflict(client: Client<'_>) {
+    let response = client
         .post(
             "/quick",
             r#"{
@@ -216,11 +179,8 @@ async fn create_conflict() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn create_bad_payload() {
-    let server = Server::instance().await;
-
-    let response = server.post("/skull", r#"{"bloink": 27}"#).await;
+pub async fn create_bad_payload(client: Client<'_>) {
+    let response = client.post("/skull", r#"{"bloink": 27}"#).await;
 
     check!(eq(
         response,
@@ -230,11 +190,8 @@ async fn create_bad_payload() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn create_length_required() {
-    let server = Server::instance().await;
-
-    let response = server.post("/skull", hyper::Body::empty()).await;
+pub async fn create_length_required(client: Client<'_>) {
+    let response = client.post("/skull", hyper::Body::empty()).await;
 
     check!(eq(
         response,
@@ -243,11 +200,8 @@ async fn create_length_required() {
         ""
     ));
 }
-#[tokio::test(flavor = "multi_thread")]
-async fn create_too_large() {
-    let server = Server::instance().await;
-
-    let response = server.post("/occurrence", [0_u8; 1025].as_slice()).await;
+pub async fn create_too_large(client: Client<'_>) {
+    let response = client.post("/occurrence", [0_u8; 1025].as_slice()).await;
 
     check!(eq(
         response,
@@ -257,12 +211,9 @@ async fn create_too_large() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn read() {
-    let server = Server::instance().await;
-
-    let last_modified = server.last_modified("/skull").await;
-    let response = server.get("/skull/2").await;
+pub async fn read(client: Client<'_>) {
+    let last_modified = client.last_modified("/skull").await;
+    let response = client.get("/skull/2").await;
 
     check!(eq(
         response,
@@ -272,21 +223,15 @@ async fn read() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn read_not_found() {
-    let server = Server::instance().await;
-
-    let response = server.get("/skull/27").await;
+pub async fn read_not_found(client: Client<'_>) {
+    let response = client.get("/skull/27").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update() {
-    let server = Server::instance().await;
-
-    let last_modified = server.last_modified("/quick").await;
-    let response = server
+pub async fn update(client: Client<'_>) {
+    let last_modified = client.last_modified("/quick").await;
+    let response = client
         .put(
             "/quick/3",
             r#"{
@@ -304,11 +249,8 @@ async fn update() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_not_found() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn update_not_found(client: Client<'_>) {
+    let response = client
         .put(
             "/quick/27",
             r#"{
@@ -321,11 +263,8 @@ async fn update_not_found() {
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_constraint() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn update_constraint(client: Client<'_>) {
+    let response = client
         .put(
             "/quick/1",
             r#"{
@@ -343,11 +282,8 @@ async fn update_constraint() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_conflict() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn update_conflict(client: Client<'_>) {
+    let response = client
         .put(
             "/quick/1",
             r#"{
@@ -365,11 +301,8 @@ async fn update_conflict() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_out_of_sync() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn update_out_of_sync(client: Client<'_>) {
+    let response = client
         .put_with(
             "/quick/3",
             r#"{
@@ -391,11 +324,8 @@ async fn update_out_of_sync() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_unmodified_missing() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn update_unmodified_missing(client: Client<'_>) {
+    let response = client
         .put_with(
             "/quick/3",
             r#"{
@@ -416,11 +346,8 @@ async fn update_unmodified_missing() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_bad_payload() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn update_bad_payload(client: Client<'_>) {
+    let response = client
         .put(
             "/quick/1",
             r#"{
@@ -437,11 +364,8 @@ async fn update_bad_payload() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_length_required() {
-    let server = Server::instance().await;
-
-    let response = server.put("/quick/1", hyper::Body::empty()).await;
+pub async fn update_length_required(client: Client<'_>) {
+    let response = client.put("/quick/1", hyper::Body::empty()).await;
 
     check!(eq(
         response,
@@ -451,11 +375,8 @@ async fn update_length_required() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn update_too_large() {
-    let server = Server::instance().await;
-
-    let response = server.put("/quick/1", [0_u8; 1025].as_slice()).await;
+pub async fn update_too_large(client: Client<'_>) {
+    let response = client.put("/quick/1", [0_u8; 1025].as_slice()).await;
 
     check!(eq(
         response,
@@ -465,12 +386,9 @@ async fn update_too_large() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn delete() {
-    let server = Server::instance().await;
-
-    let last_modified = server.last_modified("/occurrence").await;
-    let response = server.delete("/occurrence/3").await;
+pub async fn delete(client: Client<'_>) {
+    let last_modified = client.last_modified("/occurrence").await;
+    let response = client.delete("/occurrence/3").await;
 
     check!(eq(
         response,
@@ -480,20 +398,14 @@ async fn delete() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn delete_not_found() {
-    let server = Server::instance().await;
-
-    let response = server.delete("/occurrence/27").await;
+pub async fn delete_not_found(client: Client<'_>) {
+    let response = client.delete("/occurrence/27").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn delete_rejected() {
-    let server = Server::instance().await;
-
-    let response = server.delete("/skull/1").await;
+pub async fn delete_rejected(client: Client<'_>) {
+    let response = client.delete("/skull/1").await;
 
     check!(eq(
         response,
@@ -503,11 +415,8 @@ async fn delete_rejected() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn delete_out_of_sync() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn delete_out_of_sync(client: Client<'_>) {
+    let response = client
         .delete_with("/occurrence/3", |r| {
             r.headers_mut()
                 .insert(hyper::header::IF_UNMODIFIED_SINCE, 1.try_into().unwrap());
@@ -522,11 +431,8 @@ async fn delete_out_of_sync() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn delete_unmodified_missing() {
-    let server = Server::instance().await;
-
-    let response = server
+pub async fn delete_unmodified_missing(client: Client<'_>) {
+    let response = client
         .delete_with("/occurrence/3", |r| {
             r.headers_mut().remove(hyper::header::IF_UNMODIFIED_SINCE);
         })
@@ -541,14 +447,12 @@ async fn delete_unmodified_missing() {
 }
 
 mod json {
-    use super::{extract_body, Server};
     use serde_json::{Number, Value};
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn skull() {
-        let server = Server::instance().await;
+    use crate::{client::Client, helper::extract_body};
 
-        let response = server.get("/skull/1").await;
+    async fn skull(client: Client<'_>) {
+        let response = client.get("/skull/1").await;
         let body = extract_body(response).await;
         let data =
             serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&body)
@@ -565,11 +469,8 @@ mod json {
         );
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn quick() {
-        let server = Server::instance().await;
-
-        let response = server.get("/quick/1").await;
+    async fn quick(client: Client<'_>) {
+        let response = client.get("/quick/1").await;
         let body = extract_body(response).await;
         let data =
             serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&body)
@@ -584,11 +485,8 @@ mod json {
         );
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn occurrence() {
-        let server = Server::instance().await;
-
-        let response = server.get("/occurrence/1").await;
+    async fn occurrence(client: Client<'_>) {
+        let response = client.get("/occurrence/1").await;
         let body = extract_body(response).await;
         let data =
             serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&body)
@@ -604,11 +502,8 @@ mod json {
         assert_eq!(data["millis"], Value::Number(Number::from(1)));
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn list() {
-        let server = Server::instance().await;
-
-        let response = server.get("/skull").await;
+    async fn list(client: Client<'_>) {
+        let response = client.get("/skull").await;
         let body = extract_body(response).await;
         let data =
             serde_json::from_str::<Vec<std::collections::HashMap<String, serde_json::Value>>>(
