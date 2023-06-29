@@ -110,7 +110,7 @@ impl InFile {
         for (user, path) in &users {
             if !path.exists() {
                 log::debug!("Creating {}", path.display());
-                std::fs::create_dir(&path).map_err(|e| {
+                std::fs::create_dir(path).map_err(|e| {
                     anyhow::anyhow!("Could not create user directory {}: {e}", path.display())
                 })?;
             } else if !path.is_dir() {
@@ -533,7 +533,7 @@ mod test {
                 path.display()
             );
             std::fs::create_dir(&path).unwrap();
-            let store = InFile::new(&path, &[USER]).unwrap_or_else(|e| {
+            let store = InFile::new(&path, [USER]).unwrap_or_else(|e| {
                 drop(std::fs::remove_dir_all(&path));
                 panic!("{e}");
             });

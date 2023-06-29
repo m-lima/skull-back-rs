@@ -40,6 +40,8 @@ macro_rules! impl_handler {
 pub struct LastModified<D>(std::marker::PhantomData<D>);
 
 impl<D: store::Selector> LastModified<D> {
+    // Allow(clippy::unused_async): gotham needs async anyway
+    #[allow(clippy::unused_async)]
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -73,6 +75,8 @@ impl_handler!(LastModified<D>, D);
 pub struct List<D>(std::marker::PhantomData<D>);
 
 impl<D: store::Selector> List<D> {
+    // Allow(clippy::unused_async): gotham needs async anyway
+    #[allow(clippy::unused_async)]
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -148,6 +152,8 @@ impl_handler!(Create<D>, D);
 pub struct Read<D>(std::marker::PhantomData<D>);
 
 impl<D: store::Selector> Read<D> {
+    // Allow(clippy::unused_async): gotham needs async anyway
+    #[allow(clippy::unused_async)]
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {
@@ -230,6 +236,8 @@ impl_handler!(Update<D>, D);
 pub struct Delete<D>(std::marker::PhantomData<D>);
 
 impl<D: store::Selector> Delete<D> {
+    // Allow(clippy::unused_async): gotham needs async anyway
+    #[allow(clippy::unused_async)]
     async fn handle(
         state: &mut gotham::state::State,
     ) -> Result<gotham::hyper::Response<gotham::hyper::Body>, Error> {

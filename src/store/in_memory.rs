@@ -97,17 +97,15 @@ impl<D: Data> UserContainer<D> {
             None
         } else {
             let index = <usize as std::convert::TryFrom<Id>>::try_from(id).ok()?;
-            Some(std::cmp::min(self.data.len() - 1, index))
+            Some(std::cmp::min(self.data.len(), index + 1))
         }
     }
 
     fn find(&self, id: Id) -> Option<usize> {
-        for i in (0..=self.id_to_index(id)?).rev() {
-            if self.data[i].id == id {
-                return Some(i);
-            }
-        }
-        None
+        self.data
+            .iter()
+            .take(self.id_to_index(id)?)
+            .rposition(|d| d.id == id)
     }
 }
 
@@ -149,14 +147,14 @@ impl<D: Data> Crud<D> for UserContainer<D> {
     fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error> {
         self.find(id)
             .ok_or(Error::NotFound(id))
-            .map(|i| &self.data[i])
+            .map(|i| unsafe { self.data.get_unchecked(i) })
             .map(std::borrow::Cow::Borrowed)
     }
 
     fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error> {
         self.find(id).ok_or(Error::NotFound(id)).map(|i| {
             self.last_modified = std::time::SystemTime::now();
-            let old = &mut self.data[i];
+            let old = unsafe { self.data.get_unchecked_mut(i) };
             let mut with_id = WithId::new(old.id, data);
             std::mem::swap(old, &mut with_id);
             with_id
@@ -188,7 +186,7 @@ mod test {
 
         #[test]
         fn direct_slice() {
-            let store = InMemory::new(&["0", "1", "2"]);
+            let store = InMemory::new(["0", "1", "2"]);
             assert_eq!(store.skull.data.keys().len(), 3);
         }
 
@@ -207,7 +205,7 @@ mod test {
         #[test]
         fn ref_vec_str() {
             let v = vec!["0", "1", "2"];
-            let store = InMemory::new(&v);
+            let store = InMemory::new(v);
             assert_eq!(store.skull.data.keys().len(), 3);
         }
 
@@ -238,7 +236,7 @@ mod test {
 
     #[test]
     fn fetches_user_container() {
-        let mut store = InMemory::new(&[USER]);
+        let mut store = InMemory::new([USER]);
         let skull = new_skull("skull", 0.4);
         let id = Skull::write(&store, USER).unwrap().create(skull).unwrap();
 
@@ -260,7 +258,7 @@ mod test {
 
     #[test]
     fn reject_unknown_user() {
-        let store = InMemory::new(&[USER]);
+        let store = InMemory::new([USER]);
         assert_eq!(
             Skull::read(&store, "unknown")
                 .map(|_| ())
@@ -272,7 +270,7 @@ mod test {
 
     #[test]
     fn last_modified() {
-        let mut store = InMemory::new(&[USER]);
+        let mut store = InMemory::new([USER]);
 
         let last_modified = Skull::read(&store, USER).unwrap().last_modified().unwrap();
 
@@ -385,7 +383,7 @@ mod test {
 
     #[test]
     fn list() {
-        let store = InMemory::new(&[USER]);
+        let store = InMemory::new([USER]);
 
         Skull::write(&store, USER)
             .unwrap()

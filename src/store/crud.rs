@@ -1,5 +1,9 @@
 use super::{Data, Error, Id, Occurrence, Quick, Skull, WithId};
 
+// TODO: This shouldn't be a warning in the first place
+#[allow(dead_code)]
+type Filter<D> = Box<dyn Fn(&WithId<D>) -> bool>;
+
 pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
     fn skull(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Skull>>, Error>;
     fn quick(&self, user: &str) -> Result<&std::sync::RwLock<dyn Crud<Quick>>, Error>;
@@ -8,13 +12,11 @@ pub trait Store: Send + Sync + std::panic::RefUnwindSafe + 'static {
 
 // TODO: When using a RDB, will this interface still make sense?
 // TODO: Is it possible to avoid the Vec's?
-// TODO: OFfer a filter per day for Occurrence
+// TODO: Offer a filter per day for Occurrence
 pub trait Crud<D: Data> {
     fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
-    fn filter_list(
-        &self,
-        filter: Box<dyn Fn(&WithId<D>) -> bool>,
-    ) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
+    fn filter_list(&self, filter: Filter<D>)
+        -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error>;
     fn create(&mut self, data: D) -> Result<Id, Error>;
     fn read(&self, id: Id) -> Result<std::borrow::Cow<'_, WithId<D>>, Error>;
     fn update(&mut self, id: Id, data: D) -> Result<WithId<D>, Error>;
