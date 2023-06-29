@@ -113,10 +113,11 @@ impl<D: Data> UserContainer<D> {
 
 impl<D: Data> Crud<D> for UserContainer<D> {
     fn list(&self, limit: Option<usize>) -> Result<Vec<std::borrow::Cow<'_, WithId<D>>>, Error> {
+        let len = self.data.len();
         Ok(self
             .data
             .iter()
-            .skip(self.data.len() - limit.unwrap_or(self.data.len()))
+            .skip(len - limit.map_or(len, |l| l.min(len)))
             .map(std::borrow::Cow::Borrowed)
             .collect())
     }
@@ -401,6 +402,14 @@ mod test {
 
         {
             let skulls = Skull::read(&store, USER).unwrap().list(None).unwrap().len();
+            assert_eq!(skulls, 3);
+        }
+        {
+            let skulls = Skull::read(&store, USER)
+                .unwrap()
+                .list(Some(5))
+                .unwrap()
+                .len();
             assert_eq!(skulls, 3);
         }
         {

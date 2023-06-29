@@ -262,7 +262,7 @@ impl<D: FileData> Crud<D> for UserFile<D> {
             .collect::<Vec<_>>();
         if let Some(limit) = limit {
             let len = entries.len();
-            Ok(entries.into_iter().skip(len - limit).collect())
+            Ok(entries.into_iter().skip(len - limit.min(len)).collect())
         } else {
             Ok(entries)
         }
@@ -720,6 +720,13 @@ mod test {
     fn list() {
         let store = TestStore::new().with_data();
         let skulls = Skull::read(&store, USER).unwrap().list(None).unwrap().len();
+        assert_eq!(skulls, 3);
+
+        let skulls = Skull::read(&store, USER)
+            .unwrap()
+            .list(Some(5))
+            .unwrap()
+            .len();
         assert_eq!(skulls, 3);
 
         let skulls = Skull::read(&store, USER)
