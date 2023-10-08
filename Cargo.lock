@@ -420,7 +420,7 @@ checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
 
 [[package]]
 name = "derive"
-version = "0.2.0"
+version = "0.7.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1673,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "skull"
-version = "0.2.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2090,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "test_utils"
-version = "0.2.0"
+version = "0.7.0"
 dependencies = [
  "hyper",
  "rand",
