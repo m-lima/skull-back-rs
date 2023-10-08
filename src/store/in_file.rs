@@ -9,21 +9,21 @@ mod bench;
 mod serde;
 
 macro_rules! parse {
-    (string, $input:expr, $field:literal, $data:literal) => {
+    (string, $input: expr, $field: literal, $data: literal) => {
         $input
             .next()
             .ok_or_else(|| parse!(not_found, $field, $data))
             .map(String::from)
     };
 
-    (number, $input:expr, $field:literal, $data:literal) => {
+    (number, $input: expr, $field: literal, $data: literal) => {
         $input
             .next()
             .ok_or_else(|| parse!(not_found, $field, $data))
             .and_then(|v| parse!(number_raw, v, $field, $data))
     };
 
-    (end, $input:expr, $data:literal) => {
+    (end, $input: expr, $data: literal) => {
         if $input.next().is_some() {
             return Err(Error::Serde(String::from(concat!(
                 "Too many fields for ",
@@ -32,7 +32,7 @@ macro_rules! parse {
         }
     };
 
-    (number_raw, $input:expr, $field:literal, $data:literal) => {
+    (number_raw, $input: expr, $field: literal, $data: literal) => {
         $input.parse().map_err(|e| {
             Error::Serde(format!(
                 concat!("Could not parse `", $field, "` for ", $data, ": {}"),
@@ -41,7 +41,7 @@ macro_rules! parse {
         })
     };
 
-    (not_found, $field:literal, $data:literal) => {
+    (not_found, $field: literal, $data: literal) => {
         Error::Serde(String::from(concat!(
             "Could not find `",
             $field,
@@ -52,7 +52,7 @@ macro_rules! parse {
 }
 
 macro_rules! write_number {
-    ($serializer:ident, $writer:expr, $value:expr, $field:literal, $data:literal) => {{
+    ($serializer: ident, $writer: expr, $value: expr, $field: literal, $data: literal) => {{
         $writer
             .write_all($serializer::Buffer::new().format($value).as_bytes())
             .map_err(|e| {

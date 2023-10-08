@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! impl_crud_tests {
-    ($uut:ident, $instance:expr) => {
+    ($uut: ident, $instance: expr) => {
         mod crud {
             use super::*;
 
@@ -49,7 +49,7 @@ macro_rules! impl_crud_tests {
         }
     };
 
-    ($name:ident, $data:ty, $uut:ident, $instance:expr) => {
+    ($name: ident, $data: ty, $uut: ident, $instance: expr) => {
         mod $name {
             use super::*;
 
