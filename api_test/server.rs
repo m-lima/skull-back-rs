@@ -1,32 +1,44 @@
 use test_utils::check_async as check;
 
-use crate::helper;
+use crate::{client, helper};
 
 pub struct Server {
-    uri: String,
+    uri: std::sync::Arc<String>,
+    mode: Mode,
     _process: pwner::process::Simplex,
 }
 
 impl Server {
-    pub fn uri(&self, path_and_query: impl AsRef<str>) -> hyper::Uri {
-        hyper::Uri::builder()
-            .scheme("http")
-            .authority(self.uri.as_str())
-            .path_and_query(path_and_query.as_ref())
-            .build()
-            .unwrap()
+    pub fn uri(&self) -> std::sync::Arc<String> {
+        self.uri.clone()
+    }
+
+    pub fn client(&self) -> client::Client {
+        self.into()
+    }
+
+    pub fn mode(&self) -> &Mode {
+        &self.mode
     }
 }
 
-pub async fn start() -> Server {
+pub async fn start(mode: Mode) -> Server {
     let port = random_port();
 
+    let (process, mut output) = server(port, &mode).decompose();
     let server = Server {
-        uri: format!("localhost:{port}"),
-        _process: server(port).decompose().0,
+        uri: std::sync::Arc::new(format!("localhost:{port}")),
+        mode,
+        _process: process,
     };
 
-    wait_for_server(port).await;
+    if !wait_for_server(port).await {
+        let mut output_string = String::new();
+        std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
+        eprintln!("Server output:");
+        eprintln!("{output_string}");
+        panic!("Timeout waiting for the server to start");
+    }
 
     Populator::new(&server).populate().await;
 
@@ -57,10 +69,13 @@ fn port_unused(port: u16) -> bool {
     .is_some()
 }
 
-fn server(port: u16) -> pwner::process::Duplex {
+fn server(port: u16, mode: &Mode) -> pwner::process::Duplex {
     use pwner::Spawner;
 
-    std::process::Command::new(env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME"))))
+    let mut process =
+        std::process::Command::new(env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME"))));
+
+    process
         .arg("-t")
         .arg("1")
         .arg("-u")
@@ -68,29 +83,58 @@ fn server(port: u16) -> pwner::process::Duplex {
         .arg("-u")
         .arg(helper::EMPTY_USER)
         .arg("-p")
-        .arg(format!("{port}"))
+        .arg(format!("{port}"));
+
+    match mode {
+        Mode::Memory => {}
+        Mode::File(path) => {
+            process.arg("-s").arg(path.as_path());
+        }
+        Mode::Db(path) => {
+            process.arg("-d").arg(path.as_path());
+        }
+    };
+
+    process
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .spawn_owned()
         .unwrap()
 }
 
-async fn wait_for_server(port: u16) {
+#[must_use]
+async fn wait_for_server(port: u16) -> bool {
     let now = std::time::Instant::now();
     while port_unused(port) {
-        assert!(
-            now.elapsed() < std::time::Duration::from_secs(10),
-            "Timeout waiting for the server to start"
-        );
+        if now.elapsed() > std::time::Duration::from_secs(10) {
+            return false;
+        }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    true
+}
+
+pub enum Mode {
+    Memory,
+    File(test_utils::TestPath),
+    Db(test_utils::TestPath),
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Memory => f.write_str("in_memory"),
+            Self::File(_) => f.write_str("in_file"),
+            Self::Db(_) => f.write_str("in_db"),
+        }
     }
 }
 
-struct Populator<'a> {
-    client: crate::client::Client<'a>,
+struct Populator {
+    client: crate::client::Client,
 }
 
-impl Populator<'_> {
-    fn new<'a>(server: &'a Server) -> Populator<'a> {
+impl Populator {
+    fn new(server: &Server) -> Populator {
         Populator {
             client: server.into(),
         }

@@ -1,20 +1,21 @@
 use crate::{helper, server};
 
-pub struct Client<'a> {
+#[derive(Debug, Clone)]
+pub struct Client {
     client: hyper::Client<hyper::client::HttpConnector>,
-    server: &'a server::Server,
+    uri: std::sync::Arc<String>,
 }
 
-impl<'a> From<&'a server::Server> for Client<'a> {
-    fn from(server: &'a server::Server) -> Self {
+impl From<&server::Server> for Client {
+    fn from(server: &server::Server) -> Self {
         Self {
             client: hyper::Client::new(),
-            server,
+            uri: server.uri(),
         }
     }
 }
 
-impl Client<'_> {
+impl Client {
     pub async fn get(&self, path_and_query: impl AsRef<str>) -> hyper::Response<hyper::Body> {
         let request = self.get_request(path_and_query);
         self.client.request(request).await.unwrap()
@@ -96,10 +97,17 @@ impl Client<'_> {
     }
 }
 
-impl Client<'_> {
+impl Client {
     fn request(&self, path_and_query: impl AsRef<str>) -> hyper::http::request::Builder {
+        let uri = hyper::Uri::builder()
+            .scheme("http")
+            .authority(self.uri.as_str())
+            .path_and_query(path_and_query.as_ref())
+            .build()
+            .unwrap();
+
         hyper::Request::builder()
-            .uri(self.server.uri(path_and_query))
+            .uri(uri)
             .header(helper::USER_HEADER, test_utils::USER)
     }
 
@@ -115,9 +123,6 @@ impl Client<'_> {
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::Body>,
     ) -> hyper::Request<hyper::Body> {
-        if path_and_query.as_ref().starts_with("/skull") {
-            eprintln!("Warning: attempting to post `/skull`");
-        }
         self.request(path_and_query)
             .method(hyper::Method::POST)
             .body(body.into())
@@ -129,9 +134,6 @@ impl Client<'_> {
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::Body>,
     ) -> hyper::Request<hyper::Body> {
-        if path_and_query.as_ref().starts_with("/skull") {
-            eprintln!("Warning: attempting to put `/skull`");
-        }
         self.request(path_and_query)
             .method(hyper::Method::PUT)
             .header(hyper::header::IF_UNMODIFIED_SINCE, millis_in_future())
@@ -140,9 +142,6 @@ impl Client<'_> {
     }
 
     fn delete_request(&self, path_and_query: impl AsRef<str>) -> hyper::Request<hyper::Body> {
-        if path_and_query.as_ref().starts_with("/skull") {
-            eprintln!("Warning: attempting to delete `/skull`");
-        }
         self.request(path_and_query)
             .method(hyper::Method::DELETE)
             .header(hyper::header::IF_UNMODIFIED_SINCE, millis_in_future())

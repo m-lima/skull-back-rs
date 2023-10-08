@@ -1,12 +1,69 @@
 use hyper::StatusCode;
 use test_utils::check_async as check;
 
-use crate::client::Client;
-use crate::helper::{
-    build_skull_payload, eq, extract_last_modified, LastModified, EMPTY_USER, USER_HEADER,
+use crate::{
+    client::Client,
+    helper::{
+        build_skull_payload, eq, extract_last_modified, LastModified, EMPTY_USER, USER_HEADER,
+    },
+    server,
 };
 
-pub async fn missing_user(client: Client<'_>) {
+pub fn test<'a>(
+    runtime: &'a tokio::runtime::Runtime,
+    server: &'a server::Server,
+) -> Vec<(String, Result<(), tokio::task::JoinError>)> {
+    macro_rules! test {
+        ($test: path) => {
+            (
+                format!("{}::{}", server.mode(), stringify!($test)),
+                runtime.spawn($test(server.client())).await,
+            )
+        };
+    }
+
+    runtime.block_on(async {
+        vec![
+            test!(missing_user),
+            test!(unknown_user),
+            test!(method_not_allowed),
+            test!(not_found),
+            test!(head),
+            test!(list),
+            test!(list_empty),
+            test!(list_limited),
+            test!(list_bad_request),
+            test!(create),
+            test!(create_constraint),
+            test!(create_conflict),
+            test!(create_bad_payload),
+            test!(create_length_required),
+            test!(create_too_large),
+            test!(read),
+            test!(read_not_found),
+            test!(update),
+            test!(update_not_found),
+            test!(update_constraint),
+            test!(update_conflict),
+            test!(update_out_of_sync),
+            test!(update_unmodified_missing),
+            test!(update_bad_payload),
+            test!(update_length_required),
+            test!(update_too_large),
+            test!(delete),
+            test!(delete_not_found),
+            test!(delete_rejected),
+            test!(delete_out_of_sync),
+            test!(delete_unmodified_missing),
+            test!(json::skull),
+            test!(json::quick),
+            test!(json::occurrence),
+            test!(json::list),
+        ]
+    })
+}
+
+async fn missing_user(client: Client) {
     let response = client
         .get_with("/skull", |r| {
             r.headers_mut().remove(USER_HEADER);
@@ -16,7 +73,7 @@ pub async fn missing_user(client: Client<'_>) {
     check!(eq(response, StatusCode::FORBIDDEN, LastModified::None, ""));
 }
 
-pub async fn unknown_user(client: Client<'_>) {
+async fn unknown_user(client: Client) {
     let response = client
         .get_with("/skull", |r| {
             r.headers_mut()
@@ -27,7 +84,7 @@ pub async fn unknown_user(client: Client<'_>) {
     check!(eq(response, StatusCode::FORBIDDEN, LastModified::None, ""));
 }
 
-pub async fn method_not_allowed(client: Client<'_>) {
+async fn method_not_allowed(client: Client) {
     let response = client
         .get_with("/skull", |r| *r.method_mut() = hyper::Method::PATCH)
         .await;
@@ -40,19 +97,19 @@ pub async fn method_not_allowed(client: Client<'_>) {
     ));
 }
 
-pub async fn not_found(client: Client<'_>) {
+async fn not_found(client: Client) {
     let response = client.get("/bloink").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-pub async fn head(client: Client<'_>) {
+async fn head(client: Client) {
     let response = client.head("/skull").await;
 
     check!(eq(response, StatusCode::OK, LastModified::Gt(0), ""));
 }
 
-pub async fn list(client: Client<'_>) {
+async fn list(client: Client) {
     let last_modified = client.last_modified("/skull").await;
     let response = client.get("/skull").await;
 
@@ -64,7 +121,7 @@ pub async fn list(client: Client<'_>) {
     ));
 }
 
-pub async fn list_empty(client: Client<'_>) {
+async fn list_empty(client: Client) {
     let response = client
         .head_with("/skull", |r| {
             r.headers_mut()
@@ -87,7 +144,7 @@ pub async fn list_empty(client: Client<'_>) {
     ));
 }
 
-pub async fn list_limited(client: Client<'_>) {
+async fn list_limited(client: Client) {
     let last_modified = client.last_modified("/skull").await;
 
     for i in 0..5 {
@@ -109,7 +166,7 @@ pub async fn list_limited(client: Client<'_>) {
     }
 }
 
-pub async fn list_bad_request(client: Client<'_>) {
+async fn list_bad_request(client: Client) {
     let response = client.get("/skull?limit=").await;
 
     check!(eq(
@@ -120,7 +177,7 @@ pub async fn list_bad_request(client: Client<'_>) {
     ));
 }
 
-pub async fn create(client: Client<'_>) {
+async fn create(client: Client) {
     let last_modified = client.last_modified("/quick").await;
 
     let response = client
@@ -141,7 +198,7 @@ pub async fn create(client: Client<'_>) {
     ));
 }
 
-pub async fn create_constraint(client: Client<'_>) {
+async fn create_constraint(client: Client) {
     let response = client
         .post(
             "/quick",
@@ -160,7 +217,7 @@ pub async fn create_constraint(client: Client<'_>) {
     ));
 }
 
-pub async fn create_conflict(client: Client<'_>) {
+async fn create_conflict(client: Client) {
     let response = client
         .post(
             "/quick",
@@ -179,8 +236,8 @@ pub async fn create_conflict(client: Client<'_>) {
     ));
 }
 
-pub async fn create_bad_payload(client: Client<'_>) {
-    let response = client.post("/skull", r#"{"bloink": 27}"#).await;
+async fn create_bad_payload(client: Client) {
+    let response = client.post("/quick", r#"{"bloink": 27}"#).await;
 
     check!(eq(
         response,
@@ -190,8 +247,8 @@ pub async fn create_bad_payload(client: Client<'_>) {
     ));
 }
 
-pub async fn create_length_required(client: Client<'_>) {
-    let response = client.post("/skull", hyper::Body::empty()).await;
+async fn create_length_required(client: Client) {
+    let response = client.post("/quick", hyper::Body::empty()).await;
 
     check!(eq(
         response,
@@ -200,7 +257,7 @@ pub async fn create_length_required(client: Client<'_>) {
         ""
     ));
 }
-pub async fn create_too_large(client: Client<'_>) {
+async fn create_too_large(client: Client) {
     let response = client.post("/occurrence", [0_u8; 1025].as_slice()).await;
 
     check!(eq(
@@ -211,7 +268,7 @@ pub async fn create_too_large(client: Client<'_>) {
     ));
 }
 
-pub async fn read(client: Client<'_>) {
+async fn read(client: Client) {
     let last_modified = client.last_modified("/skull").await;
     let response = client.get("/skull/2").await;
 
@@ -223,13 +280,13 @@ pub async fn read(client: Client<'_>) {
     ));
 }
 
-pub async fn read_not_found(client: Client<'_>) {
+async fn read_not_found(client: Client) {
     let response = client.get("/skull/27").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-pub async fn update(client: Client<'_>) {
+async fn update(client: Client) {
     let last_modified = client.last_modified("/quick").await;
     let response = client
         .put(
@@ -249,7 +306,7 @@ pub async fn update(client: Client<'_>) {
     ));
 }
 
-pub async fn update_not_found(client: Client<'_>) {
+async fn update_not_found(client: Client) {
     let response = client
         .put(
             "/quick/27",
@@ -263,7 +320,7 @@ pub async fn update_not_found(client: Client<'_>) {
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-pub async fn update_constraint(client: Client<'_>) {
+async fn update_constraint(client: Client) {
     let response = client
         .put(
             "/quick/1",
@@ -282,7 +339,7 @@ pub async fn update_constraint(client: Client<'_>) {
     ));
 }
 
-pub async fn update_conflict(client: Client<'_>) {
+async fn update_conflict(client: Client) {
     let response = client
         .put(
             "/quick/1",
@@ -301,7 +358,7 @@ pub async fn update_conflict(client: Client<'_>) {
     ));
 }
 
-pub async fn update_out_of_sync(client: Client<'_>) {
+async fn update_out_of_sync(client: Client) {
     let response = client
         .put_with(
             "/quick/3",
@@ -324,7 +381,7 @@ pub async fn update_out_of_sync(client: Client<'_>) {
     ));
 }
 
-pub async fn update_unmodified_missing(client: Client<'_>) {
+async fn update_unmodified_missing(client: Client) {
     let response = client
         .put_with(
             "/quick/3",
@@ -346,7 +403,7 @@ pub async fn update_unmodified_missing(client: Client<'_>) {
     ));
 }
 
-pub async fn update_bad_payload(client: Client<'_>) {
+async fn update_bad_payload(client: Client) {
     let response = client
         .put(
             "/quick/1",
@@ -364,7 +421,7 @@ pub async fn update_bad_payload(client: Client<'_>) {
     ));
 }
 
-pub async fn update_length_required(client: Client<'_>) {
+async fn update_length_required(client: Client) {
     let response = client.put("/quick/1", hyper::Body::empty()).await;
 
     check!(eq(
@@ -375,7 +432,7 @@ pub async fn update_length_required(client: Client<'_>) {
     ));
 }
 
-pub async fn update_too_large(client: Client<'_>) {
+async fn update_too_large(client: Client) {
     let response = client.put("/quick/1", [0_u8; 1025].as_slice()).await;
 
     check!(eq(
@@ -386,7 +443,7 @@ pub async fn update_too_large(client: Client<'_>) {
     ));
 }
 
-pub async fn delete(client: Client<'_>) {
+async fn delete(client: Client) {
     let last_modified = client.last_modified("/occurrence").await;
     let response = client.delete("/occurrence/3").await;
 
@@ -398,13 +455,13 @@ pub async fn delete(client: Client<'_>) {
     ));
 }
 
-pub async fn delete_not_found(client: Client<'_>) {
+async fn delete_not_found(client: Client) {
     let response = client.delete("/occurrence/27").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
 }
 
-pub async fn delete_rejected(client: Client<'_>) {
+async fn delete_rejected(client: Client) {
     let response = client.delete("/skull/1").await;
 
     check!(eq(
@@ -415,7 +472,7 @@ pub async fn delete_rejected(client: Client<'_>) {
     ));
 }
 
-pub async fn delete_out_of_sync(client: Client<'_>) {
+async fn delete_out_of_sync(client: Client) {
     let response = client
         .delete_with("/occurrence/3", |r| {
             r.headers_mut()
@@ -431,7 +488,7 @@ pub async fn delete_out_of_sync(client: Client<'_>) {
     ));
 }
 
-pub async fn delete_unmodified_missing(client: Client<'_>) {
+async fn delete_unmodified_missing(client: Client) {
     let response = client
         .delete_with("/occurrence/3", |r| {
             r.headers_mut().remove(hyper::header::IF_UNMODIFIED_SINCE);
@@ -451,7 +508,7 @@ mod json {
 
     use crate::{client::Client, helper::extract_body};
 
-    async fn skull(client: Client<'_>) {
+    pub async fn skull(client: Client) {
         let response = client.get("/skull/1").await;
         let body = extract_body(response).await;
         let data =
@@ -469,7 +526,7 @@ mod json {
         );
     }
 
-    async fn quick(client: Client<'_>) {
+    pub async fn quick(client: Client) {
         let response = client.get("/quick/1").await;
         let body = extract_body(response).await;
         let data =
@@ -485,7 +542,7 @@ mod json {
         );
     }
 
-    async fn occurrence(client: Client<'_>) {
+    pub async fn occurrence(client: Client) {
         let response = client.get("/occurrence/1").await;
         let body = extract_body(response).await;
         let data =
@@ -502,7 +559,7 @@ mod json {
         assert_eq!(data["millis"], Value::Number(Number::from(1)));
     }
 
-    async fn list(client: Client<'_>) {
+    pub async fn list(client: Client) {
         let response = client.get("/skull").await;
         let body = extract_body(response).await;
         let data =

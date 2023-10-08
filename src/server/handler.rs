@@ -13,7 +13,7 @@ macro_rules! impl_handler {
 
         impl<S, M> Clone for $handler<S, M> {
             fn clone(&self) -> Self {
-                Self(self.0, self.1)
+                *self
             }
         }
         impl<S, M> Copy for $handler<S, M> {}
