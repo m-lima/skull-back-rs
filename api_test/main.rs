@@ -9,44 +9,23 @@ fn main() -> std::process::ExitCode {
         .build()
         .expect("Failed building the Runtime");
 
-    let errors = run(&runtime, server::Mode::Memory);
+    let errors = run(&runtime);
     println!();
-    if !errors.is_empty() {
+
+    if errors.is_empty() {
+        std::process::ExitCode::SUCCESS
+    } else {
         println!("failures:");
         for error in errors {
             println!("    {error}");
         }
         println!();
-        return std::process::ExitCode::FAILURE;
+        std::process::ExitCode::FAILURE
     }
-
-    let errors = run(&runtime, server::Mode::File(test_utils::TestPath::new()));
-    println!();
-    if !errors.is_empty() {
-        println!("failures:");
-        for error in errors {
-            println!("    {error}");
-        }
-        println!();
-        return std::process::ExitCode::FAILURE;
-    }
-
-    let errors = run(&runtime, server::Mode::Db(test_utils::TestPath::new()));
-    println!();
-    if !errors.is_empty() {
-        println!("failures:");
-        for error in errors {
-            println!("    {error}");
-        }
-        println!();
-        return std::process::ExitCode::FAILURE;
-    }
-
-    std::process::ExitCode::SUCCESS
 }
 
-fn run(runtime: &tokio::runtime::Runtime, mode: server::Mode) -> Vec<String> {
-    let server = runtime.block_on(server::start(mode));
+fn run(runtime: &tokio::runtime::Runtime) -> Vec<&'static str> {
+    let server = runtime.block_on(server::start());
 
     let tests = tests::test(runtime, &server);
     if tests.is_empty() {

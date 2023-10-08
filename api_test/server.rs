@@ -4,7 +4,6 @@ use crate::{client, helper};
 
 pub struct Server {
     uri: std::sync::Arc<String>,
-    mode: Mode,
     _process: pwner::process::Simplex,
 }
 
@@ -16,19 +15,14 @@ impl Server {
     pub fn client(&self) -> client::Client {
         self.into()
     }
-
-    pub fn mode(&self) -> &Mode {
-        &self.mode
-    }
 }
 
-pub async fn start(mode: Mode) -> Server {
+pub async fn start() -> Server {
     let port = random_port();
 
-    let (process, mut output) = server(port, &mode).decompose();
+    let (process, mut output) = server(port).decompose();
     let server = Server {
         uri: std::sync::Arc::new(format!("localhost:{port}")),
-        mode,
         _process: process,
     };
 
@@ -69,13 +63,10 @@ fn port_unused(port: u16) -> bool {
     .is_some()
 }
 
-fn server(port: u16, mode: &Mode) -> pwner::process::Duplex {
+fn server(port: u16) -> pwner::process::Duplex {
     use pwner::Spawner;
 
-    let mut process =
-        std::process::Command::new(env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME"))));
-
-    process
+    std::process::Command::new(env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME"))))
         .arg("-t")
         .arg("1")
         .arg("-u")
@@ -83,19 +74,7 @@ fn server(port: u16, mode: &Mode) -> pwner::process::Duplex {
         .arg("-u")
         .arg(helper::EMPTY_USER)
         .arg("-p")
-        .arg(format!("{port}"));
-
-    match mode {
-        Mode::Memory => {}
-        Mode::File(path) => {
-            process.arg("-s").arg(path.as_path());
-        }
-        Mode::Db(path) => {
-            process.arg("-d").arg(path.as_path());
-        }
-    };
-
-    process
+        .arg(format!("{port}"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .spawn_owned()
         .unwrap()
@@ -111,22 +90,6 @@ async fn wait_for_server(port: u16) -> bool {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     true
-}
-
-pub enum Mode {
-    Memory,
-    File(test_utils::TestPath),
-    Db(test_utils::TestPath),
-}
-
-impl std::fmt::Display for Mode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Memory => f.write_str("in_memory"),
-            Self::File(_) => f.write_str("in_file"),
-            Self::Db(_) => f.write_str("in_db"),
-        }
-    }
 }
 
 struct Populator {
