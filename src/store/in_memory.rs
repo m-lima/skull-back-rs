@@ -433,7 +433,7 @@ mod test {
 
         #[test]
         fn iter_str() {
-            let v = vec!["0", "1", "2"];
+            let v = ["0", "1", "2"];
             let store = InMemory::new(v.iter());
             assert_eq!(store.users.keys().len(), 3);
         }

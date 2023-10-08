@@ -760,7 +760,7 @@ pub async fn delete_reject(store: &impl Store) {
 pub async fn multiple_spawned_handles(store: impl Store) {
     let (skull_task, quick_task, occurrence_task) = helper::make_futures(store).await;
 
-    for t in vec![
+    for t in [
         tokio::spawn(skull_task),
         tokio::spawn(quick_task),
         tokio::spawn(occurrence_task),
