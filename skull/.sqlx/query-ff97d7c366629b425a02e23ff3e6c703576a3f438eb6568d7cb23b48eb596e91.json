@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM skulls\n            WHERE id = $1\n            RETURNING\n                \"id\" as \"id: _\",\n                \"name\",\n                \"color\",\n                \"icon\",\n                \"unit_price\" as \"unit_price: _\",\n                \"limit\" as \"limit: _\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: _",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "color",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "icon",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "unit_price: _",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "limit: _",
+        "ordinal": 5,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "ff97d7c366629b425a02e23ff3e6c703576a3f438eb6568d7cb23b48eb596e91"
+}

@@ -22,7 +22,7 @@ pub trait WithId<D: Data>:
     fn id(&self) -> Id;
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, skull_derive::Data)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, derive::Data)]
 pub struct Skull {
     pub(super) name: String,
     pub(super) color: String,
@@ -33,13 +33,13 @@ pub struct Skull {
     pub(super) limit: Option<f32>,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, skull_derive::Data)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, derive::Data)]
 pub struct Quick {
     pub(super) skull: Id,
     pub(super) amount: f32,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, skull_derive::Data)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, derive::Data)]
 pub struct Occurrence {
     pub(super) skull: Id,
     pub(super) amount: f32,
