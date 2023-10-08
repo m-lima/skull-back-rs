@@ -1,4 +1,4 @@
-use crate::test_util::TestPath;
+use test_utils::TestPath;
 
 use super::{Crud, Model, Occurrence, Skull, Store};
 
