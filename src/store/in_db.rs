@@ -213,43 +213,40 @@ pub trait SqlData: Data + 'static {
 }
 
 macro_rules! query {
-    (list, $limit:expr, $pool:tt, $data:path, $query:literal) => {{
+    (list, $limit: expr, $pool: tt, $data: path, $query: literal) => {{
         type DataId = <$data as Data>::Id;
 
-        let mut conn = $pool.acquire().await?;
         let limit = $limit.map(i64::from).unwrap_or(-1);
         let data = sqlx::query_as!(DataId, $query, limit)
-            .fetch_all(&mut conn)
+            .fetch_all(&$pool)
             .await?;
-        Ok((data, query!(last_modified, conn, $data)))
+        Ok((data, query!(last_modified, &$pool, $data)))
     }};
 
-    (create, $pool:tt, $data:path, $query:literal, $($fields:tt)*) => {{
-        let mut conn = $pool.acquire().await?;
+    (create, $pool: tt, $data: path, $query: literal, $($fields: tt)*) => {{
         let data = sqlx::query_as!(
             transient::Id,
             $query,
             $($fields)*
         )
-        .fetch_one(&mut conn)
+        .fetch_one(&$pool)
         .await
         .map(|id| id.id)?;
-        Ok((data, query!(last_modified, conn, $data)))
+        Ok((data, query!(last_modified, &$pool, $data)))
     }};
 
-    (read, $id:tt, $pool:tt, $data:path, $query:literal) => {{
+    (read, $id: tt, $pool: tt, $data: path, $query: literal) => {{
         type DataId = <$data as Data>::Id;
 
-        let mut conn = $pool.acquire().await?;
         let data = sqlx::query_as!(DataId, $query, $id)
-            .fetch_optional(&mut conn)
+            .fetch_optional(&$pool)
             .await
             .map_err(Into::into)
             .and_then(|d| d.ok_or(Error::NotFound($id)))?;
-        Ok((data, query!(last_modified, conn, $data)))
+        Ok((data, query!(last_modified, &$pool, $data)))
     }};
 
-    (update, $self:tt, $id:tt, $pool:tt, $data:path, $previous:literal, $update:literal, $($fields:tt)*) => {{
+    (update, $self: tt, $id: tt, $pool: tt, $data: path, $previous: literal, $update: literal, $($fields: tt)*) => {{
         type DataId = <$data as Data>::Id;
 
         let mut tx = $pool.begin().await?;
@@ -258,37 +255,36 @@ macro_rules! query {
             $previous,
             $id
         )
-        .fetch_optional(&mut tx)
+        .fetch_optional(tx.as_mut())
         .await
         .map_err(Into::into)
         .and_then(|d| d.ok_or(Error::NotFound($id)))?;
 
         if data != $self {
             sqlx::query!($update, $id, $($fields)*)
-            .execute(&mut tx)
+            .execute(tx.as_mut())
             .await?;
         }
 
-        let last_modified = query!(last_modified, tx, $data);
+        let last_modified = query!(last_modified, tx.as_mut(), $data);
         tx.commit().await?;
 
         Ok((data, last_modified))
     }};
 
-    (delete, $id:tt, $pool:tt, $data:path, $query:literal) => {{
+    (delete, $id: tt, $pool: tt, $data: path, $query: literal) => {{
         type DataId = <$data as Data>::Id;
 
-        let mut conn = $pool.acquire().await?;
         let data = sqlx::query_as!(DataId, $query, $id)
-            .fetch_optional(&mut conn)
+            .fetch_optional(&$pool)
             .await
             .map_err(Into::into)
             .and_then(|d| d.ok_or(Error::NotFound($id)))?;
-        Ok((data, query!(last_modified, conn, $data)))
+        Ok((data, query!(last_modified, &$pool, $data)))
     }};
 
 
-    (last_modified, $conn:expr, $data:path) => {{
+    (last_modified, $conn: expr, $data: path) => {{
         const TABLE_ID: u32 = <$data>::TABLE_ID;
 
         sqlx::query_as!(
@@ -296,7 +292,7 @@ macro_rules! query {
             r#"SELECT "millis" FROM last_modified WHERE "table" = $1"#,
             TABLE_ID
         )
-        .fetch_one(&mut $conn)
+        .fetch_one($conn)
         .await
         .map_err(Into::into)
         .and_then(transient::Time::unpack)?
