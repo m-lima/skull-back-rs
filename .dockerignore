@@ -1,5 +1,4 @@
 /target
-/crates/*/target
-/tests
+/skull/db.sqlite
 Dockerfile
 build.sh

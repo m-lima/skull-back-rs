@@ -1,9 +1,0 @@
-[package]
-name = "test_utils"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-# Just want to use whatever the parent crate is using
-hyper = "*"
-rand = "*"

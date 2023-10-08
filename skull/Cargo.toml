@@ -1,0 +1,50 @@
+[package]
+name = "skull"
+build = "build.rs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+derive = { path = "../derive" }
+sqlx = { workspace = true, features = ["sqlite", "runtime-tokio-native-tls"] }
+tokio = { workspace = true }
+
+# Error
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# HTTP
+gotham = { workspace = true }
+gotham_derive = { workspace = true }
+hyper = { workspace = true }
+# axum = "0.6.12"
+# tower-http = { version = "0.4.0", features = ["cors", "fs"] }
+
+# Parsing
+itoa = { workspace = true }
+ryu = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Logging
+colored = { workspace = true }
+log = { workspace = true }
+simplelog = { workspace = true }
+time = { workspace = true }
+
+[dev-dependencies]
+csv = { workspace = true }
+pwner = { workspace = true, features = ["tokio"] }
+rand = { workspace = true }
+test_utils = { path = "../test_utils" }
+tokio = { workspace = true, features = ["rt", "macros", "parking_lot"] }
+
+[build-dependencies]
+rustc_version = { workspace = true }
+
+[[test]]
+name = "api_test"
+path = "./api_test/main.rs"
+harness = false

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE occurrences\n            SET\n                \"skull\" = $2,\n                \"amount\" = $3,\n                \"millis\" = $4\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "11a81811f9a3ad574e8f605b4d0c2561220be47f87a786edebf31511b99d1416"
+}

@@ -419,6 +419,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
 
 [[package]]
+name = "derive"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1664,13 +1673,14 @@ dependencies = [
 
 [[package]]
 name = "skull"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "clap",
  "colored",
  "csv",
+ "derive",
  "gotham",
  "gotham_derive",
  "hyper",
@@ -1683,21 +1693,11 @@ dependencies = [
  "serde",
  "serde_json",
  "simplelog",
- "skull_derive",
  "sqlx",
  "test_utils",
  "thiserror",
  "time 0.3.29",
  "tokio",
-]
-
-[[package]]
-name = "skull_derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.38",
 ]
 
 [[package]]
@@ -2090,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "test_utils"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hyper",
  "rand",

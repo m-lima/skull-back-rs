@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT \"millis\" FROM last_modified WHERE \"table\" = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "millis",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0c9d99f63d35fc97e61a617734a06cf1d0d9d657aad3fc6eb71bac5b8c265557"
+}

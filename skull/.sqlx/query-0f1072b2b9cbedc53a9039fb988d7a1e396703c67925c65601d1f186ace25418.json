@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE skulls\n            SET\n                \"name\" = $2,\n                \"color\" = $3,\n                \"icon\" = $4,\n                \"unit_price\" = $5,\n                \"limit\" = $6\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "0f1072b2b9cbedc53a9039fb988d7a1e396703c67925c65601d1f186ace25418"
+}

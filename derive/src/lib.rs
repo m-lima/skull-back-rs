@@ -17,9 +17,7 @@ fn derive_data_impl(input: syn::DeriveInput) -> proc_macro2::TokenStream {
 
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
 
-    let data = if let syn::Data::Struct(data) = input.data.clone() {
-        data
-    } else {
+    let syn::Data::Struct(data) = input.data.clone() else {
         return compile_error(&input, "Data can only be derived for structs");
     };
     let fields = match data.fields {
@@ -227,7 +225,7 @@ mod tests {
         };
         assert_eq!(
             super::derive_data_impl(syn::parse2::<syn::DeriveInput>(input).unwrap()).to_string(),
-            "compile_error ! { \"Data cannot be used with unit structs\" }"
+            ":: core :: compile_error ! { \"Data cannot be used with unit structs\" }"
         );
 
         let input = quote::quote! {
@@ -235,7 +233,7 @@ mod tests {
         };
         assert_eq!(
             super::derive_data_impl(syn::parse2::<syn::DeriveInput>(input).unwrap()).to_string(),
-            "compile_error ! { \"Data cannot be used with structs with unnamed fields\" }"
+            ":: core :: compile_error ! { \"Data cannot be used with structs with unnamed fields\" }"
         );
 
         let input = quote::quote! {
@@ -243,7 +241,7 @@ mod tests {
         };
         assert_eq!(
             super::derive_data_impl(syn::parse2::<syn::DeriveInput>(input).unwrap()).to_string(),
-            "compile_error ! { \"Data can only be derived for structs\" }"
+            ":: core :: compile_error ! { \"Data can only be derived for structs\" }"
         );
 
         let input = quote::quote! {
@@ -254,7 +252,7 @@ mod tests {
         };
         assert_eq!(
             super::derive_data_impl(syn::parse2::<syn::DeriveInput>(input).unwrap()).to_string(),
-            "compile_error ! { \"Data can only be derived for structs\" }"
+            ":: core :: compile_error ! { \"Data can only be derived for structs\" }"
         );
     }
 }
