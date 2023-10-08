@@ -9,12 +9,21 @@ fn main() -> std::process::ExitCode {
         .build()
         .expect("Failed building the Runtime");
 
-    let errors = run(&runtime);
+    let start = std::time::Instant::now();
+    let (count, errors) = run(&runtime);
+    let elapsed = start.elapsed();
     println!();
 
     if errors.is_empty() {
+        println!("test result: [32mok[m. {count} passed; 0 failed; finished in {elapsed:?}");
         std::process::ExitCode::SUCCESS
     } else {
+        let ok = count - errors.len();
+        println!(
+            "test result: [32mok[m. {ok} passed; {} failed; finished in {elapsed:?}",
+            errors.len()
+        );
+        println!();
         println!("failures:");
         for error in errors {
             println!("    {error}");
@@ -24,11 +33,13 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-fn run(runtime: &tokio::runtime::Runtime) -> Vec<&'static str> {
+fn run(runtime: &tokio::runtime::Runtime) -> (usize, Vec<&'static str>) {
     let server = runtime.block_on(server::start());
 
     let tests = tests::test(runtime, &server);
-    if tests.is_empty() {
+    let count = tests.len();
+
+    let errors = if tests.is_empty() {
         Vec::new()
     } else {
         println!("running {} tests", tests.len());
@@ -44,5 +55,7 @@ fn run(runtime: &tokio::runtime::Runtime) -> Vec<&'static str> {
                 }
             })
             .collect()
-    }
+    };
+
+    (count, errors)
 }
