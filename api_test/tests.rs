@@ -12,11 +12,11 @@ use crate::{
 pub fn test<'a>(
     runtime: &'a tokio::runtime::Runtime,
     server: &'a server::Server,
-) -> Vec<(String, Result<(), tokio::task::JoinError>)> {
+) -> Vec<(&'static str, Result<(), tokio::task::JoinError>)> {
     macro_rules! test {
         ($test: path) => {
             (
-                format!("{}::{}", server.mode(), stringify!($test)),
+                concat!("api::", stringify!($test)),
                 runtime.spawn($test(server.client())).await,
             )
         };
