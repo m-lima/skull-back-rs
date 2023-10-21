@@ -332,3 +332,257 @@ impl Occurrences<'_> {
         .and_then(|r| r.ok_or(Error::NotFound(id.into())))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn skulled_store() -> (Store, types::Skull) {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skull = store
+            .skulls()
+            .create("one", 1, "icon1", 1.0, None)
+            .await
+            .unwrap();
+
+        (store, skull)
+    }
+
+    fn chrono(value: i64) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::from_timestamp(value, 0).unwrap()
+    }
+
+    #[tokio::test]
+    async fn list() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let one = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let two = occurrences.create(skull.id, 2.0, chrono(2)).await.unwrap();
+
+        let occurrences = occurrences.list().await.unwrap();
+        assert_eq!(occurrences, vec![one, two]);
+    }
+
+    #[tokio::test]
+    async fn list_empty() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let occurrences = store.occurrences();
+        let occurrences = occurrences.list().await.unwrap();
+        assert_eq!(occurrences, Vec::new());
+    }
+
+    #[test]
+    #[ignore]
+    fn search() {}
+
+    #[tokio::test]
+    async fn create() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+
+        assert_eq!(types::Id::from(occurrence.id), 1);
+        assert_eq!(occurrence.skull, skull.id);
+        assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
+        assert_eq!(occurrence.millis, chrono(1));
+    }
+
+    #[tokio::test]
+    async fn create_err_no_skull() {
+        let (store, skull) = skulled_store().await;
+        store.skulls().delete(skull.id).await.unwrap();
+
+        let occurrences = store.occurrences();
+
+        let err = occurrences
+            .create(skull.id, 1.0, chrono(1))
+            .await
+            .unwrap_err();
+        assert_eq!(err.to_string(), Error::ForeignKey.to_string());
+    }
+
+    #[tokio::test]
+    async fn create_err_amount_negative() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+
+        let err = occurrences
+            .create(skull.id, -1.0, chrono(1))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn update() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = occurrences
+            .update(occurrence.id, Some(other_id), Some(2.0), Some(chrono(2)))
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(occurrence.id), 1);
+        assert_eq!(occurrence.skull, other_id);
+        assert_eq!(occurrence.amount.to_string(), 2.0.to_string());
+        assert_eq!(occurrence.millis, chrono(2));
+    }
+
+    #[tokio::test]
+    async fn update_same_values() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = occurrences
+            .update(occurrence.id, Some(skull.id), Some(1.0), Some(chrono(1)))
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(occurrence.id), 1);
+        assert_eq!(occurrence.skull, skull.id);
+        assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
+        assert_eq!(occurrence.millis, chrono(1));
+    }
+
+    #[tokio::test]
+    async fn update_parts() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+
+        let occurrence = occurrences
+            .update(occurrence.id, Some(other_id), None, None)
+            .await
+            .unwrap();
+        assert_eq!(types::Id::from(occurrence.id), 1);
+        assert_eq!(occurrence.skull, other_id);
+        assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
+        assert_eq!(occurrence.millis, chrono(1));
+
+        let occurrence = occurrences
+            .update(occurrence.id, None, Some(2.0), Some(chrono(2)))
+            .await
+            .unwrap();
+        assert_eq!(types::Id::from(occurrence.id), 1);
+        assert_eq!(occurrence.skull, other_id);
+        assert_eq!(occurrence.amount.to_string(), 2.0.to_string());
+        assert_eq!(occurrence.millis, chrono(2));
+    }
+
+    #[tokio::test]
+    async fn update_err_no_changes() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let err = occurrences
+            .update(occurrence.id, None, None, None)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.to_string(), Error::NoChanges.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_not_found() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        occurrences.delete(occurrence.id).await.unwrap();
+        let err = occurrences
+            .update(occurrence.id, None, Some(2.0), None)
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            Error::NotFound(occurrence.id.into()).to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn update_err_no_skull() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+        store.skulls().delete(other_id).await.unwrap();
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let err = occurrences
+            .update(occurrence.id, Some(other_id), None, None)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.to_string(), Error::ForeignKey.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_amount_negative() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let err = occurrences
+            .update(occurrence.id, None, Some(-1.0), None)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        occurrences.delete(occurrence.id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_err_not_found() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        occurrences.delete(occurrence.id).await.unwrap();
+
+        let err = occurrences.delete(occurrence.id).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::NotFound(occurrence.id.into()).to_string()
+        );
+    }
+}
