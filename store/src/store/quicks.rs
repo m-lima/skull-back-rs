@@ -29,6 +29,10 @@ impl Quicks<'_> {
     }
 
     pub async fn create(&self, skull: types::SkullId, amount: f32) -> Result<types::Quick> {
+        if amount < 0.0 {
+            return Err(Error::InvalidParameter("amount"));
+        }
+
         sqlx::query_as!(
             types::Quick,
             r#"
@@ -57,6 +61,12 @@ impl Quicks<'_> {
         skull: Option<types::SkullId>,
         amount: Option<f32>,
     ) -> Result<types::Quick> {
+        if let Some(amount) = amount {
+            if amount < 0.0 {
+                return Err(Error::InvalidParameter("amount"));
+            }
+        }
+
         match (skull, amount) {
             (Some(skull), Some(amount)) => {
                 sqlx::query_as!(
@@ -155,57 +165,263 @@ impl Quicks<'_> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn full_check() {
+    async fn skulled_store() -> (Store, types::Skull) {
         let store = Store::in_memory(1).await.unwrap();
-        store.migrate().await.unwrap();
 
-        let skulls = {
-            let skulls = store.skulls();
-            let one = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        let skull = store
+            .skulls()
+            .create("one", 1, "icon1", 1.0, None)
+            .await
+            .unwrap();
 
-            assert_eq!(one.name, "one");
-            assert_eq!(one.color, 1);
-            assert_eq!(one.icon, "icon1");
-            assert_eq!(one.unit_price, 1.0);
-            assert_eq!(one.limit, None);
+        (store, skull)
+    }
 
-            let two = skulls
-                .create("two", 2, "icon2", 2.0, Some(2.0))
-                .await
-                .unwrap();
-
-            assert_eq!(two.name, "two");
-            assert_eq!(two.color, 2);
-            assert_eq!(two.icon, "icon2");
-            assert_eq!(two.unit_price, 2.0);
-            assert_eq!(two.limit, Some(2.0));
-
-            let skulls = skulls.list().await.unwrap();
-            assert_eq!(skulls, vec![one, two]);
-            skulls
-        };
+    #[tokio::test]
+    async fn list() {
+        let (store, skull) = skulled_store().await;
 
         let quicks = store.quicks();
-        let one = quicks.create(skulls[0].id, 1.0).await.unwrap();
-        assert_eq!(one.skull, skulls[0].id);
-        assert_eq!(one.amount, 1.0);
-
-        let two = quicks.create(skulls[0].id, 2.0).await.unwrap();
-        assert_eq!(two.skull, skulls[0].id);
-        assert_eq!(two.amount, 2.0);
-
-        let three = quicks.create(skulls[1].id, 3.0).await.unwrap();
-        assert_eq!(three.skull, skulls[1].id);
-        assert_eq!(three.amount, 3.0);
-
-        let four = quicks.create(skulls[1].id, 4.0).await.unwrap();
-        assert_eq!(four.skull, skulls[1].id);
-        assert_eq!(four.amount, 4.0);
+        let one = quicks.create(skull.id, 1.0).await.unwrap();
+        let two = quicks.create(skull.id, 2.0).await.unwrap();
 
         let quicks = quicks.list().await.unwrap();
-        assert_eq!(quicks, vec![one, two, three, four]);
+        assert_eq!(quicks, vec![one, two]);
+    }
 
-        let occurrences = store.occurrences();
+    #[tokio::test]
+    async fn list_empty() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let quicks = store.quicks();
+        let quicks = quicks.list().await.unwrap();
+        assert_eq!(quicks, Vec::new());
+    }
+
+    #[tokio::test]
+    async fn create() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+
+        assert_eq!(types::Id::from(quick.id), 1);
+        assert_eq!(quick.skull, skull.id);
+        assert_eq!(quick.amount.to_string(), 1.0.to_string());
+    }
+
+    #[tokio::test]
+    async fn create_err_no_skull() {
+        let (store, skull) = skulled_store().await;
+        store.skulls().delete(skull.id).await.unwrap();
+
+        let quicks = store.quicks();
+
+        let err = quicks.create(skull.id, 1.0).await.unwrap_err();
+        assert_eq!(err.to_string(), Error::ForeignKey.to_string());
+    }
+
+    #[tokio::test]
+    async fn create_err_amount_negative() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+
+        let err = quicks.create(skull.id, -1.0).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn create_err_duplicate() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        quicks.create(skull.id, 1.0).await.unwrap();
+
+        let err = quicks.create(skull.id, 1.0).await.unwrap_err();
+        if let Error::DuplicateEntry(_) = err {
+        } else {
+            panic!("{err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn update() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        let quick = quicks
+            .update(quick.id, Some(other_id), Some(2.0))
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(quick.id), 1);
+        assert_eq!(quick.skull, other_id);
+        assert_eq!(quick.amount.to_string(), 2.0.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_same_values() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        let quick = quicks
+            .update(quick.id, Some(skull.id), Some(1.0))
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(quick.id), 1);
+        assert_eq!(quick.skull, skull.id);
+        assert_eq!(quick.amount.to_string(), 1.0.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_parts() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+
+        let quick = quicks.update(quick.id, Some(other_id), None).await.unwrap();
+        assert_eq!(types::Id::from(quick.id), 1);
+        assert_eq!(quick.skull, other_id);
+        assert_eq!(quick.amount.to_string(), 1.0.to_string());
+
+        let quick = quicks.update(quick.id, None, Some(2.0)).await.unwrap();
+        assert_eq!(types::Id::from(quick.id), 1);
+        assert_eq!(quick.skull, other_id);
+        assert_eq!(quick.amount.to_string(), 2.0.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_no_changes() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        let err = quicks.update(quick.id, None, None).await.unwrap_err();
+
+        assert_eq!(err.to_string(), Error::NoChanges.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_not_found() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        quicks.delete(quick.id).await.unwrap();
+        let err = quicks.update(quick.id, None, Some(2.0)).await.unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            Error::NotFound(quick.id.into()).to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn update_err_no_skull() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+        store.skulls().delete(other_id).await.unwrap();
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        let err = quicks
+            .update(quick.id, Some(other_id), None)
+            .await
+            .unwrap_err();
+
+        assert_eq!(err.to_string(), Error::ForeignKey.to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_amount_negative() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        let err = quicks.update(quick.id, None, Some(-1.0)).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn update_err_duplicate() {
+        let (store, skull) = skulled_store().await;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        quicks.create(skull.id, 2.0).await.unwrap();
+        quicks.create(other_id, 1.0).await.unwrap();
+
+        let err = quicks.update(quick.id, None, Some(2.0)).await.unwrap_err();
+        if let Error::DuplicateEntry(_) = err {
+        } else {
+            panic!("{err}");
+        }
+
+        let err = quicks
+            .update(quick.id, Some(other_id), None)
+            .await
+            .unwrap_err();
+        if let Error::DuplicateEntry(_) = err {
+        } else {
+            panic!("{err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn delete() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        quicks.delete(quick.id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_err_not_found() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        quicks.delete(quick.id).await.unwrap();
+
+        let err = quicks.delete(quick.id).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::NotFound(quick.id.into()).to_string()
+        );
     }
 }

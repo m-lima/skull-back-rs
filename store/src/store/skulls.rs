@@ -348,6 +348,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn update_same_values() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        let skull = skulls
+            .update(
+                skull.id,
+                Some("one"),
+                Some(1),
+                Some("icon1"),
+                Some(1.0),
+                Some(None),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(skull.id), 1);
+        assert_eq!(skull.name, "one");
+        assert_eq!(skull.color, 1);
+        assert_eq!(skull.icon, "icon1");
+        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.limit, None);
+    }
+
+    #[tokio::test]
     async fn update_parts() {
         let store = Store::in_memory(1).await.unwrap();
 
@@ -591,6 +617,21 @@ mod tests {
         let skulls = store.skulls();
         let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
         skulls.delete(skull.id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_cascade() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        assert_eq!(quicks.list().await.unwrap(), vec![quick]);
+
+        skulls.delete(skull.id).await.unwrap();
+        assert_eq!(quicks.list().await.unwrap(), Vec::new());
     }
 
     #[tokio::test]
