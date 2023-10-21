@@ -29,55 +29,61 @@ impl Occurrences<'_> {
         .map_err(Into::into)
     }
 
-    pub async fn search(&self, filter: &types::Filter) -> Result<Vec<types::Occurrence>> {
+    pub async fn search(
+        &self,
+        skulls: &std::collections::HashSet<types::SkullId>,
+        start: Option<chrono::DateTime<chrono::Utc>>,
+        end: Option<chrono::DateTime<chrono::Utc>>,
+        limit: Option<usize>,
+    ) -> Result<Vec<types::Occurrence>> {
         let mut builder = sqlx::QueryBuilder::new(
             r#"
             SELECT
-                id AS "id: types::OccurrenceId",
-                skull AS "skull: types::SkullId",
-                amount AS "amount: f32",
-                millis AS "millis: chrono::DateTime<chrono::Utc>"
+                id,
+                skull,
+                amount,
+                millis
             FROM
                 occurrences
             "#,
         );
 
-        let mut nowhere = false;
+        let mut nowhere = true;
 
-        if !filter.skulls.is_empty() {
+        if !skulls.is_empty() {
             if nowhere {
                 builder.push(" WHERE skull IN (");
                 nowhere = false;
             }
             let mut separated = builder.separated(',');
 
-            for skull in &filter.skulls {
+            for skull in skulls {
                 separated.push_bind(skull);
             }
 
             separated.push_unseparated(')');
         }
 
-        if let Some(start) = filter.start {
+        if let Some(start) = start {
             if nowhere {
-                builder.push(" WHERE start >= ");
+                builder.push(" WHERE millis >= ");
                 nowhere = false;
             } else {
-                builder.push(" AND start >= ");
+                builder.push(" AND millis >= ");
             }
             builder.push_bind(start);
         }
 
-        if let Some(end) = filter.end {
+        if let Some(end) = end {
             if nowhere {
-                builder.push(" WHERE end <= ");
+                builder.push(" WHERE millis <= ");
             } else {
-                builder.push(" AND end <= ");
+                builder.push(" AND millis <= ");
             }
             builder.push_bind(end);
         }
 
-        if let Some(limit) = filter.limit {
+        if let Some(limit) = limit {
             builder.push(" LIMIT ");
             builder.push(limit);
         }
@@ -353,6 +359,60 @@ mod tests {
         chrono::DateTime::from_timestamp(value, 0).unwrap()
     }
 
+    async fn prepare_search() -> (
+        Store,
+        (types::SkullId, types::SkullId),
+        [types::OccurrenceId; 6],
+    ) {
+        let (store, skull) = skulled_store().await;
+        let skull_id = skull.id;
+        let other_id = store
+            .skulls()
+            .create("two", 2, "two", 2.0, None)
+            .await
+            .unwrap()
+            .id;
+
+        let occurrences = store.occurrences();
+
+        let one = occurrences
+            .create(skull_id, 1.0, chrono(1))
+            .await
+            .unwrap()
+            .id;
+        let two = occurrences
+            .create(skull_id, 2.0, chrono(2))
+            .await
+            .unwrap()
+            .id;
+        let three = occurrences
+            .create(skull_id, 3.0, chrono(3))
+            .await
+            .unwrap()
+            .id;
+        let four = occurrences
+            .create(skull_id, 4.0, chrono(4))
+            .await
+            .unwrap()
+            .id;
+        let five = occurrences
+            .create(other_id, 3.0, chrono(3))
+            .await
+            .unwrap()
+            .id;
+        let six = occurrences
+            .create(other_id, 4.0, chrono(4))
+            .await
+            .unwrap()
+            .id;
+
+        (
+            store,
+            (skull_id, other_id),
+            [one, two, three, four, five, six],
+        )
+    }
+
     #[tokio::test]
     async fn list() {
         let (store, skull) = skulled_store().await;
@@ -374,9 +434,149 @@ mod tests {
         assert_eq!(occurrences, Vec::new());
     }
 
-    #[test]
-    #[ignore]
-    fn search() {}
+    #[tokio::test]
+    async fn search_no_filters() {
+        let (store, _, ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(&std::collections::HashSet::new(), None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(occurrences.iter().map(|o| o.id).collect::<Vec<_>>(), ids);
+    }
+
+    #[tokio::test]
+    async fn search_all_skulls() {
+        let (store, (skull_one, skull_two), ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(
+                &std::collections::HashSet::from([skull_one, skull_two]),
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(occurrences.iter().map(|o| o.id).collect::<Vec<_>>(), ids);
+    }
+
+    #[tokio::test]
+    async fn search_just_skulls() {
+        let (store, (_, skull_two), ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(
+                &std::collections::HashSet::from([skull_two]),
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
+            ids[4..]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_just_start() {
+        let (store, _, ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(
+                &std::collections::HashSet::new(),
+                Some(chrono(3)),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
+            ids[2..]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_just_end() {
+        let (store, _, ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(
+                &std::collections::HashSet::new(),
+                None,
+                Some(chrono(2)),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
+            ids[..2]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_start_and_end() {
+        let (store, _, ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(
+                &std::collections::HashSet::new(),
+                Some(chrono(3)),
+                Some(chrono(3)),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
+            [ids[2], ids[4]]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_just_limit() {
+        let (store, _, ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(&std::collections::HashSet::new(), None, None, Some(3))
+            .await
+            .unwrap();
+        assert_eq!(
+            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
+            ids[..3]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_all_filters() {
+        let (store, (skull_one, _), ids) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(
+                &std::collections::HashSet::from([skull_one]),
+                Some(chrono(3)),
+                Some(chrono(4)),
+                Some(1),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
+            [ids[2]]
+        );
+    }
 
     #[tokio::test]
     async fn create() {
