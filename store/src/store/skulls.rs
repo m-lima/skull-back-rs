@@ -202,7 +202,8 @@ mod tests {
     async fn list_empty() {
         let store = Store::in_memory(1).await.unwrap();
 
-        let skulls = store.skulls().list().await.unwrap();
+        let skulls = store.skulls();
+        let skulls = skulls.list().await.unwrap();
         assert_eq!(skulls, Vec::new());
     }
 
@@ -211,14 +212,14 @@ mod tests {
         let store = Store::in_memory(1).await.unwrap();
 
         let skulls = store.skulls();
-        let one = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
 
-        assert_eq!(types::Id::from(one.id), 1);
-        assert_eq!(one.name, "one");
-        assert_eq!(one.color, 1);
-        assert_eq!(one.icon, "icon1");
-        assert_eq!(one.unit_price.to_string(), 1.0.to_string());
-        assert_eq!(one.limit, None);
+        assert_eq!(types::Id::from(skull.id), 1);
+        assert_eq!(skull.name, "one");
+        assert_eq!(skull.color, 1);
+        assert_eq!(skull.icon, "icon1");
+        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.limit, None);
     }
 
     #[tokio::test]

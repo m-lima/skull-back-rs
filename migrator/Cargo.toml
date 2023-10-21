@@ -1,0 +1,7 @@
+[package]
+name = "migrator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
