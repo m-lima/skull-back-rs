@@ -1,0 +1,12 @@
+[package]
+name = "types"
+version.workspace = true
+edition.workspace = true
+
+[features]
+sqlx = ["dep:sqlx"]
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true, features = ["chrono", "sqlite"] }
