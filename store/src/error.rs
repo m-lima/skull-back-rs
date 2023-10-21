@@ -46,7 +46,7 @@ impl From<sqlx::Error> for Error {
             if let Some(code) = db_err.code() {
                 match code.as_ref() {
                     "787" => return Self::ForeignKey,
-                    "275" => return Self::Constraint(String::from(db_err.message())),
+                    "275" | "1811" => return Self::Constraint(String::from(db_err.message())),
                     "2067" => return Self::DuplicateEntry(String::from(db_err.message())),
                     _ => {}
                 }

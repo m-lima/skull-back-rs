@@ -82,6 +82,8 @@ impl Skulls<'_> {
         .map_err(Into::into)
     }
 
+    // allow(clippy::option_option): This is necessary to convey a change into None
+    #[allow(clippy::option_option)]
     pub async fn update<
         Name: AsRef<str> + std::fmt::Debug,
         Icon: std::ops::Deref<Target = str> + std::fmt::Debug,
@@ -122,7 +124,14 @@ impl Skulls<'_> {
             icon,
             String::from(super::check_non_empty(icon.as_ref(), "icon")?)
         );
-        push_field!(unit_price);
+        push_field!(
+            unit_price,
+            if unit_price < 0.0 {
+                return Err(Error::InvalidParameter("unit_price"));
+            } else {
+                unit_price
+            }
+        );
         push_field!(limit);
 
         if has_fields {
@@ -208,7 +217,7 @@ mod tests {
         assert_eq!(one.name, "one");
         assert_eq!(one.color, 1);
         assert_eq!(one.icon, "icon1");
-        assert_eq!(one.unit_price, 1.0);
+        assert_eq!(one.unit_price.to_string(), 1.0.to_string());
         assert_eq!(one.limit, None);
     }
 
@@ -333,8 +342,78 @@ mod tests {
         assert_eq!(skull.name, "two");
         assert_eq!(skull.color, 2);
         assert_eq!(skull.icon, "icon2");
-        assert_eq!(skull.unit_price, 2.0);
+        assert_eq!(skull.unit_price.to_string(), 2.0.to_string());
         assert_eq!(skull.limit, Some(2.0));
+    }
+
+    #[tokio::test]
+    async fn update_parts() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+
+        let skull = skulls
+            .update(skull.id, Some("two"), None, None::<String>, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(skull.id), 1);
+        assert_eq!(skull.name, "two");
+        assert_eq!(skull.color, 1);
+        assert_eq!(skull.icon, "icon1");
+        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.limit, None);
+
+        let skull = skulls
+            .update(skull.id, None::<String>, Some(2), Some("icon2"), None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(skull.id), 1);
+        assert_eq!(skull.name, "two");
+        assert_eq!(skull.color, 2);
+        assert_eq!(skull.icon, "icon2");
+        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.limit, None);
+
+        let skull = skulls
+            .update(
+                skull.id,
+                None::<String>,
+                None,
+                None::<String>,
+                Some(2.0),
+                Some(Some(1.0)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(skull.id), 1);
+        assert_eq!(skull.name, "two");
+        assert_eq!(skull.color, 2);
+        assert_eq!(skull.icon, "icon2");
+        assert_eq!(skull.unit_price.to_string(), 2.0.to_string());
+        assert_eq!(skull.limit, Some(1.0));
+
+        let skull = skulls
+            .update(
+                skull.id,
+                None::<String>,
+                None,
+                None::<String>,
+                None,
+                Some(None),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(types::Id::from(skull.id), 1);
+        assert_eq!(skull.name, "two");
+        assert_eq!(skull.color, 2);
+        assert_eq!(skull.icon, "icon2");
+        assert_eq!(skull.unit_price.to_string(), 2.0.to_string());
+        assert_eq!(skull.limit, None);
     }
 
     #[tokio::test]
@@ -374,5 +453,180 @@ mod tests {
             err.to_string(),
             Error::NotFound(skull.id.into()).to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn update_err_name_blank() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+
+        let err = skulls
+            .update(skull.id, Some(""), None, None::<String>, None, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.to_string(), Error::InvalidParameter("name").to_string());
+
+        let err = skulls
+            .update(skull.id, Some(" 	 "), None, None::<String>, None, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.to_string(), Error::InvalidParameter("name").to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_name_duplicate() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        skulls.create("two", 2, "icon2", 2.0, None).await.unwrap();
+
+        let err = skulls
+            .update(skull.id, Some("two"), None, None::<String>, None, None)
+            .await
+            .unwrap_err();
+
+        if let Error::DuplicateEntry(_) = err {
+        } else {
+            panic!("{err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn update_err_color_duplicate() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        skulls.create("two", 2, "icon2", 2.0, None).await.unwrap();
+
+        let err = skulls
+            .update(
+                skull.id,
+                None::<String>,
+                Some(2),
+                None::<String>,
+                None,
+                None,
+            )
+            .await
+            .unwrap_err();
+
+        if let Error::DuplicateEntry(_) = err {
+        } else {
+            panic!("{err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn update_err_icon_blank() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+
+        let err = skulls
+            .update(skull.id, None::<String>, None, Some(""), None, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.to_string(), Error::InvalidParameter("icon").to_string());
+
+        let err = skulls
+            .update(skull.id, None::<String>, None, Some(" 	 "), None, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.to_string(), Error::InvalidParameter("icon").to_string());
+    }
+
+    #[tokio::test]
+    async fn update_err_icon_duplicate() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        skulls.create("two", 2, "icon2", 2.0, None).await.unwrap();
+
+        let err = skulls
+            .update(skull.id, None::<String>, None, Some("icon2"), None, None)
+            .await
+            .unwrap_err();
+
+        if let Error::DuplicateEntry(_) = err {
+        } else {
+            panic!("{err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn udpate_err_unit_price_negative() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+
+        let err = skulls
+            .update(
+                skull.id,
+                None::<String>,
+                None,
+                None::<String>,
+                Some(-1.0),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("unit_price").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        skulls.delete(skull.id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_err_not_found() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        skulls.delete(skull.id).await.unwrap();
+
+        let err = skulls.delete(skull.id).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::NotFound(skull.id.into()).to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_err_referenced() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+        store
+            .occurrences()
+            .create(
+                skull.id,
+                1.0,
+                chrono::DateTime::from_timestamp(0, 0).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let err = skulls.delete(skull.id).await.unwrap_err();
+        if let Error::Constraint(_) = err {
+        } else {
+            panic!("{err}");
+        }
     }
 }
