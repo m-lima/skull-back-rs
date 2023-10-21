@@ -1,0 +1,13 @@
+[package]
+name = "store"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+sqlx = { workspace = true, features = ["sqlite", "runtime-tokio-native-tls"] }
+thiserror = { workspace = true }
+types = { path = "../types", features = ["sqlx"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
