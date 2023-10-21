@@ -95,40 +95,53 @@ impl Occurrences<'_> {
             .map_err(Into::into)
     }
 
-    pub async fn create(
+    pub async fn create<
+        I: IntoIterator<Item = (types::SkullId, f32, chrono::DateTime<chrono::Utc>)>,
+    >(
         &self,
-        skull: types::SkullId,
-        amount: f32,
-        millis: chrono::DateTime<chrono::Utc>,
-    ) -> Result<types::Occurrence> {
-        if amount < 0.0 {
-            return Err(Error::InvalidParameter("amount"));
-        }
+        items: I,
+    ) -> Result<Vec<types::Occurrence>> {
+        let mut tx = self.store.pool.begin().await?;
+        let mut occurrences = Vec::new();
 
-        sqlx::query_as!(
-            types::Occurrence,
-            r#"
-            INSERT INTO occurrences (
+        for (skull, amount, millis) in items {
+            if amount < 0.0 {
+                return Err(Error::InvalidParameter("amount"));
+            }
+
+            let occurrence = sqlx::query_as!(
+                types::Occurrence,
+                r#"
+                INSERT INTO occurrences (
+                    skull,
+                    amount,
+                    millis
+                ) VALUES (
+                    $1,
+                    $2,
+                    $3
+                ) RETURNING
+                    id AS "id: types::OccurrenceId",
+                    skull AS "skull: types::SkullId",
+                    amount AS "amount: f32",
+                    millis AS "millis: chrono::DateTime<chrono::Utc>"
+                "#,
                 skull,
                 amount,
-                millis
-            ) VALUES (
-                $1,
-                $2,
-                $3
-            ) RETURNING
-                id AS "id: types::OccurrenceId",
-                skull AS "skull: types::SkullId",
-                amount AS "amount: f32",
-                millis AS "millis: chrono::DateTime<chrono::Utc>"
-            "#,
-            skull,
-            amount,
-            millis,
-        )
-        .fetch_one(&self.store.pool)
-        .await
-        .map_err(Into::into)
+                millis,
+            )
+            .fetch_one(tx.as_mut())
+            .await?;
+
+            occurrences.push(occurrence);
+        }
+
+        if occurrences.is_empty() {
+            return Err(Error::NoChanges);
+        }
+
+        tx.commit().await?;
+        Ok(occurrences)
     }
 
     // allow(clippy::too_many_lines): So that we can have static type checking
@@ -375,42 +388,33 @@ mod tests {
 
         let occurrences = store.occurrences();
 
-        let one = occurrences
-            .create(skull_id, 1.0, chrono(1))
+        let occurrences = occurrences
+            .create([
+                (skull_id, 1.0, chrono(1)),
+                (skull_id, 2.0, chrono(2)),
+                (skull_id, 3.0, chrono(3)),
+                (skull_id, 4.0, chrono(4)),
+                (other_id, 3.0, chrono(3)),
+                (other_id, 4.0, chrono(4)),
+            ])
             .await
             .unwrap()
-            .id;
-        let two = occurrences
-            .create(skull_id, 2.0, chrono(2))
-            .await
-            .unwrap()
-            .id;
-        let three = occurrences
-            .create(skull_id, 3.0, chrono(3))
-            .await
-            .unwrap()
-            .id;
-        let four = occurrences
-            .create(skull_id, 4.0, chrono(4))
-            .await
-            .unwrap()
-            .id;
-        let five = occurrences
-            .create(other_id, 3.0, chrono(3))
-            .await
-            .unwrap()
-            .id;
-        let six = occurrences
-            .create(other_id, 4.0, chrono(4))
-            .await
-            .unwrap()
-            .id;
+            .into_iter()
+            .map(|o| o.id)
+            .collect::<Vec<_>>();
 
-        (
-            store,
-            (skull_id, other_id),
-            [one, two, three, four, five, six],
-        )
+        (store, (skull_id, other_id), occurrences.try_into().unwrap())
+    }
+
+    async fn create_plain(store: &Store, skull: &types::Skull) -> types::Occurrence {
+        store
+            .occurrences()
+            .create([(skull.id, 1.0, chrono(1))])
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap()
     }
 
     #[tokio::test]
@@ -418,11 +422,13 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let one = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
-        let two = occurrences.create(skull.id, 2.0, chrono(2)).await.unwrap();
+        let result = occurrences
+            .create([(skull.id, 1.0, chrono(1)), (skull.id, 2.0, chrono(2))])
+            .await
+            .unwrap();
 
         let occurrences = occurrences.list().await.unwrap();
-        assert_eq!(occurrences, vec![one, two]);
+        assert_eq!(occurrences, result);
     }
 
     #[tokio::test]
@@ -582,8 +588,7 @@ mod tests {
     async fn create() {
         let (store, skull) = skulled_store().await;
 
-        let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
 
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, skull.id);
@@ -599,7 +604,7 @@ mod tests {
         let occurrences = store.occurrences();
 
         let err = occurrences
-            .create(skull.id, 1.0, chrono(1))
+            .create([(skull.id, 1.0, chrono(1))])
             .await
             .unwrap_err();
         assert_eq!(err.to_string(), Error::ForeignKey.to_string());
@@ -612,7 +617,7 @@ mod tests {
         let occurrences = store.occurrences();
 
         let err = occurrences
-            .create(skull.id, -1.0, chrono(1))
+            .create([(skull.id, -1.0, chrono(1))])
             .await
             .unwrap_err();
         assert_eq!(
@@ -632,7 +637,7 @@ mod tests {
             .id;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         let occurrence = occurrences
             .update(occurrence.id, Some(other_id), Some(2.0), Some(chrono(2)))
             .await
@@ -649,7 +654,7 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         let occurrence = occurrences
             .update(occurrence.id, Some(skull.id), Some(1.0), Some(chrono(1)))
             .await
@@ -672,12 +677,12 @@ mod tests {
             .id;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
-
+        let occurrence = create_plain(&store, &skull).await;
         let occurrence = occurrences
             .update(occurrence.id, Some(other_id), None, None)
             .await
             .unwrap();
+
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, other_id);
         assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
@@ -698,7 +703,7 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         let err = occurrences
             .update(occurrence.id, None, None, None)
             .await
@@ -712,7 +717,7 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         occurrences.delete(occurrence.id).await.unwrap();
         let err = occurrences
             .update(occurrence.id, None, Some(2.0), None)
@@ -737,7 +742,7 @@ mod tests {
         store.skulls().delete(other_id).await.unwrap();
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         let err = occurrences
             .update(occurrence.id, Some(other_id), None, None)
             .await
@@ -751,7 +756,7 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         let err = occurrences
             .update(occurrence.id, None, Some(-1.0), None)
             .await
@@ -767,7 +772,7 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         occurrences.delete(occurrence.id).await.unwrap();
     }
 
@@ -776,7 +781,7 @@ mod tests {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let occurrence = occurrences.create(skull.id, 1.0, chrono(1)).await.unwrap();
+        let occurrence = create_plain(&store, &skull).await;
         occurrences.delete(occurrence.id).await.unwrap();
 
         let err = occurrences.delete(occurrence.id).await.unwrap_err();
