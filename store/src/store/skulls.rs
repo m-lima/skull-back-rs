@@ -132,12 +132,12 @@ impl Skulls<'_> {
                 .push(
                     r#"
                     RETURNING
-                        "id" AS "id!: types::SkullId",
+                        "id",
                         "name",
-                        "color" AS "color: u32",
+                        "color",
                         "icon",
-                        "unit_price" AS "unit_price: f32",
-                        "limit" as "limit: f32"
+                        "unit_price",
+                        "limit"
                     "#,
                 )
                 .build_query_as::<types::Skull>()
