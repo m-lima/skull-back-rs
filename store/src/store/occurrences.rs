@@ -95,6 +95,10 @@ impl Occurrences<'_> {
         amount: f32,
         millis: chrono::DateTime<chrono::Utc>,
     ) -> Result<types::Occurrence> {
+        if amount < 0.0 {
+            return Err(Error::InvalidParameter("amount"));
+        }
+
         sqlx::query_as!(
             types::Occurrence,
             r#"
@@ -121,6 +125,8 @@ impl Occurrences<'_> {
         .map_err(Into::into)
     }
 
+    // allow(clippy::too_many_lines): So that we can have static type checking
+    #[allow(clippy::too_many_lines)]
     pub async fn update(
         &self,
         id: types::OccurrenceId,
@@ -128,6 +134,12 @@ impl Occurrences<'_> {
         amount: Option<f32>,
         millis: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<types::Occurrence> {
+        if let Some(amount) = amount {
+            if amount < 0.0 {
+                return Err(Error::InvalidParameter("amount"));
+            }
+        }
+
         match (skull, amount, millis) {
             (Some(skull), Some(amount), Some(millis)) => {
                 sqlx::query_as!(

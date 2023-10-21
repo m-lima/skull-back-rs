@@ -12,7 +12,7 @@ CREATE TABLE skulls (
 CREATE TABLE quicks (
   "id"     INTEGER NOT NULL PRIMARY KEY,
   "skull"  INTEGER NOT NULL,
-  "amount" REAL    NOT NULL,
+  "amount" REAL    NOT NULL              CHECK(amount >= 0),
 
   FOREIGN KEY(skull) REFERENCES skulls(id) ON DELETE CASCADE,
 
@@ -23,7 +23,7 @@ CREATE TABLE quicks (
 CREATE TABLE occurrences (
   "id"     INTEGER NOT NULL PRIMARY KEY,
   "skull"  INTEGER NOT NULL,
-  "amount" REAL    NOT NULL,
+  "amount" REAL    NOT NULL              CHECK(amount >= 0),
   "millis" INTEGER NOT NULL,
 
   FOREIGN KEY(skull) REFERENCES skulls(id) ON DELETE RESTRICT
