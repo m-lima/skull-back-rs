@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM\n                skulls\n            WHERE\n                id = $1\n            RETURNING\n                id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5a59ebb6dc7da10a640c2eff254bd2b359c528cd1039f78fbbc3abd33d12c5ee"
+}

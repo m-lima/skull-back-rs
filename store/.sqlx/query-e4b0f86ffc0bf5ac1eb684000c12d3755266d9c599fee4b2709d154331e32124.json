@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM\n                occurrences\n            WHERE\n                id = $1\n            RETURNING\n                id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e4b0f86ffc0bf5ac1eb684000c12d3755266d9c599fee4b2709d154331e32124"
+}

@@ -11,6 +11,7 @@ impl<'a> Occurrences<'a> {
 }
 
 impl Occurrences<'_> {
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn list(&self) -> Result<Vec<types::Occurrence>> {
         sqlx::query_as!(
             types::Occurrence,
@@ -29,6 +30,7 @@ impl Occurrences<'_> {
         .map_err(Into::into)
     }
 
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn search(
         &self,
         skulls: &std::collections::HashSet<types::SkullId>,
@@ -95,8 +97,9 @@ impl Occurrences<'_> {
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn create<
-        I: IntoIterator<Item = (types::SkullId, f32, chrono::DateTime<chrono::Utc>)>,
+        I: IntoIterator<Item = (types::SkullId, f32, chrono::DateTime<chrono::Utc>)> + std::fmt::Debug,
     >(
         &self,
         items: I,
@@ -146,6 +149,7 @@ impl Occurrences<'_> {
 
     // allow(clippy::too_many_lines): So that we can have static type checking
     #[allow(clippy::too_many_lines)]
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn update(
         &self,
         id: types::OccurrenceId,
@@ -332,6 +336,7 @@ impl Occurrences<'_> {
         .and_then(|r| r.ok_or(Error::NotFound(id.into())))
     }
 
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn delete(&self, id: types::OccurrenceId) -> Result {
         sqlx::query!(
             r#"

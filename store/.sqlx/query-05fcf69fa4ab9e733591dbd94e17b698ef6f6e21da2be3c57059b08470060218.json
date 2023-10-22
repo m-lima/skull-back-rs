@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO skulls (\n                \"name\",\n                \"color\",\n                \"icon\",\n                \"unit_price\",\n                \"limit\"\n            ) VALUES (\n                $1,\n                $2,\n                $3,\n                $4,\n                $5\n            ) RETURNING\n                \"id\" AS \"id: types::SkullId\",\n                \"name\",\n                \"color\" AS \"color: u32\",\n                \"icon\",\n                \"unit_price\" AS \"unit_price: f32\",\n                \"limit\" as \"limit: f32\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: types::SkullId",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "color: u32",
+        "ordinal": 2,
+        "type_info": "Int64"
+      },
+      {
+        "name": "icon",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "unit_price: f32",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "limit: f32",
+        "ordinal": 5,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "05fcf69fa4ab9e733591dbd94e17b698ef6f6e21da2be3c57059b08470060218"
+}

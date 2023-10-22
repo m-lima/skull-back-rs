@@ -11,6 +11,7 @@ impl<'a> Skulls<'a> {
 }
 
 impl Skulls<'_> {
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn list(&self) -> Result<Vec<types::Skull>> {
         sqlx::query_as!(
             types::Skull,
@@ -31,6 +32,7 @@ impl Skulls<'_> {
         .map_err(Into::into)
     }
 
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn create<
         Name: AsRef<str> + std::fmt::Debug,
         Icon: std::ops::Deref<Target = str> + std::fmt::Debug,
@@ -84,6 +86,7 @@ impl Skulls<'_> {
 
     // allow(clippy::option_option): This is necessary to convey a change into None
     #[allow(clippy::option_option)]
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn update<
         Name: AsRef<str> + std::fmt::Debug,
         Icon: std::ops::Deref<Target = str> + std::fmt::Debug,
@@ -159,6 +162,7 @@ impl Skulls<'_> {
         }
     }
 
+    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn delete(&self, id: types::SkullId) -> Result {
         sqlx::query!(
             r#"

@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id AS \"id: types::QuickId\",\n                skull AS \"skull: types::SkullId\",\n                amount AS \"amount: f32\"\n            FROM\n                quicks\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: types::QuickId",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "skull: types::SkullId",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "amount: f32",
+        "ordinal": 2,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "16300b2e531d954a6e2f561bcb747727dafcc84f3e963817e3e876fad36d7076"
+}
