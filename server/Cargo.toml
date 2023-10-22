@@ -16,7 +16,4 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
 # Logging
-log = { workspace = true }
-simplelog = { workspace = true }
-time = { workspace = true }
 tracing = { workspace = true }

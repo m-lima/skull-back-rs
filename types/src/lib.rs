@@ -69,15 +69,6 @@ pub struct Occurrence {
     pub millis: chrono::DateTime<chrono::Utc>,
 }
 
-// #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-// #[repr(transparent)]
-// #[derive(serde::Serialize, serde::Deserialize)]
-// #[serde(transparent)]
-// #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
-// pub struct Timestamp(
-//     #[serde(with = "chrono::serde::ts_milliseconds")] pub chrono::DateTime<chrono::Utc>,
-// );
-
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     pub skulls: Vec<SkullId>,
