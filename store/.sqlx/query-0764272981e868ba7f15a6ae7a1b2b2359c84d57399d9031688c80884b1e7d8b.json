@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id AS \"id: types::OccurrenceId\",\n                skull AS \"skull: types::SkullId\",\n                amount AS \"amount: f32\",\n                millis AS \"millis: chrono::DateTime<chrono::Utc>\"\n            FROM\n                occurrences\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: types::OccurrenceId",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "skull: types::SkullId",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "amount: f32",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "millis: chrono::DateTime<chrono::Utc>",
+        "ordinal": 3,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0764272981e868ba7f15a6ae7a1b2b2359c84d57399d9031688c80884b1e7d8b"
+}
