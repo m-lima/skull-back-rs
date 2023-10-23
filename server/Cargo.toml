@@ -3,10 +3,19 @@ name = "server"
 version.workspace = true
 edition.workspace = true
 
+#[feature]
+threads = ["tokio/rt-multi-thread"]
+
 [dependencies]
+# axum = { workspace = true, features = ["ws"] }
+boile-rs = { workspace = true, features = ["log-spans"] }
 clap = { workspace = true, features = ["derive"] }
+hyper = { workspace = true, features = ["server"] }
 store = { path = "../store" }
 tokio = { workspace = true }
+tower-layer = { workspace = true }
+tower-service = { workspace = true }
+types = { path = "../types" }
 
 # Error
 thiserror = { workspace = true }
@@ -17,3 +26,5 @@ serde_json = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tungstenite = { workspace = true }
