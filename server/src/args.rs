@@ -25,7 +25,8 @@ pub struct Args {
     port: u16,
 
     /// Number of threads
-    #[arg(short, long, default_value = "auto", value_parser = parse_threads)]
+    #[arg(short, long, default_value = "auto", value_parser = Threads::parse)]
+    #[cfg(feature = "threads")]
     threads: Threads,
 
     /// Create the databases if they don't exist
@@ -41,13 +42,13 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn verbosity(&self) -> log::LevelFilter {
+    pub fn verbosity(&self) -> tracing::Level {
         match self.verbosity {
-            0 => log::LevelFilter::Error,
-            1 => log::LevelFilter::Warn,
-            2 => log::LevelFilter::Info,
-            3 => log::LevelFilter::Debug,
-            _ => log::LevelFilter::Trace,
+            0 => tracing::Level::ERROR,
+            1 => tracing::Level::WARN,
+            2 => tracing::Level::INFO,
+            3 => tracing::Level::DEBUG,
+            _ => tracing::Level::TRACE,
         }
     }
 
@@ -55,8 +56,14 @@ impl Args {
         self.port
     }
 
+    #[cfg(feature = "threads")]
     pub fn threads(&self) -> Threads {
         self.threads
+    }
+
+    #[cfg(not(feature = "threads"))]
+    pub fn threads(&self) -> Threads {
+        Threads::Single
     }
 
     pub fn create(&self) -> bool {
@@ -119,22 +126,6 @@ fn to_user_list(path: std::path::PathBuf) -> Result<std::collections::HashSet<St
     Ok(users)
 }
 
-fn parse_threads(input: &str) -> Result<Threads, Error> {
-    if input == "auto" {
-        Ok(Threads::Auto)
-    } else {
-        input.parse().map_err(|_| Error::Threads).and_then(|count| {
-            if count == 0 {
-                Err(Error::Threads)
-            } else if count == 1 {
-                Ok(Threads::Single)
-            } else {
-                Ok(Threads::Multi(count))
-            }
-        })
-    }
-}
-
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Threads {
     Single,
@@ -142,12 +133,30 @@ pub enum Threads {
     Multi(u16),
 }
 
+impl Threads {
+    fn parse(input: &str) -> Result<Self, Error> {
+        if input == "auto" {
+            Ok(Self::Auto)
+        } else {
+            input.parse().map_err(|_| Error::Threads).and_then(|count| {
+                if count == 0 {
+                    Err(Error::Threads)
+                } else if count == 1 {
+                    Ok(Self::Single)
+                } else {
+                    Ok(Self::Multi(count))
+                }
+            })
+        }
+    }
+}
+
 impl std::fmt::Display for Threads {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Threads::Single => f.write_str("Single"),
-            Threads::Auto => f.write_str("Auto"),
-            Threads::Multi(count) => write!(f, "Multi({count})"),
+            Self::Single => f.write_str("Single"),
+            Self::Auto => f.write_str("Auto"),
+            Self::Multi(count) => write!(f, "Multi({count})"),
         }
     }
 }

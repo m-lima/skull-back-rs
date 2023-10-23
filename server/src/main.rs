@@ -1,34 +1,88 @@
 mod args;
-
-fn init_logger(level: log::LevelFilter) -> Result<(), log::SetLoggerError> {
-    let config = simplelog::ConfigBuilder::new()
-        .set_time_format_custom(time::macros::format_description!(
-            "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
-        ))
-        .build();
-
-    let color_choice = std::env::var("CLICOLOR_FORCE")
-        .ok()
-        .filter(|force| force != "0")
-        .map(|_| simplelog::ColorChoice::Always)
-        .or_else(|| {
-            std::env::var("CLICOLOR")
-                .ok()
-                .filter(|clicolor| clicolor == "0")
-                .map(|_| simplelog::ColorChoice::Never)
-        })
-        .unwrap_or(simplelog::ColorChoice::Auto);
-
-    simplelog::TermLogger::init(level, config, simplelog::TerminalMode::Mixed, color_choice)
-}
+mod auth;
+mod error;
+mod runtime;
+mod service;
+mod ws;
 
 fn main() -> std::process::ExitCode {
     let args = args::parse();
 
-    if let Err(err) = init_logger(args.verbosity()) {
+    if let Err(err) = boile_rs::log::setup(args.verbosity()) {
         eprintln!("{err}");
         return std::process::ExitCode::FAILURE;
     }
 
+    let port = args.port();
+    let threads = args.threads();
+    let create = args.create();
+    let (users, db_root) = args.db();
+
+    tracing::info!(
+        port = port,
+        threads = ?threads,
+        create = %create,
+        db_root = %db_root.display(),
+        users = ?users,
+        "Configuration loaded"
+    );
+
+    if users.is_empty() {
+        tracing::error!("No users provided");
+        return std::process::ExitCode::FAILURE;
+    }
+
+    let runtime = match runtime::runtime(
+        #[cfg(feature = "threads")]
+        threads,
+    ) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            tracing::error!(%error, "Failed to build the async runtime");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+
+    if create {
+        for user in &users {
+            let path = db_root.join(user);
+            if !path.exists() {
+                tracing::info!(db = %path.display(), "Creating database");
+                if let Err(error) = std::fs::write(&path, []) {
+                    tracing::error!(db = %path.display(), %error, "Unable to create database");
+                    return std::process::ExitCode::FAILURE;
+                }
+            }
+        }
+    }
+
+    runtime.block_on(async_main(port));
+
     std::process::ExitCode::SUCCESS
 }
+
+async fn async_main(port: u16) {}
+
+// auth
+// - Rejects
+// - ws/rest splitter
+//     - ws
+//         - Creates connection
+//             - ws
+//     - rest
+//         - Root
+//             - logger
+//         - Path
+//             - create root request
+//                 - logger
+//
+// ws
+// - logger
+//
+// logger
+// - take duration
+//     - call handler
+//         - response of handler should have "action" and Result<types::Response>
+//             - Make json
+//                 - Log duration, size, action
+//                     - Respond
