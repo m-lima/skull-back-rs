@@ -8,11 +8,21 @@ use crate::service::Service;
 pub struct WebSocket<S>(std::marker::PhantomData<S>);
 
 #[derive(Debug, Copy, Clone)]
-enum Mode {
+pub enum Mode {
     Text,
     Binary,
 }
 
-async fn listen(socket: (), session: Session<Service>, mode: Mode) {
-    todo!()
+pub struct Listener;
+
+impl upgrade::Listener<Service> for Listener {
+    type Future = ();
+
+    fn listen(
+        socket: tokio_tungstenite::WebSocketStream<hyper::upgrade::Upgraded>,
+        session: Session<Service>,
+        mode: self::Mode,
+    ) -> Self::Future {
+        todo!()
+    }
 }

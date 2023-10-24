@@ -1,6 +1,8 @@
 mod args;
 mod auth;
 mod error;
+mod logger;
+mod router;
 mod runtime;
 mod service;
 mod ws;
