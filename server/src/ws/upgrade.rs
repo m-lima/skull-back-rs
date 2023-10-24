@@ -1,21 +1,37 @@
-#[derive(Copy, Clone, Debug)]
-pub struct Upgrade;
+use crate::auth::Session;
 
-pub trait Server<S> {
-    type Future: std::future::Future<Output = ()>;
-    fn serve();
+#[derive(Copy, Clone, Debug)]
+pub struct Upgrade<L>(std::marker::PhantomData<L>);
+
+impl<L> Upgrade<L> {
+    pub fn new() -> Self {
+        Self(std::marker::PhantomData)
+    }
+}
+
+pub trait Listener<S> {
+    type Future: std::future::Future<Output = ()> + Send;
+
+    fn listen(
+        socket: tokio_tungstenite::WebSocketStream<hyper::upgrade::Upgraded>,
+        session: Session<S>,
+        mode: super::Mode,
+    ) -> Self::Future;
 }
 
 mod inner {
-    use super::super::{listen, Mode};
-    use super::Upgrade;
+    use super::super::Mode;
+    use super::{Listener, Upgrade};
     use crate::auth::Session;
 
-    impl<I> tower_layer::Layer<I> for Upgrade {
-        type Service = Middleware<I>;
+    impl<I, L> tower_layer::Layer<I> for Upgrade<L> {
+        type Service = Middleware<I, L>;
 
         fn layer(&self, inner: I) -> Self::Service {
-            Middleware { inner }
+            Middleware {
+                inner,
+                _marker: self.0,
+            }
         }
     }
 
@@ -42,18 +58,21 @@ mod inner {
     }
 
     #[derive(Debug, Clone)]
-    pub struct Middleware<I> {
+    pub struct Middleware<I, L> {
         inner: I,
+        _marker: std::marker::PhantomData<L>,
     }
 
-    impl<B, S, I> tower_service::Service<(hyper::Request<B>, Session<S>)> for Middleware<I>
+    impl<B, S, I, L> tower_service::Service<(hyper::Request<B>, Session<S>)> for Middleware<I, L>
     where
+        S: Send + 'static,
         I: tower_service::Service<
             (hyper::Request<B>, Session<S>),
             Response = hyper::Response<Vec<u8>>,
         >,
         I::Future: Unpin,
         I::Error: Unpin,
+        L: Listener<S> + Send,
     {
         type Response = I::Response;
         type Error = I::Error;
@@ -69,7 +88,7 @@ mod inner {
         #[tracing::instrument(level = tracing::Level::DEBUG, skip_all)]
         fn call(&mut self, (request, session): (hyper::Request<B>, Session<S>)) -> Self::Future {
             if let Some(mode) = check_upgrade(&request) {
-                upgrade(request, session, mode)
+                upgrade::<_, _, _, _, L>(request, session, mode)
             } else {
                 Future::pass(self.inner.call((request, session)))
             }
@@ -101,11 +120,15 @@ mod inner {
         Some(mode)
     }
 
-    fn upgrade<B, S, F, E>(
+    fn upgrade<B, S, F, E, L>(
         mut request: hyper::Request<B>,
         session: Session<S>,
         mode: Mode,
-    ) -> Future<F, E> {
+    ) -> Future<F, E>
+    where
+        S: Send + 'static,
+        L: Listener<S> + Send,
+    {
         if !has_header(
             request.headers(),
             hyper::header::SEC_WEBSOCKET_VERSION,
@@ -150,7 +173,7 @@ mod inner {
             )
             .await;
 
-            listen(socket, session, mode).await;
+            L::listen(socket, session, mode).await;
         });
         Future::Upgrade(key, protocol)
     }
