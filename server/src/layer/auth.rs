@@ -40,7 +40,7 @@ where
 
     fn call(&mut self, mut request: hyper::Request<B>) -> Self::Future {
         if let Some((user, session)) = pre_auth(&request, &self.auth.services) {
-            let span = tracing::span!(target: "layer", tracing::Level::DEBUG, "auth", %user);
+            let span = tracing::span!(target: "layer", tracing::Level::INFO, "auth", %user);
             request.extensions_mut().insert(session);
             Future::Pass(self.inner.call(request), span)
         } else {
@@ -49,7 +49,7 @@ where
     }
 }
 
-#[tracing::instrument(level = tracing::Level::DEBUG, target = "layer", skip_all)]
+#[tracing::instrument(target = "layer", skip_all)]
 fn pre_auth<'a, B, S>(
     request: &'a hyper::Request<B>,
     services: &std::collections::HashMap<String, S>,

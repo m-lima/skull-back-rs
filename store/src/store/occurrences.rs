@@ -11,7 +11,7 @@ impl<'a> Occurrences<'a> {
 }
 
 impl Occurrences<'_> {
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn list(&self) -> Result<Vec<types::Occurrence>> {
         sqlx::query_as!(
             types::Occurrence,
@@ -30,7 +30,7 @@ impl Occurrences<'_> {
         .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn search(
         &self,
         skulls: Option<&std::collections::HashSet<types::SkullId>>,
@@ -97,7 +97,7 @@ impl Occurrences<'_> {
             .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn create<
         I: IntoIterator<Item = (types::SkullId, f32, chrono::DateTime<chrono::Utc>)> + std::fmt::Debug,
     >(
@@ -108,7 +108,7 @@ impl Occurrences<'_> {
         let mut occurrences = Vec::new();
 
         for (skull, amount, millis) in items {
-            if amount < 0.0 {
+            if amount <= 0.0 {
                 return Err(Error::InvalidParameter("amount"));
             }
 
@@ -149,7 +149,7 @@ impl Occurrences<'_> {
 
     // allow(clippy::too_many_lines): So that we can have static type checking
     #[allow(clippy::too_many_lines)]
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn update(
         &self,
         id: types::OccurrenceId,
@@ -158,7 +158,7 @@ impl Occurrences<'_> {
         millis: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<types::Occurrence> {
         if let Some(amount) = amount {
-            if amount < 0.0 {
+            if amount <= 0.0 {
                 return Err(Error::InvalidParameter("amount"));
             }
         }
@@ -336,7 +336,7 @@ impl Occurrences<'_> {
         .and_then(|r| r.ok_or(Error::NotFound(id.into())))
     }
 
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn delete(&self, id: types::OccurrenceId) -> Result {
         sqlx::query!(
             r#"

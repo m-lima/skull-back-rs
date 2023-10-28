@@ -44,7 +44,7 @@ where
 
         let span = tracing::span!(
             target: "layer",
-            tracing::Level::DEBUG,
+            tracing::Level::INFO,
             "request",
             %method,
             %path
