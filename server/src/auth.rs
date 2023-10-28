@@ -1,31 +1,46 @@
 #[derive(Debug, Clone)]
 pub struct Session<S> {
     user: String,
-    broadcaster: tokio::sync::broadcast::Sender<types::Push>,
     service: S,
+}
+
+impl<S> Session<S> {
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+
+    pub fn service(&self) -> &S {
+        &self.service
+    }
+
+    pub fn decompose(self) -> (String, S) {
+        (self.user, self.service)
+    }
+}
+
+impl<S> std::ops::Deref for Session<S> {
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.service
+    }
+}
+
+impl<S> std::ops::DerefMut for Session<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.service
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Auth<S> {
-    sessions: std::sync::Arc<Vec<Session<S>>>,
+    services: std::sync::Arc<std::collections::HashMap<String, S>>,
 }
 
 impl<S> Auth<S> {
-    pub fn new(services: std::collections::HashMap<String, S>) -> Self {
-        let mut sessions = Vec::with_capacity(services.len());
-        for (user, service) in services {
-            let (broadcaster, _) = tokio::sync::broadcast::channel::<types::Push>(16);
-            let session = Session {
-                user,
-                broadcaster,
-                service,
-            };
-            sessions.push(session);
-        }
-        sessions.sort_unstable_by(|a, b| a.user.cmp(&b.user));
-
+    pub fn wrap(services: std::collections::HashMap<String, S>) -> Self {
         Self {
-            sessions: std::sync::Arc::new(sessions),
+            services: std::sync::Arc::new(services),
         }
     }
 }
@@ -55,17 +70,14 @@ mod inner {
 
     impl<B, S, I> tower_service::Service<hyper::Request<B>> for Middleware<S, I>
     where
-        S: Clone,
-        I: tower_service::Service<
-            (hyper::Request<B>, Session<S>),
-            Response = hyper::Response<Vec<u8>>,
-        >,
+        S: Clone + Send + Sync + 'static,
+        I: tower_service::Service<hyper::Request<B>, Response = axum::response::Response>,
+        I::Error: std::fmt::Display,
         I::Future: Unpin,
-        I::Error: Unpin,
     {
         type Response = I::Response;
         type Error = I::Error;
-        type Future = Future<I::Future, I::Error>;
+        type Future = Future<I::Future>;
 
         fn poll_ready(
             &mut self,
@@ -74,56 +86,59 @@ mod inner {
             self.inner.poll_ready(cx)
         }
 
-        #[tracing::instrument(level = tracing::Level::DEBUG, skip_all)]
-        fn call(&mut self, request: hyper::Request<B>) -> Self::Future {
-            static X_USER: hyper::header::HeaderName =
-                hyper::header::HeaderName::from_static("x-user");
-
-            let Some(user_header) = request.headers().get(&X_USER) else {
-                tracing::warn!(header = %X_USER, "Header is missing");
-                return Future::Forbidden;
-            };
-
-            let user = match user_header.to_str() {
-                Ok(user) => user,
-                Err(error) => {
-                    tracing::warn!(header = %X_USER, %error, "Header is not parseable as a String");
-                    return Future::Forbidden;
-                }
-            };
-
-            let Ok(index) = self
-                .auth
-                .sessions
-                .binary_search_by(|u| u.user.as_str().cmp(user))
-            else {
-                tracing::warn!(%user, "User is not authorized");
-                return Future::Forbidden;
-            };
-
-            // SAFETY: This was addressed above and the Vec is immutable
-            let session = unsafe { self.auth.sessions.get_unchecked(index) };
-
-            // TODO: Can I avoid this clone?
-            Future::pass(self.inner.call((request, session.clone())))
+        fn call(&mut self, mut request: hyper::Request<B>) -> Self::Future {
+            if let Some(session) = pre_auth(&request, &self.auth.services) {
+                let span = tracing::span!(target: "layer", tracing::Level::DEBUG, "auth", user = %session.user);
+                request.extensions_mut().insert(session);
+                Future::Pass(self.inner.call(request), span)
+            } else {
+                Future::Forbidden
+            }
         }
     }
 
-    pub enum Future<F, E> {
-        Forbidden,
-        Pass(F, std::marker::PhantomData<E>),
-    }
-
-    impl<F, E> Future<F, E> {
-        fn pass(future: F) -> Self {
-            Self::Pass(future, std::marker::PhantomData)
-        }
-    }
-
-    impl<F, E> std::future::Future for Future<F, E>
+    #[tracing::instrument(level = tracing::Level::DEBUG, target = "layer", skip_all)]
+    fn pre_auth<B, S>(
+        request: &hyper::Request<B>,
+        services: &std::collections::HashMap<String, S>,
+    ) -> Option<Session<S>>
     where
-        F: std::future::Future<Output = Result<hyper::Response<Vec<u8>>, E>> + Unpin,
-        E: Unpin,
+        S: Clone,
+    {
+        let header = crate::X_USER;
+
+        let Some(user_header) = request.headers().get(&header) else {
+            tracing::warn!(%header, "Header is missing");
+            return None;
+        };
+
+        let user = match user_header.to_str() {
+            Ok(user) => user,
+            Err(error) => {
+                tracing::warn!(%header, %error, "Header is not parseable as a String");
+                return None;
+            }
+        };
+
+        let Some(service) = services.get(user) else {
+            return None;
+        };
+
+        Some(Session {
+            user: String::from(user),
+            service: service.clone(),
+        })
+    }
+
+    pub enum Future<F> {
+        Forbidden,
+        Pass(F, tracing::Span),
+    }
+
+    impl<F, E> std::future::Future for Future<F>
+    where
+        F: std::future::Future<Output = Result<axum::response::Response, E>> + Unpin,
+        E: std::fmt::Display,
     {
         type Output = F::Output;
 
@@ -133,11 +148,14 @@ mod inner {
         ) -> std::task::Poll<Self::Output> {
             match self.get_mut() {
                 Self::Forbidden => {
-                    let mut response = hyper::Response::new(Vec::new());
-                    *response.status_mut() = hyper::StatusCode::FORBIDDEN;
+                    let response =
+                        axum::response::IntoResponse::into_response(hyper::StatusCode::FORBIDDEN);
                     std::task::Poll::Ready(Ok(response))
                 }
-                Self::Pass(f, _) => std::pin::Pin::new(f).poll(cx),
+                Self::Pass(f, span) => {
+                    let _span = span.enter();
+                    std::pin::Pin::new(f).poll(cx)
+                }
             }
         }
     }

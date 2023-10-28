@@ -1,5 +1,5 @@
 mod error;
-mod store;
+pub mod store;
 #[cfg(feature = "sqlx")]
 use crate::{Error, Result};
 

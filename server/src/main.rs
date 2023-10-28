@@ -1,43 +1,45 @@
 mod args;
 mod auth;
-mod error;
+// mod rejection;
+// mod root;
+// mod error;
 mod logger;
-mod router;
-mod runtime;
+// mod router;
 mod service;
 mod ws;
 
-fn main() -> std::process::ExitCode {
-    let args = args::parse();
+#[allow(clippy::declare_interior_mutable_const)]
+const X_USER: hyper::header::HeaderName = hyper::header::HeaderName::from_static("x-user");
 
-    if let Err(err) = boile_rs::log::setup(args.verbosity()) {
+fn main() -> std::process::ExitCode {
+    let (verbosity, port, threads, create, db_root, users) = args::parse().decompose();
+
+    if let Err(err) = boile_rs::log::setup(verbosity) {
         eprintln!("{err}");
         return std::process::ExitCode::FAILURE;
     }
 
-    let port = args.port();
-    let threads = args.threads();
-    let create = args.create();
-    let (users, db_root) = args.db();
-
     tracing::info!(
+        verbosity = %verbosity,
         port = port,
-        threads = ?threads,
+        threads = %threads,
         create = %create,
         db_root = %db_root.display(),
         users = ?users,
         "Configuration loaded"
     );
 
-    if users.is_empty() {
-        tracing::error!("No users provided");
+    if !service::prepare_users(create, &db_root, &users) {
         return std::process::ExitCode::FAILURE;
     }
 
-    let runtime = match runtime::runtime(
+    let runtime = match boile_rs::rt::runtime(
         #[cfg(feature = "threads")]
         threads,
-    ) {
+    )
+    .enable_all()
+    .build()
+    {
         Ok(runtime) => runtime,
         Err(error) => {
             tracing::error!(%error, "Failed to build the async runtime");
@@ -45,46 +47,49 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    if create {
-        for user in &users {
-            let path = db_root.join(user);
-            if !path.exists() {
-                tracing::info!(db = %path.display(), "Creating database");
-                if let Err(error) = std::fs::write(&path, []) {
-                    tracing::error!(db = %path.display(), %error, "Unable to create database");
-                    return std::process::ExitCode::FAILURE;
-                }
-            }
-        }
-    }
-
-    runtime.block_on(async_main(port));
-
-    std::process::ExitCode::SUCCESS
+    runtime.block_on(async_main(port, db_root, users))
 }
 
-async fn async_main(port: u16) {}
+async fn async_main(
+    port: u16,
+    db_root: std::path::PathBuf,
+    users: std::collections::HashSet<String>,
+) -> std::process::ExitCode {
+    let services = match service::create_all(users, db_root).await {
+        Ok(services) => services,
+        Err(error) => {
+            tracing::error!(%error, "Failed to create the store service");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
 
-// auth
-// - Rejects
-// - ws/rest splitter
-//     - ws
-//         - Creates connection
-//             - ws
-//     - rest
-//         - Root
-//             - logger
-//         - Path
-//             - create root request
-//                 - logger
-//
-// ws
-// - logger
-//
-// logger
-// - take duration
-//     - call handler
-//         - response of handler should have "action" and Result<types::Response>
-//             - Make json
-//                 - Log duration, size, action
-//                     - Respond
+    let router = axum::Router::<(), hyper::Body>::new()
+        // .nest("/", rest::build())
+        .nest("/ws", ws::build())
+        .layer(auth::Auth::wrap(services))
+        .layer(logger::Logger);
+
+    let addr = ([0, 0, 0, 0], port).into();
+
+    tracing::info!(%addr, "Binding to address");
+
+    let server = hyper::Server::bind(&addr).serve(router.into_make_service());
+
+    let server = match boile_rs::rt::Shutdown::new() {
+        Ok(shutdown) => server.with_graceful_shutdown(shutdown),
+        Err(error) => {
+            tracing::error!(%error, "Failed to create shutdown hook");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+
+    let start = std::time::Instant::now();
+
+    if let Err(error) = server.await {
+        tracing::error!(%error, duration = ?start.elapsed(), "Server execution aborted");
+        std::process::ExitCode::FAILURE
+    } else {
+        tracing::info!(duration = ?start.elapsed(), "Server gracefully shutdown");
+        std::process::ExitCode::SUCCESS
+    }
+}

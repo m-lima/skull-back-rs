@@ -15,6 +15,7 @@ version = "0.8.0"
 edition = "2021"
 
 [workspace.dependencies]
+axum = "0.6.20"
 boile-rs = { version = "0.1.1", git = "https://github.com/m-lima/boile-rs" }
 chrono = { version = "0.4.31", default-features = false }
 clap = "4.4.6"
@@ -24,11 +25,9 @@ serde_json = "1.0.107"
 sqlx = "0.7.2"
 thiserror = "1.0.50"
 tokio = "1.33.0"
-tokio-tungstenite = "0.20.1"
 tower-layer = "0.3.2"
 tower-service = "0.3.2"
 tracing = "0.1.40"
-tungstenite = "0.20.1"
 
 [profile.release]
 lto = true

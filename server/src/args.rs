@@ -25,9 +25,9 @@ pub struct Args {
     port: u16,
 
     /// Number of threads
-    #[arg(short, long, default_value = "auto", value_parser = Threads::parse)]
+    #[arg(short, long, default_value = "auto", value_parser = boile_rs::rt::threads::parse)]
     #[cfg(feature = "threads")]
-    threads: Threads,
+    threads: boile_rs::rt::Threads,
 
     /// Create the databases if they don't exist
     #[arg(short = 'c', long)]
@@ -42,7 +42,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn verbosity(&self) -> tracing::Level {
+    fn verbosity(&self) -> tracing::Level {
         match self.verbosity {
             0 => tracing::Level::ERROR,
             1 => tracing::Level::WARN,
@@ -52,26 +52,27 @@ impl Args {
         }
     }
 
-    pub fn port(&self) -> u16 {
-        self.port
-    }
-
-    #[cfg(feature = "threads")]
-    pub fn threads(&self) -> Threads {
-        self.threads
-    }
-
-    #[cfg(not(feature = "threads"))]
-    pub fn threads(&self) -> Threads {
-        Threads::Single
-    }
-
-    pub fn create(&self) -> bool {
-        self.create
-    }
-
-    pub fn db(self) -> (std::collections::HashSet<String>, std::path::PathBuf) {
-        (self.users.users(), self.db)
+    pub fn decompose(
+        self,
+    ) -> (
+        tracing::Level,
+        u16,
+        boile_rs::rt::Threads,
+        bool,
+        std::path::PathBuf,
+        std::collections::HashSet<String>,
+    ) {
+        (
+            self.verbosity(),
+            self.port,
+            #[cfg(feature = "threads")]
+            self.threads,
+            #[cfg(not(feature = "threads"))]
+            boile_rs::rt::Threads::Single,
+            self.create,
+            self.db,
+            self.users.users(),
+        )
     }
 }
 
@@ -126,43 +127,43 @@ fn to_user_list(path: std::path::PathBuf) -> Result<std::collections::HashSet<St
     Ok(users)
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub enum Threads {
-    Single,
-    Auto,
-    Multi(u16),
-}
-
-impl Threads {
-    fn parse(input: &str) -> Result<Self, Error> {
-        if input == "auto" {
-            Ok(Self::Auto)
-        } else {
-            input.parse().map_err(|_| Error::Threads).and_then(|count| {
-                if count == 0 {
-                    Err(Error::Threads)
-                } else if count == 1 {
-                    Ok(Self::Single)
-                } else {
-                    Ok(Self::Multi(count))
-                }
-            })
-        }
-    }
-}
-
-impl std::fmt::Display for Threads {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Single => f.write_str("Single"),
-            Self::Auto => f.write_str("Auto"),
-            Self::Multi(count) => write!(f, "Multi({count})"),
-        }
-    }
-}
-
-impl std::fmt::Debug for Threads {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
-    }
-}
+// #[derive(Copy, Clone, Eq, PartialEq)]
+// pub enum Threads {
+//     Single,
+//     Auto,
+//     Multi(u16),
+// }
+//
+// impl Threads {
+//     fn parse(input: &str) -> Result<Self, Error> {
+//         if input == "auto" {
+//             Ok(Self::Auto)
+//         } else {
+//             input.parse().map_err(|_| Error::Threads).and_then(|count| {
+//                 if count == 0 {
+//                     Err(Error::Threads)
+//                 } else if count == 1 {
+//                     Ok(Self::Single)
+//                 } else {
+//                     Ok(Self::Multi(count))
+//                 }
+//             })
+//         }
+//     }
+// }
+//
+// impl std::fmt::Display for Threads {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Self::Single => f.write_str("Single"),
+//             Self::Auto => f.write_str("Auto"),
+//             Self::Multi(count) => write!(f, "Multi({count})"),
+//         }
+//     }
+// }
+//
+// impl std::fmt::Debug for Threads {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         std::fmt::Display::fmt(self, f)
+//     }
+// }
