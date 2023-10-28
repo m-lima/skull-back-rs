@@ -1,6 +1,5 @@
-use test_utils::check_async as check;
-
-use crate::{client, helper};
+use crate::check_async as check;
+use crate::{client, helper, test_utils};
 
 pub struct Server {
     uri: std::sync::Arc<String>,
@@ -19,8 +18,9 @@ impl Server {
 
 pub async fn start() -> Server {
     let port = random_port();
+    let db_root = test_utils::TestPath::new();
 
-    let (process, mut output) = server(port).decompose();
+    let (process, mut output) = server(port, &db_root).decompose();
     let server = Server {
         uri: std::sync::Arc::new(format!("localhost:{port}")),
         _process: process,
@@ -29,7 +29,12 @@ pub async fn start() -> Server {
     if !wait_for_server(port).await {
         let mut output_string = String::new();
         std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
-        eprintln!("Server output:");
+        eprintln!("Server stdout:");
+        eprintln!("{output_string}");
+        let mut output_string = String::new();
+        output.read_from(pwner::process::ReadSource::Stderr);
+        std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
+        eprintln!("Server stderr:");
         eprintln!("{output_string}");
         panic!("Timeout waiting for the server to start");
     }
@@ -63,18 +68,18 @@ fn port_unused(port: u16) -> bool {
     .is_some()
 }
 
-fn server(port: u16) -> pwner::process::Duplex {
+fn server(port: u16, db_root: &std::path::Path) -> pwner::process::Duplex {
     use pwner::Spawner;
 
     std::process::Command::new(env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME"))))
-        .arg("-t")
-        .arg("1")
-        .arg("-u")
+        .arg("-c")
+        .arg("-U")
         .arg(test_utils::USER)
-        .arg("-u")
+        .arg("-U")
         .arg(helper::EMPTY_USER)
         .arg("-p")
         .arg(format!("{port}"))
+        .arg(db_root.to_str().unwrap())
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .spawn_owned()
         .unwrap()

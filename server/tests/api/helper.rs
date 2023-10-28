@@ -1,5 +1,4 @@
-use gotham::hyper;
-use test_utils::Assertion;
+use crate::test_utils::Assertion;
 
 pub const USER_HEADER: &str = "X-User";
 pub const EMPTY_USER: &str = "bloink-empty";

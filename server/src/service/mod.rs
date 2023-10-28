@@ -76,9 +76,6 @@ impl Service {
                 types::Response::Error(error.into())
             }
         }
-        // TODO: Log here the type of request
-        // TODO: Log here the error (especially if 500)
-        // TODO: Suppress top-level logging for REST?
     }
 
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<types::Push> {

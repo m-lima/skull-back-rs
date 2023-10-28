@@ -3,8 +3,11 @@ name = "server"
 version.workspace = true
 edition.workspace = true
 
-#[feature]
-threads = ["boile-rs/rt-threads"]
+[features]
+threads = [
+  "boile-rs/rt-threads",
+  "tokio/rt-multi-thread",
+]
 
 [dependencies]
 axum = { workspace = true, features = ["query", "ws"] }
@@ -12,20 +15,24 @@ boile-rs = { workspace = true, features = ["log-spans", "rt-shutdown", "rt-clap"
 clap = { workspace = true, features = ["derive"] }
 hyper = { workspace = true, features = ["server"] }
 rand = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 store = { path = "../store" }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tower-layer = { workspace = true }
 tower-service = { workspace = true }
-types = { path = "../types" }
-
-# Error
-thiserror = { workspace = true }
-
-# Parsing
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-
-# Logging
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-rmp-serde = "1.1.2"
+types = { path = "../types" }
+
+[dev-dependencies]
+hyper = { workspace = true, features = ["client"] }
+pwner = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[[test]]
+name = "api"
+path = "./tests/api/main.rs"
+harness = false

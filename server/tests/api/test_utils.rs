@@ -84,10 +84,6 @@ impl<T> Assertion<T> {
         Self::Err(message, format!("{got:?}"), Some(format!("{wanted:?}")))
     }
 
-    pub fn err_eq(message: &'static str, got: impl std::fmt::Debug) -> Self {
-        Self::Err(message, format!("{got:?}"), None)
-    }
-
     pub fn assert(self, location: &'static str) -> T {
         match self {
             Self::Ok(r) => r,
