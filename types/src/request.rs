@@ -95,7 +95,9 @@ pub mod occurrence {
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct Search {
         pub skulls: Option<std::collections::HashSet<SkullId>>,
+        #[serde(with = "chrono::serde::ts_milliseconds_option")]
         pub start: Option<chrono::DateTime<chrono::Utc>>,
+        #[serde(with = "chrono::serde::ts_milliseconds_option")]
         pub end: Option<chrono::DateTime<chrono::Utc>>,
         pub limit: Option<usize>,
     }
@@ -109,6 +111,7 @@ pub mod occurrence {
     pub struct Occurrence {
         pub skull: SkullId,
         pub amount: f32,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
         pub millis: chrono::DateTime<chrono::Utc>,
     }
 

@@ -9,7 +9,6 @@ fn setup_tracing(
 ) -> Result<(), tracing::subscriber::SetGlobalDefaultError> {
     use tracing_subscriber::layer::SubscriberExt;
 
-    println!("{}", verbosity.level);
     let subscriber = tracing_subscriber::registry().with(boile_rs::log::tracing::layer());
 
     if verbosity.include_spans {
