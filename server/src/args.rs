@@ -7,6 +7,7 @@ enum Error {
     #[error("Could not open file")]
     CouldNotOpenFile,
     #[error("Expected `auto` or a value in the [1..=255] range")]
+    #[cfg(feature = "threads")]
     Threads,
 }
 
@@ -138,44 +139,3 @@ fn to_user_list(path: std::path::PathBuf) -> Result<std::collections::HashSet<St
 
     Ok(users)
 }
-
-// #[derive(Copy, Clone, Eq, PartialEq)]
-// pub enum Threads {
-//     Single,
-//     Auto,
-//     Multi(u16),
-// }
-//
-// impl Threads {
-//     fn parse(input: &str) -> Result<Self, Error> {
-//         if input == "auto" {
-//             Ok(Self::Auto)
-//         } else {
-//             input.parse().map_err(|_| Error::Threads).and_then(|count| {
-//                 if count == 0 {
-//                     Err(Error::Threads)
-//                 } else if count == 1 {
-//                     Ok(Self::Single)
-//                 } else {
-//                     Ok(Self::Multi(count))
-//                 }
-//             })
-//         }
-//     }
-// }
-//
-// impl std::fmt::Display for Threads {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::Single => f.write_str("Single"),
-//             Self::Auto => f.write_str("Auto"),
-//             Self::Multi(count) => write!(f, "Multi({count})"),
-//         }
-//     }
-// }
-//
-// impl std::fmt::Debug for Threads {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         std::fmt::Display::fmt(self, f)
-//     }
-// }

@@ -1,12 +1,14 @@
 use types::{
     request::{
         skull::{Create, Delete, Update},
-        Setter, Skull,
+        Skull,
     },
-    Payload, Push,
+    Payload, Push, Setter,
 };
 
-use super::{Broadcaster, Result, Service};
+use super::{Broadcaster, Service};
+
+type Result = std::result::Result<types::Payload, store::Error>;
 
 pub async fn handle(service: &Service, request: Skull) -> Result {
     let skulls = Skulls::new(service);
@@ -48,7 +50,7 @@ impl Skulls<'_> {
             )
             .await?;
 
-        self.broadcaster.send(Push::SkullCreated(created)).await;
+        self.broadcaster.send(Push::SkullCreated(created));
         Ok(Payload::Created)
     }
 
@@ -65,14 +67,14 @@ impl Skulls<'_> {
             )
             .await?;
 
-        self.broadcaster.send(Push::SkullUpdated(updated)).await;
+        self.broadcaster.send(Push::SkullUpdated(updated));
         Ok(Payload::Updated)
     }
 
     async fn delete(&self, request: Delete) -> Result {
         self.store.delete(request.id).await?;
 
-        self.broadcaster.send(Push::SkullDeleted(request.id)).await;
+        self.broadcaster.send(Push::SkullDeleted(request.id));
         Ok(Payload::Deleted)
     }
 }

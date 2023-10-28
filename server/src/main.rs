@@ -1,6 +1,5 @@
 mod args;
 mod layer;
-mod rest;
 mod router;
 mod service;
 mod ws;
@@ -25,6 +24,7 @@ fn setup_tracing(
                 .with_targets([
                     ("layer", tracing::level_filters::LevelFilter::OFF),
                     ("store", tracing::level_filters::LevelFilter::OFF),
+                    ("ws", tracing::level_filters::LevelFilter::OFF),
                 ]),
         );
         tracing::subscriber::set_global_default(subscriber).map_err(Into::into)
@@ -92,9 +92,7 @@ async fn async_main(
         }
     };
 
-    let router = axum::Router::<(), hyper::Body>::new()
-        .nest("/", rest::build())
-        .nest("/ws", ws::build())
+    let router = router::build()
         .layer(layer::Auth::wrap(services))
         .layer(layer::Logger);
 

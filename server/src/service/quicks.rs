@@ -1,12 +1,14 @@
 use types::{
     request::{
         quick::{Create, Delete, Update},
-        Quick, Setter,
+        Quick,
     },
-    Payload, Push,
+    Payload, Push, Setter,
 };
 
-use super::{Broadcaster, Result, Service};
+use super::{Broadcaster, Service};
+
+type Result = std::result::Result<types::Payload, store::Error>;
 
 pub async fn handle(service: &Service, request: Quick) -> Result {
     let quicks = Quicks::new(service);
@@ -39,7 +41,7 @@ impl Quicks<'_> {
     async fn create(&self, request: Create) -> Result {
         let created = self.store.create(request.skull, request.amount).await?;
 
-        self.broadcaster.send(Push::QuickCreated(created)).await;
+        self.broadcaster.send(Push::QuickCreated(created));
         Ok(Payload::Created)
     }
 
@@ -53,14 +55,14 @@ impl Quicks<'_> {
             )
             .await?;
 
-        self.broadcaster.send(Push::QuickUpdated(updated)).await;
+        self.broadcaster.send(Push::QuickUpdated(updated));
         Ok(Payload::Updated)
     }
 
     async fn delete(&self, request: Delete) -> Result {
         self.store.delete(request.id).await?;
 
-        self.broadcaster.send(Push::QuickDeleted(request.id)).await;
+        self.broadcaster.send(Push::QuickDeleted(request.id));
         Ok(Payload::Deleted)
     }
 }

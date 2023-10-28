@@ -23,18 +23,18 @@ async fn handle(
     service: Service,
     request: types::Request,
 ) -> (hyper::StatusCode, axum::Json<types::Response>) {
-    match service.handle(request).await.map_err(types::Error::from) {
-        Ok(ok) => {
-            let status = match ok {
+    match service.handle(request).await {
+        types::Response::Payload(payload) => {
+            let status = match payload {
                 types::Payload::Created => hyper::StatusCode::CREATED,
                 types::Payload::Updated | types::Payload::Deleted => hyper::StatusCode::NO_CONTENT,
                 types::Payload::Skulls(_)
                 | types::Payload::Quicks(_)
                 | types::Payload::Occurrences(_) => hyper::StatusCode::OK,
             };
-            (status, axum::Json(types::Response::Ok(ok)))
+            (status, axum::Json(types::Response::Payload(payload)))
         }
-        Err(error) => {
+        types::Response::Error(error) => {
             let status = match error.kind {
                 types::Kind::BadRequest => hyper::StatusCode::BAD_REQUEST,
                 types::Kind::NotFound => hyper::StatusCode::NOT_FOUND,

@@ -1,12 +1,14 @@
 use types::{
     request::{
         occurrence::{Create, Search, Update},
-        Occurrence, Setter,
+        Occurrence,
     },
-    Payload, Push,
+    Payload, Push, Setter,
 };
 
-use super::{Broadcaster, Result, Service};
+use super::{Broadcaster, Service};
+
+type Result = std::result::Result<types::Payload, store::Error>;
 
 pub async fn handle(service: &Service, request: Occurrence) -> Result {
     let occurrences = Occurrences::new(service);
@@ -75,18 +77,14 @@ impl Occurrences<'_> {
             )
             .await?;
 
-        self.broadcaster
-            .send(Push::OccurrenceUpdated(updated))
-            .await;
+        self.broadcaster.send(Push::OccurrenceUpdated(updated));
         Ok(Payload::Updated)
     }
 
     async fn delete(&self, request: types::request::occurrence::Delete) -> Result {
         self.store.delete(request.id).await?;
 
-        self.broadcaster
-            .send(Push::OccurrenceDeleted(request.id))
-            .await;
+        self.broadcaster.send(Push::OccurrenceDeleted(request.id));
         Ok(Payload::Deleted)
     }
 }
