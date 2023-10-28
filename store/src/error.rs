@@ -55,3 +55,22 @@ impl From<sqlx::Error> for Error {
         Self::Sqlx(error)
     }
 }
+
+impl From<Error> for types::Error {
+    fn from(error: Error) -> Self {
+        let kind = match error {
+            Error::InvalidParameter(_)
+            | Error::ConflictingField(_, _)
+            | Error::NoChanges
+            | Error::ForeignKey
+            | Error::Constraint(_)
+            | Error::DuplicateEntry(_) => types::Kind::BadRequest,
+            Error::NotFound(_) => types::Kind::NotFound,
+            Error::Sqlx(_) | Error::Migration(_) => types::Kind::InternalError,
+        };
+
+        let message = (kind != types::Kind::InternalError).then(|| error.to_string());
+
+        Self { kind, message }
+    }
+}

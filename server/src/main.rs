@@ -1,10 +1,7 @@
 mod args;
-mod auth;
-// mod rejection;
-// mod root;
-// mod error;
-mod logger;
-// mod router;
+mod layer;
+mod rest;
+mod router;
 mod service;
 mod ws;
 
@@ -29,7 +26,12 @@ fn main() -> std::process::ExitCode {
         "Configuration loaded"
     );
 
-    if !service::prepare_users(create, &db_root, &users) {
+    if users.is_empty() {
+        tracing::error!("No users provided");
+        return std::process::ExitCode::FAILURE;
+    }
+
+    if create && !service::create_users(&db_root, &users) {
         return std::process::ExitCode::FAILURE;
     }
 
@@ -55,7 +57,7 @@ async fn async_main(
     db_root: std::path::PathBuf,
     users: std::collections::HashSet<String>,
 ) -> std::process::ExitCode {
-    let services = match service::create_all(users, db_root).await {
+    let services = match service::new(db_root, users).await {
         Ok(services) => services,
         Err(error) => {
             tracing::error!(%error, "Failed to create the store service");
@@ -64,10 +66,10 @@ async fn async_main(
     };
 
     let router = axum::Router::<(), hyper::Body>::new()
-        // .nest("/", rest::build())
+        .nest("/", rest::build())
         .nest("/ws", ws::build())
-        .layer(auth::Auth::wrap(services))
-        .layer(logger::Logger);
+        .layer(layer::Auth::wrap(services))
+        .layer(layer::Logger);
 
     let addr = ([0, 0, 0, 0], port).into();
 

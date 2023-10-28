@@ -1,9 +1,23 @@
 use types::{
-    request::{Occurrence, Setter},
+    request::{
+        occurrence::{Create, Search, Update},
+        Occurrence, Setter,
+    },
     Payload, Push,
 };
 
-use super::{Action, Broadcaster, Resource, Response, Result, Service};
+use super::{Broadcaster, Result, Service};
+
+pub async fn handle(service: &Service, request: Occurrence) -> Result {
+    let occurrences = Occurrences::new(service);
+    match request {
+        Occurrence::List => occurrences.list().await,
+        Occurrence::Search(request) => occurrences.search(request).await,
+        Occurrence::Create(request) => occurrences.create(request).await,
+        Occurrence::Update(request) => occurrences.update(request).await,
+        Occurrence::Delete(request) => occurrences.delete(request).await,
+    }
+}
 
 pub struct Occurrences<'a> {
     store: store::store::occurrences::Occurrences<'a>,
@@ -19,27 +33,11 @@ impl<'a> Occurrences<'a> {
 }
 
 impl Occurrences<'_> {
-    pub async fn handle(&self, request: Occurrence) -> Response {
-        let (action, result) = match request {
-            Occurrence::List => (Action::List, self.list().await),
-            Occurrence::Search(request) => (Action::Search, self.search(request).await),
-            Occurrence::Create(request) => (Action::Create, self.create(request).await),
-            Occurrence::Update(request) => (Action::Update, self.update(request).await),
-            Occurrence::Delete(request) => (Action::Delete, self.delete(request).await),
-        };
-
-        Response {
-            resource: Resource::Occurrence,
-            action,
-            result,
-        }
-    }
-
     async fn list(&self) -> Result {
         self.store.list().await.map(Payload::Occurrences)
     }
 
-    async fn search(&self, request: types::request::occurrence::Search) -> Result {
+    async fn search(&self, request: Search) -> Result {
         self.store
             .search(
                 request.skulls.as_ref(),
@@ -51,7 +49,7 @@ impl Occurrences<'_> {
             .map(Payload::Occurrences)
     }
 
-    async fn create(&self, request: types::request::occurrence::Create) -> Result {
+    async fn create(&self, request: Create) -> Result {
         let created = self
             .store
             .create(
@@ -62,12 +60,11 @@ impl Occurrences<'_> {
             )
             .await?;
 
-        let ids = created.iter().map(|occurrence| occurrence.id).collect();
         self.broadcaster.send(Push::OccurrencesCreated(created));
-        Ok(Payload::Ids(ids))
+        Ok(Payload::Created)
     }
 
-    async fn update(&self, request: types::request::occurrence::Update) -> Result {
+    async fn update(&self, request: Update) -> Result {
         let updated = self
             .store
             .update(
@@ -81,7 +78,7 @@ impl Occurrences<'_> {
         self.broadcaster
             .send(Push::OccurrenceUpdated(updated))
             .await;
-        Ok(Payload::Ok)
+        Ok(Payload::Updated)
     }
 
     async fn delete(&self, request: types::request::occurrence::Delete) -> Result {
@@ -90,6 +87,6 @@ impl Occurrences<'_> {
         self.broadcaster
             .send(Push::OccurrenceDeleted(request.id))
             .await;
-        Ok(Payload::Ok)
+        Ok(Payload::Deleted)
     }
 }
