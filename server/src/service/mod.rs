@@ -48,7 +48,7 @@ impl Broadcaster {
         Self { sender }
     }
 
-    async fn send(&self, push: types::Push) {
+    fn send(&self, push: types::Push) {
         if let Ok(count) = self.sender.send(push) {
             if count == 1 {
                 tracing::debug!("Broadcasting to 1 listener");
@@ -59,15 +59,30 @@ impl Broadcaster {
     }
 }
 
-type Result = std::result::Result<types::Payload, store::Error>;
-
 impl Service {
-    pub async fn handle(&self, request: types::Request) -> Result {
-        match request {
+    pub async fn handle(&self, request: types::Request) -> types::Response {
+        let result = match request {
             types::Request::Skull(request) => skulls::handle(self, request).await,
             types::Request::Quick(request) => quicks::handle(self, request).await,
             types::Request::Occurrence(request) => occurrences::handle(self, request).await,
+        };
+
+        match result {
+            Ok(payload) => types::Response::Payload(payload),
+            Err(error) => {
+                if error.kind() == types::Kind::InternalError {
+                    tracing::error!(%error, "Internal error");
+                }
+                types::Response::Error(error.into())
+            }
         }
+        // TODO: Log here the type of request
+        // TODO: Log here the error (especially if 500)
+        // TODO: Suppress top-level logging for REST?
+    }
+
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<types::Push> {
+        self.broadcaster.sender.subscribe()
     }
 
     async fn new<P: AsRef<std::path::Path>>(path: P) -> store::Result<Self> {

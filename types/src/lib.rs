@@ -1,8 +1,12 @@
+pub mod error;
 pub mod request;
 pub mod response;
+pub mod ws;
 
-pub use request::Request;
-pub use response::{Error, Kind, Payload, Push, Response};
+pub use error::{Error, Kind};
+pub use request::{Request, Setter};
+pub use response::{Payload, Response};
+pub use ws::{Message, Push};
 
 pub type Id = i64;
 

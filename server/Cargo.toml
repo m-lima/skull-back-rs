@@ -11,8 +11,9 @@ axum = { workspace = true, features = ["query", "ws"] }
 boile-rs = { workspace = true, features = ["log-spans", "rt-shutdown", "rt-clap"] }
 clap = { workspace = true, features = ["derive"] }
 hyper = { workspace = true, features = ["server"] }
+rand = { workspace = true }
 store = { path = "../store" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
 tower-layer = { workspace = true }
 tower-service = { workspace = true }
 types = { path = "../types" }
@@ -27,3 +28,4 @@ serde_json = { workspace = true }
 # Logging
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+rmp-serde = "1.1.2"

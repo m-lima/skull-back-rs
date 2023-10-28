@@ -23,6 +23,24 @@ pub enum Error {
     DuplicateEntry(String),
 }
 
+impl Error {
+    #[must_use]
+    pub fn kind(&self) -> types::Kind {
+        match self {
+            Self::InvalidParameter(_)
+            | Self::ConflictingField(_, _)
+            | Self::NoChanges
+            | Self::ForeignKey
+            | Self::Constraint(_)
+            | Self::DuplicateEntry(_) => types::Kind::BadRequest,
+
+            Self::NotFound(_) => types::Kind::NotFound,
+
+            Self::Sqlx(_) | Self::Migration(_) => types::Kind::InternalError,
+        }
+    }
+}
+
 impl From<sqlx::Error> for Error {
     fn from(error: sqlx::Error) -> Self {
         if let sqlx::Error::Database(db_err) = &error {
@@ -58,16 +76,7 @@ impl From<sqlx::Error> for Error {
 
 impl From<Error> for types::Error {
     fn from(error: Error) -> Self {
-        let kind = match error {
-            Error::InvalidParameter(_)
-            | Error::ConflictingField(_, _)
-            | Error::NoChanges
-            | Error::ForeignKey
-            | Error::Constraint(_)
-            | Error::DuplicateEntry(_) => types::Kind::BadRequest,
-            Error::NotFound(_) => types::Kind::NotFound,
-            Error::Sqlx(_) | Error::Migration(_) => types::Kind::InternalError,
-        };
+        let kind = error.kind();
 
         let message = (kind != types::Kind::InternalError).then(|| error.to_string());
 
