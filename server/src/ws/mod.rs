@@ -14,7 +14,6 @@ enum FlowControl<T> {
 pub struct Socket<T: Mode> {
     id: String,
     socket: axum::extract::ws::WebSocket,
-    broadcast: tokio::sync::broadcast::Receiver<types::Push>,
     service: Service,
     _mode: std::marker::PhantomData<T>,
 }
@@ -24,12 +23,9 @@ impl<T: Mode> Socket<T> {
         let id = format!("{id:04x}", id = rand::random::<u16>());
         tracing::debug!(ws = %id, mode = %T::mode(), "Opening websocket");
 
-        let broadcast = service.subscribe();
-
         Self {
             id,
             socket,
-            broadcast,
             service,
             _mode: std::marker::PhantomData,
         }
@@ -47,13 +43,22 @@ impl<T: Mode> Socket<T> {
             };
         }
 
+        let mut broadcast = self.service.subscribe();
+
         loop {
             tokio::select! {
                 () = tokio::time::sleep(std::time::Duration::from_secs(30)) => self.heartbeat().await,
-                // message = self.broadcast.recv() => {
-                //     let push = flow!(push(message));
-                //     flow!(socket.push(push).await);
-                // }
+                message = broadcast.recv() => {
+                    let push = match message {
+                        Ok(push) => types::Message::Push(push),
+                        Err(error) => {
+                            tracing::warn!(ws = %self.id, mode = %T::mode(), %error, "Failed to read from broadcaster");
+                            continue;
+                        }
+                    };
+                    tracing::debug!(ws = %self.id, mode = %T::mode(), "Pushing message");
+                    flow!(self.send(push).await);
+                }
                 request = self.recv() => {
                     let start = std::time::Instant::now();
                     let request = flow!(request);
@@ -75,7 +80,7 @@ impl<T: Mode> Socket<T> {
                             types::Message::Error(error)
                         }
                     };
-                    flow!(self.reply(message).await);
+                    flow!(self.send(message).await);
                 }
             }
         }
@@ -132,41 +137,25 @@ impl<T: Mode> Socket<T> {
                     kind: types::Kind::BadRequest,
                     message: Some(error.to_string()),
                 };
-                self.reply(types::Message::Error(error)).await
+                self.send(types::Message::Error(error)).await
             }
         }
     }
 
-    async fn reply<R>(&mut self, response: types::Message) -> FlowControl<R> {
+    async fn send<R>(&mut self, response: types::Message) -> FlowControl<R> {
         match T::serialize(response) {
             Ok(response) => {
                 if let Err(error) = self.socket.send(response).await {
-                    tracing::error!(ws = %self.id, mode = %T::mode(), %error, "Failed to send response");
+                    tracing::error!(ws = %self.id, mode = %T::mode(), %error, "Failed to send message");
                     FlowControl::Break
                 } else {
                     FlowControl::Continue
                 }
             }
             Err(error) => {
-                tracing::error!(ws = %self.id, mode = %T::mode(), %error, "Failed to serialize response");
+                tracing::error!(ws = %self.id, mode = %T::mode(), %error, "Failed to serialize message");
                 FlowControl::Break
             }
         }
     }
-
-    // async fn push<R>(&mut self, push: types::Push) -> FlowControl<R> {
-    //     match T::serialize(Response::Push(push)) {
-    //         Ok(message) => {
-    //             if let Err(error) = self.socket.send(message).await {
-    //                 tracing::warn!(%error, "Failed to push message");
-    //             } else {
-    //                 tracing::info!("Message pushed");
-    //             }
-    //         }
-    //         Err(error) => {
-    //             tracing::error!(%error, "Failed to serialize push message");
-    //         }
-    //     }
-    //     FlowControl::Continue
-    // }
 }
