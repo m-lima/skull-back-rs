@@ -42,20 +42,26 @@ pub struct Args {
 }
 
 impl Args {
-    fn verbosity(&self) -> tracing::Level {
-        match self.verbosity {
-            0 => tracing::Level::ERROR,
-            1 => tracing::Level::WARN,
-            2 => tracing::Level::INFO,
-            3 => tracing::Level::DEBUG,
-            _ => tracing::Level::TRACE,
+    fn verbosity(&self) -> Verbosity {
+        let (level, include_spans) = match self.verbosity {
+            0 => (tracing::Level::ERROR, false),
+            1 => (tracing::Level::WARN, false),
+            2 => (tracing::Level::INFO, false),
+            3 => (tracing::Level::INFO, true),
+            4 => (tracing::Level::DEBUG, true),
+            _ => (tracing::Level::TRACE, true),
+        };
+
+        Verbosity {
+            level,
+            include_spans,
         }
     }
 
     pub fn decompose(
         self,
     ) -> (
-        tracing::Level,
+        Verbosity,
         u16,
         boile_rs::rt::Threads,
         bool,
@@ -74,6 +80,12 @@ impl Args {
             self.users.users(),
         )
     }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Verbosity {
+    pub level: tracing::Level,
+    pub include_spans: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]

@@ -5,19 +5,46 @@ mod router;
 mod service;
 mod ws;
 
+fn setup_tracing(
+    verbosity: args::Verbosity,
+) -> Result<(), tracing::subscriber::SetGlobalDefaultError> {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    println!("{}", verbosity.level);
+    let subscriber = tracing_subscriber::registry().with(boile_rs::log::tracing::layer());
+
+    if verbosity.include_spans {
+        let subscriber = subscriber.with(::tracing::level_filters::LevelFilter::from_level(
+            verbosity.level,
+        ));
+        tracing::subscriber::set_global_default(subscriber).map_err(Into::into)
+    } else {
+        let subscriber = subscriber.with(
+            tracing_subscriber::filter::Targets::new()
+                .with_default(verbosity.level)
+                .with_targets([
+                    ("layer", tracing::level_filters::LevelFilter::OFF),
+                    ("store", tracing::level_filters::LevelFilter::OFF),
+                ]),
+        );
+        tracing::subscriber::set_global_default(subscriber).map_err(Into::into)
+    }
+}
+
 #[allow(clippy::declare_interior_mutable_const)]
 const X_USER: hyper::header::HeaderName = hyper::header::HeaderName::from_static("x-user");
 
 fn main() -> std::process::ExitCode {
     let (verbosity, port, threads, create, db_root, users) = args::parse().decompose();
 
-    if let Err(err) = boile_rs::log::setup(verbosity) {
+    if let Err(err) = setup_tracing(verbosity) {
         eprintln!("{err}");
         return std::process::ExitCode::FAILURE;
     }
 
     tracing::info!(
-        verbosity = %verbosity,
+        verbosity = %verbosity.level,
+        spans = %verbosity.include_spans,
         port = port,
         threads = %threads,
         create = %create,

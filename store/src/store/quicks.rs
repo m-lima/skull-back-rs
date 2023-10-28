@@ -11,7 +11,7 @@ impl<'a> Quicks<'a> {
 }
 
 impl Quicks<'_> {
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn list(&self) -> Result<Vec<types::Quick>> {
         sqlx::query_as!(
             types::Quick,
@@ -29,9 +29,9 @@ impl Quicks<'_> {
         .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn create(&self, skull: types::SkullId, amount: f32) -> Result<types::Quick> {
-        if amount < 0.0 {
+        if amount <= 0.0 {
             return Err(Error::InvalidParameter("amount"));
         }
 
@@ -57,7 +57,7 @@ impl Quicks<'_> {
         .map_err(Into::into)
     }
 
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn update(
         &self,
         id: types::QuickId,
@@ -65,7 +65,7 @@ impl Quicks<'_> {
         amount: Option<f32>,
     ) -> Result<types::Quick> {
         if let Some(amount) = amount {
-            if amount < 0.0 {
+            if amount <= 0.0 {
                 return Err(Error::InvalidParameter("amount"));
             }
         }
@@ -144,7 +144,7 @@ impl Quicks<'_> {
         .and_then(|r| r.ok_or(Error::NotFound(id.into())))
     }
 
-    #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn delete(&self, id: types::QuickId) -> Result {
         sqlx::query!(
             r#"
