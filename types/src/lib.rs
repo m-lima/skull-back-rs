@@ -2,7 +2,7 @@ pub mod request;
 pub mod response;
 
 pub use request::Request;
-pub use response::{Payload, Push, Response};
+pub use response::{Error, Kind, Payload, Push, Response};
 
 pub type Id = i64;
 

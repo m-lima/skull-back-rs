@@ -1,17 +1,30 @@
 use types::{
-    request::{Setter, Skull},
+    request::{
+        skull::{Create, Delete, Update},
+        Setter, Skull,
+    },
     Payload, Push,
 };
 
-use super::{Action, Broadcaster, Resource, Response, Result, Service};
+use super::{Broadcaster, Result, Service};
 
-pub struct Skulls<'a> {
+pub async fn handle(service: &Service, request: Skull) -> Result {
+    let skulls = Skulls::new(service);
+    match request {
+        Skull::List => skulls.list().await,
+        Skull::Create(request) => skulls.create(request).await,
+        Skull::Update(request) => skulls.update(request).await,
+        Skull::Delete(request) => skulls.delete(request).await,
+    }
+}
+
+struct Skulls<'a> {
     store: store::store::skulls::Skulls<'a>,
     broadcaster: &'a Broadcaster,
 }
 
 impl<'a> Skulls<'a> {
-    pub fn new(service: &'a Service) -> Self {
+    fn new(service: &'a Service) -> Self {
         let store = service.store.skulls();
         let broadcaster = &service.broadcaster;
         Self { store, broadcaster }
@@ -19,26 +32,11 @@ impl<'a> Skulls<'a> {
 }
 
 impl Skulls<'_> {
-    pub async fn handle(&self, request: Skull) -> Response {
-        let (action, result) = match request {
-            Skull::List => (Action::List, self.list().await),
-            Skull::Create(request) => (Action::Create, self.create(request).await),
-            Skull::Update(request) => (Action::Update, self.update(request).await),
-            Skull::Delete(request) => (Action::Delete, self.delete(request).await),
-        };
-
-        Response {
-            resource: Resource::Skull,
-            action,
-            result,
-        }
-    }
-
     async fn list(&self) -> Result {
         self.store.list().await.map(Payload::Skulls)
     }
 
-    async fn create(&self, request: types::request::skull::Create) -> Result {
+    async fn create(&self, request: Create) -> Result {
         let created = self
             .store
             .create(
@@ -50,12 +48,11 @@ impl Skulls<'_> {
             )
             .await?;
 
-        let id = created.id;
         self.broadcaster.send(Push::SkullCreated(created)).await;
-        Ok(Payload::Skull(id))
+        Ok(Payload::Created)
     }
 
-    async fn update(&self, request: types::request::skull::Update) -> Result {
+    async fn update(&self, request: Update) -> Result {
         let updated = self
             .store
             .update(
@@ -69,13 +66,13 @@ impl Skulls<'_> {
             .await?;
 
         self.broadcaster.send(Push::SkullUpdated(updated)).await;
-        Ok(Payload::Ok)
+        Ok(Payload::Updated)
     }
 
-    async fn delete(&self, request: types::request::skull::Delete) -> Result {
+    async fn delete(&self, request: Delete) -> Result {
         self.store.delete(request.id).await?;
 
         self.broadcaster.send(Push::SkullDeleted(request.id)).await;
-        Ok(Payload::Ok)
+        Ok(Payload::Deleted)
     }
 }

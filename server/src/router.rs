@@ -1,56 +1,70 @@
-use crate::auth::Session;
-
-pub struct Router;
-
-impl<B, S> tower_service::Service<(hyper::Request<B>, Session<S>)> for Router {
-    type Response = ();
-    type Error = ();
-    type Future = Future;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        todo!()
-    }
-
-    fn call(&mut self, (request, session): (hyper::Request<B>, Session<S>)) -> Self::Future {
-        let path = request.uri().path();
-        let path = path.strip_suffix('/').unwrap_or(path);
-
-        match path {
-            "" => root(&request),
-            "/skull" => skull(&request),
-            "/quick" => skull(&request),
-            "/occurrence" => skull(&request),
-            _ => Future::NotFound,
-        }
-    }
+pub fn build() -> axum::Router {
+    axum::Router::new().nest("/", rest::build())
 }
 
-pub enum Future {
-    Rest,
-    Ws,
-    RootMethodNotAllowed,
-    WsMethodNotAllowed,
-    RestMethodNotAllowed,
-    NotFound,
-    PayloadTooLarge,
-}
+mod rest {
+    use types::Request;
 
-fn root<B>(request: &hyper::Request<B>) -> Future {
-    if method != hyper::Method::POST {
-        return Future::RootMethodNotAllowed;
-    }
-}
+    use crate::service::Service;
 
-fn skull<B>(request: &hyper::Request<B>) -> Future {
-    let method = request.method();
-    if method == hyper::Method::GET {
-    } else if method == hyper::Method::POST {
-    } else if method == hyper::Method::PATCH {
-    } else if method == hyper::Method::DELETE {
-    } else {
-        Future::RestMethodNotAllowed
+    pub fn build() -> axum::Router {
+        axum::Router::new()
+        // .route("/", axum::routing::post(handle))
+        // .nest("/skull", skull::build())
+        // .nest("/quick", quick::build())
+        // .nest("/occurrence", occurrence::build())
     }
+
+    // async fn handle(
+    //     axum::Extension(service): axum::Extension<Service>,
+    //     axum::Json(request): axum::Json<Request>,
+    // ) -> (hyper::StatusCode, axum::Json<Response>) {
+    //     let response = service.handle(request).await;
+    //     // (status_for(&response), axum::Json(response))
+    //     todo!()
+    // }
+    //
+    // mod skull {
+    //     pub fn build() -> axum::Router {
+    //         axum::Router::new()
+    //             .route("/", axum::routing::get(get))
+    //             .route("/", axum::routing::post(post))
+    //             .route("/", axum::routing::put(put))
+    //             .route("/", axum::routing::delete(delete))
+    //     }
+    //
+    //     async fn get(
+    //         axum::Extension(service): axum::Extension<Service>,
+    //     ) -> Result<axum::Json<Vec<Task>>> {
+    //         service.handle(types::request::Skull::List).await;
+    //         todo!()
+    //     }
+    //
+    //     async fn post(
+    //         axum::Extension(service): axum::Extension<Service>,
+    //         axum::Json(payload): axum::Json<Create>,
+    //     ) -> Result<axum::response::Response> {
+    //         let id = service.tasks().create(payload).await?;
+    //         Ok(axum::response::IntoResponse::into_response((
+    //             axum::http::StatusCode::CREATED,
+    //             format!("{id}"),
+    //         )))
+    //     }
+    //
+    //     async fn patch(
+    //         axum::Extension(service): axum::Extension<Service>,
+    //         axum::Json(payload): axum::Json<Update>,
+    //     ) -> Result<axum::http::StatusCode> {
+    //         service.tasks().update(payload).await?;
+    //         Ok(axum::http::StatusCode::NO_CONTENT)
+    //     }
+    //
+    //     async fn delete(
+    //         axum::Extension(service): axum::Extension<Service>,
+    //         axum::Json(payload): axum::Json<Delete>,
+    //     ) -> Result<axum::http::StatusCode> {
+    //         service.tasks().delete(payload).await?;
+    //         Ok(axum::http::StatusCode::NO_CONTENT)
+    //     }
+    // }
 }
