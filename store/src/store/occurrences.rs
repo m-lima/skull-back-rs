@@ -33,7 +33,7 @@ impl Occurrences<'_> {
     #[tracing::instrument(level = tracing::Level::DEBUG, skip(self), err(level = tracing::Level::DEBUG))]
     pub async fn search(
         &self,
-        skulls: &std::collections::HashSet<types::SkullId>,
+        skulls: Option<&std::collections::HashSet<types::SkullId>>,
         start: Option<chrono::DateTime<chrono::Utc>>,
         end: Option<chrono::DateTime<chrono::Utc>>,
         limit: Option<usize>,
@@ -52,7 +52,7 @@ impl Occurrences<'_> {
 
         let mut nowhere = true;
 
-        if !skulls.is_empty() {
+        if let Some(skulls) = skulls {
             if nowhere {
                 builder.push(" WHERE skull IN (");
                 nowhere = false;
@@ -451,7 +451,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(&std::collections::HashSet::new(), None, None, None)
+            .search(None, None, None, None)
             .await
             .unwrap();
         assert_eq!(occurrences.iter().map(|o| o.id).collect::<Vec<_>>(), ids);
@@ -464,7 +464,7 @@ mod tests {
         let occurrences = store
             .occurrences()
             .search(
-                &std::collections::HashSet::from([skull_one, skull_two]),
+                Some(&std::collections::HashSet::from([skull_one, skull_two])),
                 None,
                 None,
                 None,
@@ -475,13 +475,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_no_skulls() {
+        let (store, _, _) = prepare_search().await;
+
+        let occurrences = store
+            .occurrences()
+            .search(Some(&std::collections::HashSet::new()), None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(occurrences.iter().map(|o| o.id).collect::<Vec<_>>(), []);
+    }
+
+    #[tokio::test]
     async fn search_just_skulls() {
         let (store, (_, skull_two), ids) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
             .search(
-                &std::collections::HashSet::from([skull_two]),
+                Some(&std::collections::HashSet::from([skull_two])),
                 None,
                 None,
                 None,
@@ -500,12 +512,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(
-                &std::collections::HashSet::new(),
-                Some(chrono(3)),
-                None,
-                None,
-            )
+            .search(None, Some(chrono(3)), None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -520,12 +527,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(
-                &std::collections::HashSet::new(),
-                None,
-                Some(chrono(2)),
-                None,
-            )
+            .search(None, None, Some(chrono(2)), None)
             .await
             .unwrap();
         assert_eq!(
@@ -540,12 +542,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(
-                &std::collections::HashSet::new(),
-                Some(chrono(3)),
-                Some(chrono(3)),
-                None,
-            )
+            .search(None, Some(chrono(3)), Some(chrono(3)), None)
             .await
             .unwrap();
         assert_eq!(
@@ -560,7 +557,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(&std::collections::HashSet::new(), None, None, Some(3))
+            .search(None, None, None, Some(3))
             .await
             .unwrap();
         assert_eq!(
@@ -576,7 +573,7 @@ mod tests {
         let occurrences = store
             .occurrences()
             .search(
-                &std::collections::HashSet::from([skull_one]),
+                Some(&std::collections::HashSet::from([skull_one])),
                 Some(chrono(3)),
                 Some(chrono(4)),
                 Some(1),

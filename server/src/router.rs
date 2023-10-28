@@ -18,32 +18,39 @@ impl<B, S> tower_service::Service<(hyper::Request<B>, Session<S>)> for Router {
         let path = request.uri().path();
         let path = path.strip_suffix('/').unwrap_or(path);
 
-        let mode = match path {
-            "" => {
-                if request.method() == hyper::Method::POST {
-                    request.body()
-                } else {
-                    Future::MethodNotAllowed
-                }
-            }
-            "skulll" => Mode::Binary,
-            "quick" => Mode::Binary,
-            "occurrence" => Mode::Binary,
+        match path {
+            "" => root(&request),
+            "/skull" => skull(&request),
+            "/quick" => skull(&request),
+            "/occurrence" => skull(&request),
             _ => Future::NotFound,
-        };
+        }
     }
-}
-
-fn get_body<B>(request: hyper::Request<B>) -> types::Request
-where
-    B: hyper::body::HttpBody,
-{
 }
 
 pub enum Future {
     Rest,
     Ws,
-    MethodNotAllowed,
+    RootMethodNotAllowed,
+    WsMethodNotAllowed,
+    RestMethodNotAllowed,
     NotFound,
     PayloadTooLarge,
+}
+
+fn root<B>(request: &hyper::Request<B>) -> Future {
+    if method != hyper::Method::POST {
+        return Future::RootMethodNotAllowed;
+    }
+}
+
+fn skull<B>(request: &hyper::Request<B>) -> Future {
+    let method = request.method();
+    if method == hyper::Method::GET {
+    } else if method == hyper::Method::POST {
+    } else if method == hyper::Method::PATCH {
+    } else if method == hyper::Method::DELETE {
+    } else {
+        Future::RestMethodNotAllowed
+    }
 }

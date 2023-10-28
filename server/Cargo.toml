@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 #[feature]
-threads = ["tokio/rt-multi-thread"]
+threads = ["boile-rs/rt-threads"]
 
 [dependencies]
-# axum = { workspace = true, features = ["ws"] }
-boile-rs = { workspace = true, features = ["log-spans"] }
+axum = { workspace = true, features = ["ws"] }
+boile-rs = { workspace = true, features = ["log-spans", "rt-shutdown", "rt-clap"] }
 clap = { workspace = true, features = ["derive"] }
 hyper = { workspace = true, features = ["server"] }
 store = { path = "../store" }
@@ -26,5 +26,3 @@ serde_json = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
-tokio-tungstenite = { workspace = true }
-tungstenite = { workspace = true }
