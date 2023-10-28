@@ -1,4 +1,4 @@
-use crate::{helper, server};
+use crate::{helper, server, test_utils};
 
 #[derive(Debug, Clone)]
 pub struct Client {

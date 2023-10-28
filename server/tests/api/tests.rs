@@ -1,5 +1,5 @@
+use crate::check_async as check;
 use hyper::StatusCode;
-use test_utils::check_async as check;
 
 use crate::{
     client::Client,
