@@ -8,6 +8,11 @@ pub use request::{Request, Setter};
 pub use response::{Payload, Response};
 pub use ws::{Message, Push};
 
+mod transparent;
+
+#[cfg(test)]
+mod tests;
+
 pub type Id = i64;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -17,11 +22,7 @@ pub type Id = i64;
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct SkullId(Id);
 
-impl From<SkullId> for Id {
-    fn from(value: SkullId) -> Self {
-        value.0
-    }
-}
+transparent!(readonly SkullId, Id);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
@@ -41,11 +42,7 @@ pub struct Skull {
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct QuickId(Id);
 
-impl From<QuickId> for Id {
-    fn from(value: QuickId) -> Self {
-        value.0
-    }
-}
+transparent!(readonly QuickId, Id);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
@@ -62,11 +59,7 @@ pub struct Quick {
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct OccurrenceId(Id);
 
-impl From<OccurrenceId> for Id {
-    fn from(value: OccurrenceId) -> Self {
-        value.0
-    }
-}
+transparent!(readonly OccurrenceId, Id);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
@@ -74,16 +67,31 @@ pub struct Occurrence {
     pub id: OccurrenceId,
     pub skull: SkullId,
     pub amount: f32,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub millis: chrono::DateTime<chrono::Utc>,
+    pub millis: Millis,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Filter {
-    pub skulls: Vec<SkullId>,
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    pub start: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    pub end: Option<chrono::DateTime<chrono::Utc>>,
-    pub limit: Option<u32>,
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
+pub struct Millis(i64);
+
+transparent!(Millis, i64);
+
+#[cfg(feature = "chrono")]
+impl From<chrono::DateTime<chrono::Utc>> for Millis {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Self(value.timestamp_millis())
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<Millis> for chrono::DateTime<chrono::Utc> {
+    fn from(value: Millis) -> Self {
+        let value = value.0;
+        let seconds = value / 1000;
+        let nanos = ((value % 1000) as u32) * 1_000_000;
+        chrono::DateTime::from_timestamp(seconds, nanos).unwrap()
+    }
 }

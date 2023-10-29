@@ -137,8 +137,7 @@ async fn ingest_occurrences(
     skulls: &std::collections::HashMap<types::Id, types::SkullId>,
 ) -> Result<(), String> {
     let lines = read(occurrences)?;
-    let mut occurrences =
-        Vec::<(types::SkullId, f32, chrono::DateTime<chrono::Utc>)>::with_capacity(lines.len());
+    let mut occurrences = Vec::<(types::SkullId, f32, types::Millis)>::with_capacity(lines.len());
 
     for (i, line) in lines.into_iter().enumerate() {
         let i = i + 1;
@@ -165,15 +164,12 @@ async fn ingest_occurrences(
             .parse()
             .map_err(|e| format!("Occurrences: Line {i} column 3: value is not `f32`: {e}"))?;
 
-        let millis = chrono::DateTime::from_timestamp(
-            split[3].parse().map_err(|e| {
+        let millis = split[3]
+            .parse::<i64>()
+            .map(types::Millis::from)
+            .map_err(|e| {
                 format!("Occurrences: Line {i} column 4: value is not a millis timestamp: {e}")
-            })?,
-            0,
-        )
-        .ok_or_else(|| {
-            format!("Occurrences: Line {i} column 4: could not build chrono timestamp")
-        })?;
+            })?;
 
         occurrences.push((skull, amount, millis));
     }

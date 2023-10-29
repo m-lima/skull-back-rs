@@ -47,14 +47,13 @@ pub async fn start() -> Server {
 }
 
 fn random_port() -> u16 {
-    static PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(27720);
-
+    let mut port = 27720;
     loop {
-        let port = PORT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         assert!(port >= 27720, "Could not find available port above 27720");
         if port_unused(port) {
             return port;
         }
+        port = port.wrapping_add(1);
     }
 }
 
