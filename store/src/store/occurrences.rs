@@ -10,6 +10,8 @@ impl<'a> Occurrences<'a> {
     }
 }
 
+// TODO: The millis comun is becoming a timestamp. Is it a string?
+// TODO: Update. It's being stored as a "real"
 impl Occurrences<'_> {
     #[tracing::instrument(skip(self), err)]
     pub async fn list(&self) -> Result<Vec<types::Occurrence>> {
