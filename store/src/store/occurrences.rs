@@ -114,6 +114,8 @@ impl Occurrences<'_> {
                 return Err(Error::InvalidParameter("amount"));
             }
 
+            let amount = f64::from(amount);
+
             let occurrence = sqlx::query_as!(
                 types::Occurrence,
                 r#"

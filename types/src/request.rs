@@ -43,8 +43,7 @@ pub mod skull {
         pub name: String,
         pub color: u32,
         pub icon: String,
-        #[serde(rename = "unitPrice")]
-        pub unit_price: f32,
+        pub price: f32,
         pub limit: Option<f32>,
     }
 
@@ -54,8 +53,7 @@ pub mod skull {
         pub name: Option<Setter<String>>,
         pub color: Option<Setter<u32>>,
         pub icon: Option<Setter<String>>,
-        #[serde(rename = "unitPrice")]
-        pub unit_price: Option<Setter<f32>>,
+        pub price: Option<Setter<f32>>,
         pub limit: Option<Setter<Option<f32>>>,
     }
 
@@ -95,6 +93,7 @@ pub mod occurrence {
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct Search {
         pub skulls: Option<std::collections::HashSet<SkullId>>,
+        // TODO: Using this attribute makes the field mandatory in the query
         #[serde(with = "chrono::serde::ts_milliseconds_option")]
         pub start: Option<chrono::DateTime<chrono::Utc>>,
         #[serde(with = "chrono::serde::ts_milliseconds_option")]

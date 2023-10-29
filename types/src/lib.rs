@@ -30,8 +30,7 @@ pub struct Skull {
     pub name: String,
     pub color: u32,
     pub icon: String,
-    #[serde(rename = "unitPrice")]
-    pub unit_price: f32,
+    pub price: f32,
     pub limit: Option<f32>,
 }
 

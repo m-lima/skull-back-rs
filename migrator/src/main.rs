@@ -68,15 +68,17 @@ async fn ingest_skulls(
         )
         .map_err(|e| format!("Skulls: Line {i} column 3: {e}"))?;
         let icon = String::from(split[3]);
-        let unit_price = parse_f32(split[4])
+        let price = split[4]
+            .parse()
             .map_err(|e| format!("Skulls: Line {i} column 5: value is not `f32`: {e}"))?;
-        let limit = parse_f32(split[5])
+        let limit = split[5]
+            .parse()
             .map(Some)
             .map_err(|e| format!("Skulls: Line {i} column 6: value is not `f32`: {e}"))?;
 
         let new_id = store
             .skulls()
-            .create(name, color, icon, unit_price, limit)
+            .create(name, color, icon, price, limit)
             .await
             .map_err(|e| format!("Skulls: Line {i}: Failed to write to store: {e}"))?
             .id;
@@ -115,7 +117,8 @@ async fn ingest_quicks(
             .get(&orig_skull)
             .ok_or_else(|| format!("Quicks: Line {i}: could not find ID for {orig_skull}"))?;
 
-        let amount = parse_f32(split[2])
+        let amount = split[2]
+            .parse()
             .map_err(|e| format!("Quicks: Line {i} column 3: value is not `f32`: {e}"))?;
 
         store
@@ -158,7 +161,8 @@ async fn ingest_occurrences(
             .get(&orig_skull)
             .ok_or_else(|| format!("Occurrences: Line {i}: could not find ID for {orig_skull}"))?;
 
-        let amount = parse_f32(split[2])
+        let amount = split[2]
+            .parse()
             .map_err(|e| format!("Occurrences: Line {i} column 3: value is not `f32`: {e}"))?;
 
         let millis = chrono::DateTime::from_timestamp(
@@ -199,14 +203,6 @@ async fn ingest_occurrences(
     }
 
     Ok(())
-}
-
-// TODO: values are coming in wronly for sqlite (rounding errors)
-// TODO: Even with a precise `0.3`, the values in the DB have rouding errors
-fn parse_f32(string: &str) -> Result<f32, String> {
-    let value = string.parse::<f32>().map_err(|e| e.to_string())?;
-    println!("{value}");
-    Ok(0.3)
 }
 
 fn read(path: std::path::PathBuf) -> Result<Vec<String>, String> {

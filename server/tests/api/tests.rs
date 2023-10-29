@@ -276,7 +276,7 @@ async fn read(client: Client) {
         response,
         StatusCode::OK,
         LastModified::Eq(last_modified),
-        r#"{"id":2,"name":"skull2","color":"color2","icon":"icon2","unitPrice":0.2}"#
+        r#"{"id":2,"name":"skull2","color":"color2","icon":"icon2","price":0.2}"#
     ));
 }
 
@@ -520,10 +520,7 @@ mod json {
         assert_eq!(data["name"], Value::String(String::from("skull1")));
         assert_eq!(data["color"], Value::String(String::from("color1")));
         assert_eq!(data["icon"], Value::String(String::from("icon1")));
-        assert_eq!(
-            data["unitPrice"],
-            Value::Number(Number::from_f64(0.1).unwrap())
-        );
+        assert_eq!(data["price"], Value::Number(Number::from_f64(0.1).unwrap()));
     }
 
     pub async fn quick(client: Client) {
@@ -575,7 +572,7 @@ mod json {
             assert_eq!(d["color"], Value::String(format!("color{i}")));
             assert_eq!(d["icon"], Value::String(format!("icon{i}")));
             assert_eq!(
-                d["unitPrice"],
+                d["price"],
                 Value::Number(Number::from_f64(format!("0.{i}").parse().unwrap()).unwrap())
             );
         }
