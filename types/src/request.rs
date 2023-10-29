@@ -120,6 +120,7 @@ pub mod occurrence {
         pub id: OccurrenceId,
         pub skull: Option<Setter<SkullId>>,
         pub amount: Option<Setter<f32>>,
+        // TODO: This guy needs to parse form an integer
         pub millis: Option<Setter<chrono::DateTime<chrono::Utc>>>,
     }
 

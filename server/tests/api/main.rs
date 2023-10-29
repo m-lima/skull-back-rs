@@ -34,6 +34,7 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+// TODO: These tests
 fn run(runtime: &tokio::runtime::Runtime) -> (usize, Vec<&'static str>) {
     let server = runtime.block_on(server::start());
     (0, Vec::new())

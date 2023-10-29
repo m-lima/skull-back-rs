@@ -5,3 +5,7 @@ edition.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
+chrono = { workspace = true }
+store = { path = "../store" }
+tokio = { workspace = true, features = ["macros"] }
+types = { path = "../types" }

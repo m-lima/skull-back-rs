@@ -915,6 +915,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "migrator"
+version = "0.8.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "store",
+ "tokio",
+ "types",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
