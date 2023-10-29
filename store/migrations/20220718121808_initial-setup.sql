@@ -4,7 +4,7 @@ CREATE TABLE skulls (
   "name"       TEXT    NOT NULL UNIQUE CHECK(LENGTH(TRIM(name)) > 0),
   "color"      INTEGER NOT NULL UNIQUE,
   "icon"       TEXT    NOT NULL UNIQUE CHECK(LENGTH(TRIM(icon)) > 0),
-  "unit_price" REAL    NOT NULL        CHECK(unit_price >= 0),
+  "price"      REAL    NOT NULL        CHECK(price >= 0),
   "limit"      REAL
 );
 

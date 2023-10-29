@@ -111,7 +111,7 @@ impl Populator {
     }
 
     async fn populate(&self) {
-        const SKULL: &str = r#"{"name":"skull$","color":$,"icon":"icon$","unitPrice":0.$}"#;
+        const SKULL: &str = r#"{"name":"skull$","color":$,"icon":"icon$","price":0.$}"#;
         const QUICK: &str = r#"{"skull":$,"amount":$.0}"#;
         const OCCURRENCE: &str = r#"{"skull":$,"amount":$.0,"millis":$}"#;
 

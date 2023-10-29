@@ -21,7 +21,7 @@ impl Skulls<'_> {
                 "name",
                 "color" AS "color: u32",
                 "icon",
-                "unit_price" AS "unit_price: f32",
+                "price" AS "price: f32",
                 "limit" as "limit: f32"
             FROM
                 skulls
@@ -41,13 +41,13 @@ impl Skulls<'_> {
         name: Name,
         color: u32,
         icon: Icon,
-        unit_price: f32,
+        price: f32,
         limit: Option<f32>,
     ) -> Result<types::Skull> {
         let name = super::check_non_empty(name.as_ref(), "name")?;
         let icon = super::check_non_empty(icon.as_ref(), "icon")?;
-        if unit_price < 0.0 {
-            return Err(Error::InvalidParameter("unit_price"));
+        if price < 0.0 {
+            return Err(Error::InvalidParameter("price"));
         }
 
         sqlx::query_as!(
@@ -57,7 +57,7 @@ impl Skulls<'_> {
                 "name",
                 "color",
                 "icon",
-                "unit_price",
+                "price",
                 "limit"
             ) VALUES (
                 $1,
@@ -70,13 +70,13 @@ impl Skulls<'_> {
                 "name",
                 "color" AS "color: u32",
                 "icon",
-                "unit_price" AS "unit_price: f32",
+                "price" AS "price: f32",
                 "limit" as "limit: f32"
             "#,
             name,
             color,
             icon,
-            unit_price,
+            price,
             limit,
         )
         .fetch_one(&self.store.pool)
@@ -96,7 +96,7 @@ impl Skulls<'_> {
         name: Option<Name>,
         color: Option<u32>,
         icon: Option<Icon>,
-        unit_price: Option<f32>,
+        price: Option<f32>,
         limit: Option<Option<f32>>,
     ) -> Result<types::Skull> {
         let mut has_fields = false;
@@ -128,11 +128,11 @@ impl Skulls<'_> {
             String::from(super::check_non_empty(icon.as_ref(), "icon")?)
         );
         push_field!(
-            unit_price,
-            if unit_price < 0.0 {
-                return Err(Error::InvalidParameter("unit_price"));
+            price,
+            if price < 0.0 {
+                return Err(Error::InvalidParameter("price"));
             } else {
-                unit_price
+                price
             }
         );
         push_field!(limit);
@@ -148,7 +148,7 @@ impl Skulls<'_> {
                         "name",
                         "color",
                         "icon",
-                        "unit_price",
+                        "price",
                         "limit"
                     "#,
                 )
@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(skull.name, "one");
         assert_eq!(skull.color, 1);
         assert_eq!(skull.icon, "icon1");
-        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.price.to_string(), 1.0.to_string());
         assert_eq!(skull.limit, None);
     }
 
@@ -310,7 +310,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_err_unit_price_negative() {
+    async fn create_err_price_negative() {
         let store = Store::in_memory(1).await.unwrap();
 
         let skulls = store.skulls();
@@ -321,7 +321,7 @@ mod tests {
 
         assert_eq!(
             err.to_string(),
-            Error::InvalidParameter("unit_price").to_string()
+            Error::InvalidParameter("price").to_string()
         );
     }
 
@@ -347,7 +347,7 @@ mod tests {
         assert_eq!(skull.name, "two");
         assert_eq!(skull.color, 2);
         assert_eq!(skull.icon, "icon2");
-        assert_eq!(skull.unit_price.to_string(), 2.0.to_string());
+        assert_eq!(skull.price.to_string(), 2.0.to_string());
         assert_eq!(skull.limit, Some(2.0));
     }
 
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(skull.name, "one");
         assert_eq!(skull.color, 1);
         assert_eq!(skull.icon, "icon1");
-        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.price.to_string(), 1.0.to_string());
         assert_eq!(skull.limit, None);
     }
 
@@ -393,7 +393,7 @@ mod tests {
         assert_eq!(skull.name, "two");
         assert_eq!(skull.color, 1);
         assert_eq!(skull.icon, "icon1");
-        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.price.to_string(), 1.0.to_string());
         assert_eq!(skull.limit, None);
 
         let skull = skulls
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(skull.name, "two");
         assert_eq!(skull.color, 2);
         assert_eq!(skull.icon, "icon2");
-        assert_eq!(skull.unit_price.to_string(), 1.0.to_string());
+        assert_eq!(skull.price.to_string(), 1.0.to_string());
         assert_eq!(skull.limit, None);
 
         let skull = skulls
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(skull.name, "two");
         assert_eq!(skull.color, 2);
         assert_eq!(skull.icon, "icon2");
-        assert_eq!(skull.unit_price.to_string(), 2.0.to_string());
+        assert_eq!(skull.price.to_string(), 2.0.to_string());
         assert_eq!(skull.limit, Some(1.0));
 
         let skull = skulls
@@ -443,7 +443,7 @@ mod tests {
         assert_eq!(skull.name, "two");
         assert_eq!(skull.color, 2);
         assert_eq!(skull.icon, "icon2");
-        assert_eq!(skull.unit_price.to_string(), 2.0.to_string());
+        assert_eq!(skull.price.to_string(), 2.0.to_string());
         assert_eq!(skull.limit, None);
     }
 
@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn udpate_err_unit_price_negative() {
+    async fn udpate_err_price_negative() {
         let store = Store::in_memory(1).await.unwrap();
 
         let skulls = store.skulls();
@@ -610,7 +610,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             err.to_string(),
-            Error::InvalidParameter("unit_price").to_string()
+            Error::InvalidParameter("price").to_string()
         );
     }
 

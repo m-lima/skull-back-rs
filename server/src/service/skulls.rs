@@ -45,7 +45,7 @@ impl Skulls<'_> {
                 request.name,
                 request.color,
                 request.icon,
-                request.unit_price,
+                request.price,
                 request.limit,
             )
             .await?;
@@ -62,7 +62,7 @@ impl Skulls<'_> {
                 request.name.map(Setter::set),
                 request.color.map(Setter::set),
                 request.icon.map(Setter::set),
-                request.unit_price.map(Setter::set),
+                request.price.map(Setter::set),
                 request.limit.map(Setter::set),
             )
             .await?;

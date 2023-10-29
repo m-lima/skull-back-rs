@@ -31,9 +31,7 @@ impl Quicks<'_> {
 
     #[tracing::instrument(skip(self), err)]
     pub async fn create(&self, skull: types::SkullId, amount: f32) -> Result<types::Quick> {
-        if amount <= 0.0 {
-            return Err(Error::InvalidParameter("amount"));
-        }
+        let amount = super::check_positive(amount, "amount")?;
 
         sqlx::query_as!(
             types::Quick,
@@ -64,11 +62,11 @@ impl Quicks<'_> {
         skull: Option<types::SkullId>,
         amount: Option<f32>,
     ) -> Result<types::Quick> {
-        if let Some(amount) = amount {
-            if amount <= 0.0 {
-                return Err(Error::InvalidParameter("amount"));
-            }
-        }
+        let amount = if let Some(amount) = amount {
+            Some(super::check_positive(amount, "amount")?)
+        } else {
+            None
+        };
 
         match (skull, amount) {
             (Some(skull), Some(amount)) => {

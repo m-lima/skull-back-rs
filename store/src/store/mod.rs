@@ -68,3 +68,11 @@ fn check_non_empty<'a>(value: &'a str, field: &'static str) -> Result<&'a str> {
         Ok(value)
     }
 }
+
+fn check_positive<'a>(value: f32, field: &'static str) -> Result<f64> {
+    if value <= 0.0 {
+        Err(Error::InvalidParameter(field))
+    } else {
+        Ok(f64::from(value))
+    }
+}
