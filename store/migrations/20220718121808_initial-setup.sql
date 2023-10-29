@@ -29,5 +29,4 @@ CREATE TABLE occurrences (
   FOREIGN KEY(skull) REFERENCES skulls(id) ON DELETE RESTRICT
 );
 
--- TODO: Columns of type REAL are `f64`s, which causes `f64 as f32` to run when reading from the database
--- TODO: Though `millis` is an INTEGER, sqlx is storing REAL and TEXT there
+-- NOTE: Columns of type REAL are `f64`s, which causes `f64 as f32` to run when reading from the database

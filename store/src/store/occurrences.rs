@@ -10,8 +10,6 @@ impl<'a> Occurrences<'a> {
     }
 }
 
-// TODO: The millis comun is becoming a timestamp. Is it a string?
-// TODO: Update. It's being stored as a "real"
 impl Occurrences<'_> {
     #[tracing::instrument(skip(self), err)]
     pub async fn list(&self) -> Result<Vec<types::Occurrence>> {
@@ -22,7 +20,7 @@ impl Occurrences<'_> {
                 id AS "id: types::OccurrenceId",
                 skull AS "skull: types::SkullId",
                 amount AS "amount: f32",
-                millis AS "millis: chrono::DateTime<chrono::Utc>"
+                millis AS "millis: types::Millis"
             FROM
                 occurrences
             "#
@@ -36,8 +34,8 @@ impl Occurrences<'_> {
     pub async fn search(
         &self,
         skulls: Option<&std::collections::HashSet<types::SkullId>>,
-        start: Option<chrono::DateTime<chrono::Utc>>,
-        end: Option<chrono::DateTime<chrono::Utc>>,
+        start: Option<types::Millis>,
+        end: Option<types::Millis>,
         limit: Option<usize>,
     ) -> Result<Vec<types::Occurrence>> {
         let mut builder = sqlx::QueryBuilder::new(
@@ -101,7 +99,7 @@ impl Occurrences<'_> {
 
     #[tracing::instrument(skip(self), err)]
     pub async fn create<
-        I: IntoIterator<Item = (types::SkullId, f32, chrono::DateTime<chrono::Utc>)> + std::fmt::Debug,
+        I: IntoIterator<Item = (types::SkullId, f32, types::Millis)> + std::fmt::Debug,
     >(
         &self,
         items: I,
@@ -129,7 +127,7 @@ impl Occurrences<'_> {
                     id AS "id: types::OccurrenceId",
                     skull AS "skull: types::SkullId",
                     amount AS "amount: f32",
-                    millis AS "millis: chrono::DateTime<chrono::Utc>"
+                    millis AS "millis: types::Millis"
                 "#,
                 skull,
                 amount,
@@ -157,7 +155,7 @@ impl Occurrences<'_> {
         id: types::OccurrenceId,
         skull: Option<types::SkullId>,
         amount: Option<f32>,
-        millis: Option<chrono::DateTime<chrono::Utc>>,
+        millis: Option<types::Millis>,
     ) -> Result<types::Occurrence> {
         if let Some(amount) = amount {
             if amount <= 0.0 {
@@ -182,7 +180,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     skull,
@@ -207,7 +205,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     amount,
@@ -231,7 +229,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     skull,
@@ -255,7 +253,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     skull,
@@ -278,7 +276,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     skull,
@@ -300,7 +298,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     amount,
@@ -322,7 +320,7 @@ impl Occurrences<'_> {
                         id AS "id!: types::OccurrenceId",
                         skull AS "skull: types::SkullId",
                         amount AS "amount: f32",
-                        millis AS "millis: chrono::DateTime<chrono::Utc>"
+                        millis AS "millis: types::Millis"
                     "#,
                     id,
                     millis,
@@ -375,8 +373,8 @@ mod tests {
         (store, skull)
     }
 
-    fn chrono(value: i64) -> chrono::DateTime<chrono::Utc> {
-        chrono::DateTime::from_timestamp(value, 0).unwrap()
+    fn millis(value: i64) -> types::Millis {
+        types::Millis::from(value)
     }
 
     async fn prepare_search() -> (
@@ -397,12 +395,12 @@ mod tests {
 
         let occurrences = occurrences
             .create([
-                (skull_id, 1.0, chrono(1)),
-                (skull_id, 2.0, chrono(2)),
-                (skull_id, 3.0, chrono(3)),
-                (skull_id, 4.0, chrono(4)),
-                (other_id, 3.0, chrono(3)),
-                (other_id, 4.0, chrono(4)),
+                (skull_id, 1.0, millis(1)),
+                (skull_id, 2.0, millis(2)),
+                (skull_id, 3.0, millis(3)),
+                (skull_id, 4.0, millis(4)),
+                (other_id, 3.0, millis(3)),
+                (other_id, 4.0, millis(4)),
             ])
             .await
             .unwrap()
@@ -416,7 +414,7 @@ mod tests {
     async fn create_plain(store: &Store, skull: &types::Skull) -> types::Occurrence {
         store
             .occurrences()
-            .create([(skull.id, 1.0, chrono(1))])
+            .create([(skull.id, 1.0, millis(1))])
             .await
             .unwrap()
             .into_iter()
@@ -430,7 +428,7 @@ mod tests {
 
         let occurrences = store.occurrences();
         let result = occurrences
-            .create([(skull.id, 1.0, chrono(1)), (skull.id, 2.0, chrono(2))])
+            .create([(skull.id, 1.0, millis(1)), (skull.id, 2.0, millis(2))])
             .await
             .unwrap();
 
@@ -514,7 +512,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(None, Some(chrono(3)), None, None)
+            .search(None, Some(millis(3)), None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -529,7 +527,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(None, None, Some(chrono(2)), None)
+            .search(None, None, Some(millis(2)), None)
             .await
             .unwrap();
         assert_eq!(
@@ -544,7 +542,7 @@ mod tests {
 
         let occurrences = store
             .occurrences()
-            .search(None, Some(chrono(3)), Some(chrono(3)), None)
+            .search(None, Some(millis(3)), Some(millis(3)), None)
             .await
             .unwrap();
         assert_eq!(
@@ -576,8 +574,8 @@ mod tests {
             .occurrences()
             .search(
                 Some(&std::collections::HashSet::from([skull_one])),
-                Some(chrono(3)),
-                Some(chrono(4)),
+                Some(millis(3)),
+                Some(millis(4)),
                 Some(1),
             )
             .await
@@ -597,7 +595,7 @@ mod tests {
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, skull.id);
         assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
-        assert_eq!(occurrence.millis, chrono(1));
+        assert_eq!(occurrence.millis, millis(1));
     }
 
     #[tokio::test]
@@ -608,7 +606,7 @@ mod tests {
         let occurrences = store.occurrences();
 
         let err = occurrences
-            .create([(skull.id, 1.0, chrono(1))])
+            .create([(skull.id, 1.0, millis(1))])
             .await
             .unwrap_err();
         assert_eq!(err.to_string(), Error::ForeignKey.to_string());
@@ -621,7 +619,7 @@ mod tests {
         let occurrences = store.occurrences();
 
         let err = occurrences
-            .create([(skull.id, -1.0, chrono(1))])
+            .create([(skull.id, -1.0, millis(1))])
             .await
             .unwrap_err();
         assert_eq!(
@@ -637,7 +635,7 @@ mod tests {
         let occurrences = store.occurrences();
 
         let err = occurrences
-            .create([(skull.id, 0.0, chrono(1))])
+            .create([(skull.id, 0.0, millis(1))])
             .await
             .unwrap_err();
         assert_eq!(
@@ -659,14 +657,14 @@ mod tests {
         let occurrences = store.occurrences();
         let occurrence = create_plain(&store, &skull).await;
         let occurrence = occurrences
-            .update(occurrence.id, Some(other_id), Some(2.0), Some(chrono(2)))
+            .update(occurrence.id, Some(other_id), Some(2.0), Some(millis(2)))
             .await
             .unwrap();
 
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, other_id);
         assert_eq!(occurrence.amount.to_string(), 2.0.to_string());
-        assert_eq!(occurrence.millis, chrono(2));
+        assert_eq!(occurrence.millis, millis(2));
     }
 
     #[tokio::test]
@@ -676,14 +674,14 @@ mod tests {
         let occurrences = store.occurrences();
         let occurrence = create_plain(&store, &skull).await;
         let occurrence = occurrences
-            .update(occurrence.id, Some(skull.id), Some(1.0), Some(chrono(1)))
+            .update(occurrence.id, Some(skull.id), Some(1.0), Some(millis(1)))
             .await
             .unwrap();
 
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, skull.id);
         assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
-        assert_eq!(occurrence.millis, chrono(1));
+        assert_eq!(occurrence.millis, millis(1));
     }
 
     #[tokio::test]
@@ -706,16 +704,16 @@ mod tests {
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, other_id);
         assert_eq!(occurrence.amount.to_string(), 1.0.to_string());
-        assert_eq!(occurrence.millis, chrono(1));
+        assert_eq!(occurrence.millis, millis(1));
 
         let occurrence = occurrences
-            .update(occurrence.id, None, Some(2.0), Some(chrono(2)))
+            .update(occurrence.id, None, Some(2.0), Some(millis(2)))
             .await
             .unwrap();
         assert_eq!(types::Id::from(occurrence.id), 1);
         assert_eq!(occurrence.skull, other_id);
         assert_eq!(occurrence.amount.to_string(), 2.0.to_string());
-        assert_eq!(occurrence.millis, chrono(2));
+        assert_eq!(occurrence.millis, millis(2));
     }
 
     #[tokio::test]

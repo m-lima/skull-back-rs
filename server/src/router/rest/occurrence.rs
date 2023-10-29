@@ -20,7 +20,6 @@ async fn get(
     axum::Extension(service): axum::Extension<Service>,
     axum::extract::Query(search): axum::extract::Query<Search>,
 ) -> (hyper::StatusCode, axum::Json<Response>) {
-    // TODO: Looks like the query is mandatory
     if search.skulls.is_none()
         && search.start.is_none()
         && search.end.is_none()

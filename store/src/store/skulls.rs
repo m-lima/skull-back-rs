@@ -713,11 +713,7 @@ mod tests {
         let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
         store
             .occurrences()
-            .create([(
-                skull.id,
-                1.0,
-                chrono::DateTime::from_timestamp(0, 0).unwrap(),
-            )])
+            .create([(skull.id, 1.0, types::Millis::from(0))])
             .await
             .unwrap();
 

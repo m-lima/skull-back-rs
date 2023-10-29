@@ -88,30 +88,26 @@ pub mod quick {
 
 pub mod occurrence {
     use super::Setter;
-    use crate::{OccurrenceId, SkullId};
+    use crate::{Millis, OccurrenceId, SkullId};
 
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct Search {
         pub skulls: Option<std::collections::HashSet<SkullId>>,
-        // TODO: Using this attribute makes the field mandatory in the query
-        #[serde(with = "chrono::serde::ts_milliseconds_option")]
-        pub start: Option<chrono::DateTime<chrono::Utc>>,
-        #[serde(with = "chrono::serde::ts_milliseconds_option")]
-        pub end: Option<chrono::DateTime<chrono::Utc>>,
+        pub start: Option<Millis>,
+        pub end: Option<Millis>,
         pub limit: Option<usize>,
     }
 
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct Create {
-        pub items: Vec<Occurrence>,
+        pub items: Vec<Item>,
     }
 
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-    pub struct Occurrence {
+    pub struct Item {
         pub skull: SkullId,
         pub amount: f32,
-        #[serde(with = "chrono::serde::ts_milliseconds")]
-        pub millis: chrono::DateTime<chrono::Utc>,
+        pub millis: Millis,
     }
 
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -119,8 +115,7 @@ pub mod occurrence {
         pub id: OccurrenceId,
         pub skull: Option<Setter<SkullId>>,
         pub amount: Option<Setter<f32>>,
-        // TODO: This guy needs to parse form an integer
-        pub millis: Option<Setter<chrono::DateTime<chrono::Utc>>>,
+        pub millis: Option<Setter<Millis>>,
     }
 
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
