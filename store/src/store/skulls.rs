@@ -49,6 +49,11 @@ impl Skulls<'_> {
         if price < 0.0 {
             return Err(Error::InvalidParameter("price"));
         }
+        if let Some(limit) = limit {
+            if limit < 0.0 {
+                return Err(Error::InvalidParameter("limit"));
+            }
+        }
 
         sqlx::query_as!(
             types::Skull,
@@ -135,7 +140,14 @@ impl Skulls<'_> {
                 price
             }
         );
-        push_field!(limit);
+        push_field!(limit, {
+            if let Some(limit) = limit {
+                if limit < 0.0 {
+                    return Err(Error::InvalidParameter("limit"));
+                }
+            }
+            limit
+        });
 
         if has_fields {
             builder
@@ -322,6 +334,22 @@ mod tests {
         assert_eq!(
             err.to_string(),
             Error::InvalidParameter("price").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn create_err_limit_negative() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let err = skulls
+            .create("one", 1, "icon1", 1.0, Some(-1.0))
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("limit").to_string()
         );
     }
 
@@ -611,6 +639,30 @@ mod tests {
         assert_eq!(
             err.to_string(),
             Error::InvalidParameter("price").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn udpate_err_limit_negative() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let skulls = store.skulls();
+        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
+
+        let err = skulls
+            .update(
+                skull.id,
+                None::<String>,
+                None,
+                None::<String>,
+                None,
+                Some(Some(-1.0)),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("limit").to_string()
         );
     }
 

@@ -31,7 +31,9 @@ impl Quicks<'_> {
 
     #[tracing::instrument(skip(self), err)]
     pub async fn create(&self, skull: types::SkullId, amount: f32) -> Result<types::Quick> {
-        let amount = super::check_positive(amount, "amount")?;
+        if amount <= 0.0 {
+            return Err(Error::InvalidParameter("amount"));
+        }
 
         sqlx::query_as!(
             types::Quick,
@@ -62,11 +64,11 @@ impl Quicks<'_> {
         skull: Option<types::SkullId>,
         amount: Option<f32>,
     ) -> Result<types::Quick> {
-        let amount = if let Some(amount) = amount {
-            Some(super::check_positive(amount, "amount")?)
-        } else {
-            None
-        };
+        if let Some(amount) = amount {
+            if amount <= 0.0 {
+                return Err(Error::InvalidParameter("amount"));
+            }
+        }
 
         match (skull, amount) {
             (Some(skull), Some(amount)) => {
@@ -237,6 +239,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_err_amount_zero() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+
+        let err = quicks.create(skull.id, 0.0).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
     async fn create_err_duplicate() {
         let (store, skull) = skulled_store().await;
 
@@ -366,6 +381,19 @@ mod tests {
         let quicks = store.quicks();
         let quick = quicks.create(skull.id, 1.0).await.unwrap();
         let err = quicks.update(quick.id, None, Some(-1.0)).await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn update_err_amount_zero() {
+        let (store, skull) = skulled_store().await;
+
+        let quicks = store.quicks();
+        let quick = quicks.create(skull.id, 1.0).await.unwrap();
+        let err = quicks.update(quick.id, None, Some(0.0)).await.unwrap_err();
         assert_eq!(
             err.to_string(),
             Error::InvalidParameter("amount").to_string()

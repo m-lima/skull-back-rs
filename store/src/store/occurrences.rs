@@ -114,8 +114,6 @@ impl Occurrences<'_> {
                 return Err(Error::InvalidParameter("amount"));
             }
 
-            let amount = f64::from(amount);
-
             let occurrence = sqlx::query_as!(
                 types::Occurrence,
                 r#"
@@ -633,6 +631,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_err_amount_zero() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+
+        let err = occurrences
+            .create([(skull.id, 0.0, chrono(1))])
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
     async fn update() {
         let (store, skull) = skulled_store().await;
         let other_id = store
@@ -765,6 +779,22 @@ mod tests {
         let occurrence = create_plain(&store, &skull).await;
         let err = occurrences
             .update(occurrence.id, None, Some(-1.0), None)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            Error::InvalidParameter("amount").to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn update_err_amount_zero() {
+        let (store, skull) = skulled_store().await;
+
+        let occurrences = store.occurrences();
+        let occurrence = create_plain(&store, &skull).await;
+        let err = occurrences
+            .update(occurrence.id, None, Some(0.0), None)
             .await
             .unwrap_err();
         assert_eq!(
