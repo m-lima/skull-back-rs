@@ -161,7 +161,7 @@ async fn ingest_occurrences(
             .ok_or_else(|| format!("Occurrences: Line {i}: could not find ID for {orig_skull}"))?;
 
         let amount = split[2]
-            .parse()
+            .parse::<f32>()
             .map_err(|e| format!("Occurrences: Line {i} column 3: value is not `f32`: {e}"))?;
 
         let millis = split[3]
@@ -174,12 +174,50 @@ async fn ingest_occurrences(
         occurrences.push((skull, amount, millis));
     }
 
-    occurrences.sort_unstable_by_key(|o| o.2);
+    occurrences.sort_unstable_by(|a, b| match a.2.cmp(&b.2) {
+        std::cmp::Ordering::Equal => match b.0.cmp(&a.0) {
+            std::cmp::Ordering::Equal => match a.1.partial_cmp(&b.1) {
+                Some(o) => o,
+                None => panic!(),
+            },
+            o => o,
+        },
+        o => o,
+    });
 
-    let mut buffer = Vec::with_capacity(10);
+    occurrences
+        .iter()
+        .scan(
+            (i64::MIN, f32::NEG_INFINITY, types::Millis::from(i64::MIN)),
+            |state, curr| {
+                // allow(clippy::cast_sign_loss): this is just for printing
+                #[allow(clippy::cast_sign_loss)]
+                if curr.2 == state.2
+                    && i64::from(curr.0) == state.0
+                    && curr.1.to_ne_bytes() == state.1.to_ne_bytes()
+                {
+                    println!(
+                        "Found repeated millis for {} {} {} ({})",
+                        curr.0,
+                        curr.1,
+                        curr.2,
+                        chrono::DateTime::from_timestamp(
+                            i64::from(curr.2) / 1000,
+                            ((i64::from(curr.2) % 1000) as u32) * 1_000_000
+                        )
+                        .unwrap()
+                    );
+                }
+                *state = (curr.0.into(), curr.1, curr.2);
+                Some(true)
+            },
+        )
+        .all(|i| i);
+
+    let mut buffer = Vec::with_capacity(20);
 
     for occurrence in occurrences {
-        if buffer.len() == 10 {
+        if buffer.len() == 20 {
             store
                 .occurrences()
                 .create(buffer.iter().copied())
