@@ -31,7 +31,7 @@ pub struct Args {
     threads: boile_rs::rt::Threads,
 
     /// Create the databases if they don't exist
-    #[arg(short = 'c', long)]
+    #[arg(short, long)]
     create: bool,
 
     #[command(flatten)]

@@ -1,4 +1,5 @@
 /target
-/skull/db.sqlite
+/store/db
+/store/.env
 Dockerfile
 build.sh

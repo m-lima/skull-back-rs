@@ -1,15 +1,14 @@
 # Build
-FROM rust:1.68.0-buster as rust
+FROM docker.io/rust:1.73.0-bookworm as rust
 WORKDIR /src
 COPY . .
-RUN cargo build --release
+RUN cargo build --release --bin server
 
 # Pack
-FROM debian:stable-slim
+FROM docker.io/debian:stable-20231009-slim
 WORKDIR /opt/skull
-COPY --from=rust /src/target/release/skull /opt/skull/skull
+COPY --from=rust /src/target/release/server /opt/skull/skull
 EXPOSE 80
 ENV CLICOLOR_FORCE 1
 
 ENTRYPOINT ["./skull"]
-CMD [ "-t", "1", "-p", "80", "-s", "/data" ]
