@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                \"id\" AS \"id: types::SkullId\",\n                \"name\",\n                \"color\" AS \"color: u32\",\n                \"icon\",\n                \"unit_price\" AS \"unit_price: f32\",\n                \"limit\" as \"limit: f32\"\n            FROM\n                skulls\n            ",
+  "query": "\n            SELECT\n                \"id\" AS \"id: types::SkullId\",\n                \"name\",\n                \"color\" AS \"color: u32\",\n                \"icon\",\n                \"price\" AS \"price: f32\",\n                \"limit\" as \"limit: f32\"\n            FROM\n                skulls\n            ",
   "describe": {
     "columns": [
       {
@@ -24,7 +24,7 @@
         "type_info": "Text"
       },
       {
-        "name": "unit_price: f32",
+        "name": "price: f32",
         "ordinal": 4,
         "type_info": "Float"
       },
@@ -46,5 +46,5 @@
       true
     ]
   },
-  "hash": "a581b0887773c67f9d627da03c322ba1f6b6cf548e9ebac7cdfe46fac0ee4801"
+  "hash": "58347af1a81e32a6311173706209abd8a068ebc0b500a19ce2a00f29bffe909c"
 }
