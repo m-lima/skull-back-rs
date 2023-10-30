@@ -1,6 +1,9 @@
 mod auth;
 mod logger;
 
+#[allow(clippy::declare_interior_mutable_const)]
+const X_USER: hyper::header::HeaderName = hyper::header::HeaderName::from_static("x-user");
+
 #[derive(Debug, Copy, Clone)]
 pub struct Logger;
 

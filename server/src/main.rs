@@ -30,9 +30,6 @@ fn setup_tracing(
     }
 }
 
-#[allow(clippy::declare_interior_mutable_const)]
-const X_USER: hyper::header::HeaderName = hyper::header::HeaderName::from_static("x-user");
-
 fn main() -> std::process::ExitCode {
     let (verbosity, port, threads, create, db_root, users) = args::parse().decompose();
 
