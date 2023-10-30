@@ -142,10 +142,10 @@ impl<T: Mode> Socket<T> {
         }
     }
 
-    async fn send<R>(&mut self, response: types::Message) -> FlowControl<R> {
-        match T::serialize(response) {
-            Ok(response) => {
-                if let Err(error) = self.socket.send(response).await {
+    async fn send<R>(&mut self, message: types::Message) -> FlowControl<R> {
+        match T::serialize(message) {
+            Ok(message) => {
+                if let Err(error) = self.socket.send(message).await {
                     tracing::error!(ws = %self.id, mode = %T::mode(), %error, "Failed to send message");
                     FlowControl::Break
                 } else {

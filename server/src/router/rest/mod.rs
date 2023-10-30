@@ -6,17 +6,9 @@ use crate::service::Service;
 
 pub fn build() -> axum::Router {
     axum::Router::new()
-        .route("/", axum::routing::post(root))
         .nest("/skull", skull::build())
         .nest("/quick", quick::build())
         .nest("/occurrence", occurrence::build())
-}
-
-async fn root(
-    axum::Extension(service): axum::Extension<Service>,
-    axum::Json(request): axum::Json<types::Request>,
-) -> (hyper::StatusCode, axum::Json<types::Response>) {
-    handle(service, request).await
 }
 
 async fn handle(
