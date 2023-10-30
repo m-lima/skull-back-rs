@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                    UPDATE\n                        occurrences\n                    SET\n                        amount = $2\n                    WHERE\n                        id = $1\n                    RETURNING\n                        id AS \"id!: types::OccurrenceId\",\n                        skull AS \"skull: types::SkullId\",\n                        amount AS \"amount: f32\",\n                        millis AS \"millis: types::Millis\"\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: types::OccurrenceId",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "skull: types::SkullId",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "amount: f32",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "millis: types::Millis",
+        "ordinal": 3,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d2b64c60b2a2a0fcc4a947feeb077d30fb68a5e3fa3eecd790f42bf304182dcc"
+}
