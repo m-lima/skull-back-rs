@@ -1,5 +1,4 @@
 use super::Logger;
-use crate::X_USER;
 
 impl<S> tower_layer::Layer<S> for Logger {
     type Service = Middleware<S>;
@@ -38,7 +37,7 @@ where
         let length = get_length(request.headers());
         let user = request
             .headers()
-            .get(X_USER)
+            .get(super::X_USER)
             .and_then(|l| l.to_str().ok())
             .map(String::from);
 
