@@ -1,8 +1,7 @@
-#[macro_export]
 macro_rules! impl_fmt {
     ($self: ty, $fmt: ident, $($rest: ident),*) => {
-        impl_fmt!($self, $fmt);
-        impl_fmt!($self, $($rest),*);
+        $crate::transparent::impl_fmt!($self, $fmt);
+        $crate::transparent::impl_fmt!($self, $($rest),*);
     };
 
     ($self: ty, $fmt: ident) => {
@@ -14,7 +13,6 @@ macro_rules! impl_fmt {
     };
 }
 
-#[macro_export]
 macro_rules! transparent {
     (nofmt readonly $self: ty, $target: ty) => {
         impl From<$self> for $target {
@@ -38,7 +36,7 @@ macro_rules! transparent {
         }
     };
     (nofmt $self: ty, $target: ty) => {
-        transparent!(nofmt readonly $self, $target);
+        $crate::transparent::transparent!(nofmt readonly $self, $target);
 
         impl From<$target> for $self {
             fn from(value: $target) -> Self {
@@ -59,11 +57,14 @@ macro_rules! transparent {
         }
     };
     (readonly $self: ty, $target: ty) => {
-        transparent!(nofmt readonly $self, $target);
-        $crate::impl_fmt!($self, Display, Octal, Binary, UpperHex, LowerHex, UpperExp, LowerExp);
+        $crate::transparent::transparent!(nofmt readonly $self, $target);
+        $crate::transparent::impl_fmt!($self, Display, Octal, Binary, UpperHex, LowerHex, UpperExp, LowerExp);
     };
     ($self: ty, $target: ty) => {
-        transparent!(nofmt $self, $target);
-        $crate::impl_fmt!($self, Display, Octal, Binary, UpperHex, LowerHex, UpperExp, LowerExp);
+        $crate::transparent::transparent!(nofmt $self, $target);
+        $crate::transparent::impl_fmt!($self, Display, Octal, Binary, UpperHex, LowerHex, UpperExp, LowerExp);
     };
 }
+
+pub(crate) use impl_fmt;
+pub(crate) use transparent;

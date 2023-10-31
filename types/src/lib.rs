@@ -22,7 +22,7 @@ pub type Id = i64;
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct SkullId(Id);
 
-transparent!(readonly SkullId, Id);
+transparent::transparent!(readonly SkullId, Id);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
@@ -42,7 +42,7 @@ pub struct Skull {
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct QuickId(Id);
 
-transparent!(readonly QuickId, Id);
+transparent::transparent!(readonly QuickId, Id);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
@@ -59,7 +59,7 @@ pub struct Quick {
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct OccurrenceId(Id);
 
-transparent!(readonly OccurrenceId, Id);
+transparent::transparent!(readonly OccurrenceId, Id);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
@@ -77,7 +77,7 @@ pub struct Occurrence {
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct Millis(i64);
 
-transparent!(Millis, i64);
+transparent::transparent!(Millis, i64);
 
 #[cfg(feature = "chrono")]
 impl From<chrono::DateTime<chrono::Utc>> for Millis {
