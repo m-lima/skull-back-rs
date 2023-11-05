@@ -58,12 +58,15 @@ async fn ingest_skulls(
 
         let name = String::from(split[1]);
         let color = u32::from_str_radix(
-            split[2].strip_prefix('#').ok_or_else(|| {
-                format!(
-                    "Skulls: Line {i} column 3: Expected a `#xxxxxx` color format but got {}",
-                    split[2]
-                )
-            })?,
+            split[2]
+                .strip_prefix('#')
+                .filter(|h| h.len() == 6)
+                .ok_or_else(|| {
+                    format!(
+                        "Skulls: Line {i} column 3: Expected a `#xxxxxx` color format but got {}",
+                        split[2]
+                    )
+                })?,
             16,
         )
         .map_err(|e| format!("Skulls: Line {i} column 3: {e}"))?;
