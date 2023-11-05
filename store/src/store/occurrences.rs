@@ -23,6 +23,8 @@ impl Occurrences<'_> {
                 millis AS "millis: types::Millis"
             FROM
                 occurrences
+            ORDER BY
+                millis DESC
             "#
         )
         .fetch_all(&self.store.pool)
@@ -89,6 +91,8 @@ impl Occurrences<'_> {
             builder.push(" LIMIT ");
             builder.push(limit);
         }
+
+        builder.push(" ORDER BY millis DESC");
 
         builder
             .build_query_as()
