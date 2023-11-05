@@ -178,7 +178,7 @@ async fn ingest_occurrences(
     }
 
     occurrences.sort_unstable_by(|a, b| match a.2.cmp(&b.2) {
-        std::cmp::Ordering::Equal => match b.0.cmp(&a.0) {
+        std::cmp::Ordering::Equal => match a.0.cmp(&b.0) {
             std::cmp::Ordering::Equal => match a.1.partial_cmp(&b.1) {
                 Some(o) => o,
                 None => panic!(),
