@@ -88,12 +88,12 @@ impl Occurrences<'_> {
             builder.push_bind(end);
         }
 
+        builder.push(" ORDER BY millis DESC, skull ASC ");
+
         if let Some(limit) = limit {
             builder.push(" LIMIT ");
             builder.push(limit);
         }
-
-        builder.push(" ORDER BY millis DESC, skull ASC");
 
         builder
             .build_query_as()
