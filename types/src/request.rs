@@ -123,6 +123,7 @@ pub mod occurrence {
         pub id: OccurrenceId,
     }
 
+    #[cfg(feature = "query")]
     pub mod query {
         use super::{Millis, Search, SkullId};
 
@@ -133,14 +134,18 @@ pub mod occurrence {
                     self.skulls.as_ref().map(|skulls| {
                         let skulls = skulls
                             .iter()
-                            .map(ToString::to_string)
+                            .map(|id| String::from(itoa::Buffer::new().format(i64::from(*id))))
                             .collect::<Vec<_>>()
                             .join(",");
                         format!("skulls={skulls}")
                     }),
-                    self.start.map(|start| format!("start={start}")),
-                    self.end.map(|end| format!("end={end}")),
-                    self.limit.map(|limit| format!("limit={limit}")),
+                    self.start.map(|start| {
+                        format!("start={}", itoa::Buffer::new().format(i64::from(start)))
+                    }),
+                    self.end
+                        .map(|end| format!("end={}", itoa::Buffer::new().format(i64::from(end)))),
+                    self.limit
+                        .map(|limit| format!("limit={}", itoa::Buffer::new().format(limit))),
                 ]
                 .into_iter()
                 .flatten()

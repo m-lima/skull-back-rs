@@ -17,6 +17,7 @@ boile-rs = { version = "0.1.1", git = "https://github.com/m-lima/boile-rs" }
 chrono = { version = "0.4.31", default-features = false }
 clap = "4.4.6"
 hyper = "0.14.27"
+itoa = "1.0.9"
 pwner = "0.1.8"
 rand = "0.8.5"
 rmp-serde = "1.1.2"
