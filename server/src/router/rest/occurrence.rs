@@ -1,6 +1,6 @@
 use types::{
     request::{
-        occurrence::{Create, Delete, Search, Update},
+        occurrence::{query::Error, Create, Delete, Search, Update},
         Occurrence,
     },
     Response,
@@ -18,7 +18,7 @@ pub fn build() -> axum::Router {
 
 async fn get(
     axum::Extension(service): axum::Extension<Service>,
-    axum::extract::Query(search): axum::extract::Query<Search>,
+    SearchQuery(search): SearchQuery,
 ) -> (hyper::StatusCode, axum::Json<Response>) {
     if search.skulls.is_none()
         && search.start.is_none()
@@ -66,4 +66,38 @@ async fn delete(
         types::Request::Occurrence(Occurrence::Delete(request)),
     )
     .await
+}
+
+#[repr(transparent)]
+struct SearchQuery(Search);
+
+impl<S> axum::extract::FromRequestParts<S> for SearchQuery {
+    type Rejection = SearchQueryRejection;
+
+    fn from_request_parts<'parts, 'state, 'extractor>(
+        parts: &'parts mut hyper::http::request::Parts,
+        _: &'state S,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send + 'extractor>,
+    >
+    where
+        'parts: 'extractor,
+        'state: 'extractor,
+        Self: 'extractor,
+    {
+        Box::pin(async move {
+            Search::from_query(parts.uri.query().unwrap_or(""))
+                .map(SearchQuery)
+                .map_err(SearchQueryRejection)
+        })
+    }
+}
+
+#[repr(transparent)]
+struct SearchQueryRejection(Error);
+
+impl axum::response::IntoResponse for SearchQueryRejection {
+    fn into_response(self) -> axum::response::Response {
+        (hyper::StatusCode::BAD_REQUEST, self.0.to_string()).into_response()
+    }
 }

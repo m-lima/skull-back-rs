@@ -122,6 +122,98 @@ pub mod occurrence {
     pub struct Delete {
         pub id: OccurrenceId,
     }
+
+    pub mod query {
+        use super::{Millis, Search, SkullId};
+
+        impl Search {
+            #[must_use]
+            pub fn to_query(&self) -> String {
+                [
+                    self.skulls.as_ref().map(|skulls| {
+                        let skulls = skulls
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        format!("skulls={skulls}")
+                    }),
+                    self.start.map(|start| format!("start={start}")),
+                    self.end.map(|end| format!("end={end}")),
+                    self.limit.map(|limit| format!("limit={limit}")),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join("&")
+            }
+
+            pub fn from_query(query: &str) -> Result<Self, Error> {
+                let mut search = Self {
+                    skulls: None,
+                    start: None,
+                    end: None,
+                    limit: None,
+                };
+                for (key, value) in query.split('&').filter_map(|p| p.split_once('=')) {
+                    match key {
+                        "skulls" => {
+                            search.skulls = Some(
+                                value
+                                    .split(',')
+                                    .map(|id| id.parse::<i64>().map(SkullId))
+                                    .collect::<Result<_, _>>()
+                                    .map_err(|error| Error {
+                                        field: "skulls",
+                                        error,
+                                    })?,
+                            );
+                        }
+                        "start" => {
+                            search.start =
+                                Some(value.parse::<i64>().map(Millis::from).map_err(|error| {
+                                    Error {
+                                        field: "start",
+                                        error,
+                                    }
+                                })?);
+                        }
+                        "end" => {
+                            search.end =
+                                Some(value.parse::<i64>().map(Millis::from).map_err(|error| {
+                                    Error {
+                                        field: "end",
+                                        error,
+                                    }
+                                })?);
+                        }
+                        "limit" => {
+                            search.limit = Some(value.parse::<usize>().map_err(|error| Error {
+                                field: "limit",
+                                error,
+                            })?);
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(search)
+            }
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct Error {
+            field: &'static str,
+            error: std::num::ParseIntError,
+        }
+
+        impl std::error::Error for Error {}
+
+        impl std::fmt::Display for Error {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "Failed to parse field `{}`: {}", self.field, self.error)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
