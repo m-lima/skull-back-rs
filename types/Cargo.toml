@@ -4,11 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-sqlx = ["dep:sqlx"]
 chrono = ["dep:chrono"]
+query = ["dep:itoa"]
+sqlx = ["dep:sqlx"]
 
 [dependencies]
 chrono = { workspace = true, optional = true }
+itoa = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true, features = ["sqlite"] }
 

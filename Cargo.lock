@@ -2082,6 +2082,7 @@ name = "types"
 version = "0.8.0"
 dependencies = [
  "chrono",
+ "itoa",
  "rmp-serde",
  "serde",
  "serde_json",
