@@ -25,7 +25,7 @@ impl Occurrences<'_> {
                 occurrences
             ORDER BY
                 millis DESC,
-                skull ASC
+                skull DESC
             "#
         )
         .fetch_all(&self.store.pool)
@@ -88,7 +88,7 @@ impl Occurrences<'_> {
             builder.push_bind(end);
         }
 
-        builder.push(" ORDER BY millis DESC, skull ASC ");
+        builder.push(" ORDER BY millis DESC, skull DESC ");
 
         if let Some(limit) = limit {
             builder.push(" LIMIT ");
