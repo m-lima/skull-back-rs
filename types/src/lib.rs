@@ -80,8 +80,11 @@ pub struct Millis(i64);
 transparent::transparent!(Millis, i64);
 
 #[cfg(feature = "chrono")]
-impl From<chrono::DateTime<chrono::Utc>> for Millis {
-    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+impl<Tz> From<chrono::DateTime<Tz>> for Millis
+where
+    Tz: chrono::TimeZone,
+{
+    fn from(value: chrono::DateTime<Tz>) -> Self {
         Self(value.timestamp_millis())
     }
 }
@@ -93,5 +96,19 @@ impl From<Millis> for chrono::DateTime<chrono::Utc> {
         let seconds = value / 1000;
         let nanos = ((value % 1000) as u32) * 1_000_000;
         chrono::DateTime::from_timestamp(seconds, nanos).unwrap()
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<Millis> for chrono::DateTime<chrono::Local> {
+    fn from(value: Millis) -> Self {
+        chrono::DateTime::<chrono::Utc>::from(value).into()
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<Millis> for chrono::DateTime<chrono::FixedOffset> {
+    fn from(value: Millis) -> Self {
+        chrono::DateTime::<chrono::Utc>::from(value).into()
     }
 }
