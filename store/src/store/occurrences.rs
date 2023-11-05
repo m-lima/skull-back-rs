@@ -24,7 +24,8 @@ impl Occurrences<'_> {
             FROM
                 occurrences
             ORDER BY
-                millis DESC
+                millis DESC,
+                skull ASC
             "#
         )
         .fetch_all(&self.store.pool)
@@ -92,7 +93,7 @@ impl Occurrences<'_> {
             builder.push(limit);
         }
 
-        builder.push(" ORDER BY millis DESC");
+        builder.push(" ORDER BY millis DESC, skull ASC");
 
         builder
             .build_query_as()

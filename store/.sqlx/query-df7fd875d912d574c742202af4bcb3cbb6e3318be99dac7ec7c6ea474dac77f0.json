@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT\n                id AS \"id: types::OccurrenceId\",\n                skull AS \"skull: types::SkullId\",\n                amount AS \"amount: f32\",\n                millis AS \"millis: types::Millis\"\n            FROM\n                occurrences\n            ORDER BY\n                millis DESC\n            ",
+  "query": "\n            SELECT\n                id AS \"id: types::OccurrenceId\",\n                skull AS \"skull: types::SkullId\",\n                amount AS \"amount: f32\",\n                millis AS \"millis: types::Millis\"\n            FROM\n                occurrences\n            ORDER BY\n                millis DESC,\n                skull ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "c63aa75fe4b15a57c876b9b746426518113884bcaa584077ae19df9a088503e0"
+  "hash": "df7fd875d912d574c742202af4bcb3cbb6e3318be99dac7ec7c6ea474dac77f0"
 }
