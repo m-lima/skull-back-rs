@@ -1,12 +1,26 @@
-use crate::{Error, Occurrence, OccurrenceId, Payload, Quick, QuickId, Skull, SkullId};
+use crate::{Occurrence, OccurrenceId, Quick, QuickId, Request, Response, Skull, SkullId};
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestWithId {
+    pub id: Option<u32>,
+    #[serde(flatten)]
+    pub payload: Request,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponseWithId {
+    pub id: Option<u32>,
+    #[serde(flatten)]
+    pub payload: Response,
+}
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Message {
-    Error(Error),
     Push(Push),
-    #[serde(untagged)]
-    Payload(Payload),
+    Response(ResponseWithId),
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

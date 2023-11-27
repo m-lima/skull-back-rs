@@ -62,14 +62,15 @@ impl<T: Mode> Socket<T> {
                 request = self.recv() => {
                     let start = std::time::Instant::now();
                     let request = flow!(request);
-                    let (resource, action) = flow::incoming(&request);
-                    let response = self.service.handle(request).await;
+                    let types::RequestWithId { id, payload } = request;
+                    let (resource, action) = flow::incoming(&payload);
+                    let response = self.service.handle(payload).await;
                     let outgoing = flow::outgoing(&response);
 
                     let message = match response {
-                        types::Response::Payload(payload) => {
+                        payload @ types::Response::Payload(_) => {
                             tracing::info!(ws = %self.id, mode = %T::mode(), %resource, %action, latency = ?start.elapsed(), "{outgoing}");
-                            types::Message::Payload(payload)
+                            types::Message::Response(types::ResponseWithId { id, payload })
                         }
                         types::Response::Error(error) => {
                             if error.kind == types::Kind::InternalError {
@@ -77,9 +78,10 @@ impl<T: Mode> Socket<T> {
                             } else {
                                 tracing::warn!(ws = %self.id, mode = %T::mode(), %resource, %action, latency = ?start.elapsed(), "{outgoing}");
                             }
-                            types::Message::Error(error)
+                            types::Message::Response(types::ResponseWithId { id, payload: types::Response::Error(error) })
                         }
                     };
+
                     flow!(self.send(message).await);
                 }
             }
@@ -97,7 +99,7 @@ impl<T: Mode> Socket<T> {
         }
     }
 
-    async fn recv(&mut self) -> FlowControl<types::Request> {
+    async fn recv(&mut self) -> FlowControl<types::RequestWithId> {
         // Closed socket
         let Some(message) = self.socket.recv().await else {
             tracing::debug!(ws = %self.id, mode = %T::mode(), "Closing websocket");
@@ -137,7 +139,11 @@ impl<T: Mode> Socket<T> {
                     kind: types::Kind::BadRequest,
                     message: Some(error.to_string()),
                 };
-                self.send(types::Message::Error(error)).await
+                self.send(types::Message::Response(types::ResponseWithId {
+                    id: None,
+                    payload: types::Response::Error(error),
+                }))
+                .await
             }
         }
     }
