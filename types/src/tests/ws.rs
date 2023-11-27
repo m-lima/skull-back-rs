@@ -1,14 +1,33 @@
 use super::{json, rmp};
 use crate::{
-    Error, Kind, Message, Millis, Occurrence, OccurrenceId, Payload, Push, Quick, QuickId, Skull,
-    SkullId,
+    Error, Kind, Message, Millis, Occurrence, OccurrenceId, Payload, Push, Quick, QuickId,
+    Response, ResponseWithId, Skull, SkullId,
 };
 
 #[test]
-fn error_none() {
-    let t = Message::Error(Error {
-        kind: Kind::NotFound,
-        message: None,
+fn error_none_no_id() {
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Error(Error {
+            kind: Kind::NotFound,
+            message: None,
+        }),
+    });
+    let json = json(&t, r#"{"error":{"kind":"NotFound"}}"#).unwrap();
+    let rmp = rmp(&t).unwrap();
+
+    assert_eq!(t, json);
+    assert_eq!(t, rmp);
+}
+
+#[test]
+fn error_none_with_id() {
+    let t = Message::Response(ResponseWithId {
+        id: Some(1),
+        payload: Response::Error(Error {
+            kind: Kind::NotFound,
+            message: None,
+        }),
     });
     let json = json(&t, r#"{"error":{"kind":"NotFound"}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
@@ -19,9 +38,12 @@ fn error_none() {
 
 #[test]
 fn error_message() {
-    let t = Message::Error(Error {
-        kind: Kind::NotFound,
-        message: Some(String::from("message")),
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Error(Error {
+            kind: Kind::NotFound,
+            message: Some(String::from("message")),
+        }),
     });
     let json = json(&t, r#"{"error":{"kind":"NotFound","message":"message"}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
@@ -32,7 +54,10 @@ fn error_message() {
 
 #[test]
 fn created() {
-    let t = Message::Payload(Payload::Created);
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Created),
+    });
     let json = json(&t, r#""created""#).unwrap();
     let rmp = rmp(&t).unwrap();
 
@@ -42,7 +67,10 @@ fn created() {
 
 #[test]
 fn updated() {
-    let t = Message::Payload(Payload::Updated);
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Updated),
+    });
     let json = json(&t, r#""updated""#).unwrap();
     let rmp = rmp(&t).unwrap();
 
@@ -52,7 +80,10 @@ fn updated() {
 
 #[test]
 fn deleted() {
-    let t = Message::Payload(Payload::Deleted);
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Deleted),
+    });
     let json = json(&t, r#""deleted""#).unwrap();
     let rmp = rmp(&t).unwrap();
 
@@ -62,14 +93,17 @@ fn deleted() {
 
 #[test]
 fn skulls() {
-    let t = Message::Payload(Payload::Skulls(vec![Skull {
-        id: SkullId(27),
-        name: String::from("name"),
-        color: 1,
-        icon: String::from("icon"),
-        price: 1.0,
-        limit: None,
-    }]));
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Skulls(vec![Skull {
+            id: SkullId(27),
+            name: String::from("name"),
+            color: 1,
+            icon: String::from("icon"),
+            price: 1.0,
+            limit: None,
+        }])),
+    });
     let json = json(
         &t,
         r#"{"skulls":[{"id":27,"name":"name","color":1,"icon":"icon","price":1}]}"#,
@@ -83,7 +117,10 @@ fn skulls() {
 
 #[test]
 fn skulls_empty() {
-    let t = Message::Payload(Payload::Skulls(Vec::new()));
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Skulls(Vec::new())),
+    });
     let json = json(&t, r#"{"skulls":[]}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
@@ -93,11 +130,14 @@ fn skulls_empty() {
 
 #[test]
 fn quicks() {
-    let t = Message::Payload(Payload::Quicks(vec![Quick {
-        id: QuickId(27),
-        skull: SkullId(72),
-        amount: 1.0,
-    }]));
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Quicks(vec![Quick {
+            id: QuickId(27),
+            skull: SkullId(72),
+            amount: 1.0,
+        }])),
+    });
     let json = json(&t, r#"{"quicks":[{"id":27,"skull":72,"amount":1}]}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
@@ -107,7 +147,10 @@ fn quicks() {
 
 #[test]
 fn quicks_empty() {
-    let t = Message::Payload(Payload::Quicks(Vec::new()));
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Quicks(Vec::new())),
+    });
     let json = json(&t, r#"{"quicks":[]}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
@@ -117,12 +160,15 @@ fn quicks_empty() {
 
 #[test]
 fn occurrences() {
-    let t = Message::Payload(Payload::Occurrences(vec![Occurrence {
-        id: OccurrenceId(27),
-        skull: SkullId(72),
-        amount: 1.0,
-        millis: Millis(-27),
-    }]));
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Occurrences(vec![Occurrence {
+            id: OccurrenceId(27),
+            skull: SkullId(72),
+            amount: 1.0,
+            millis: Millis(-27),
+        }])),
+    });
     let json = json(
         &t,
         r#"{"occurrences":[{"id":27,"skull":72,"amount":1,"millis":-27}]}"#,
@@ -136,7 +182,10 @@ fn occurrences() {
 
 #[test]
 fn occurrences_empty() {
-    let t = Message::Payload(Payload::Occurrences(Vec::new()));
+    let t = Message::Response(ResponseWithId {
+        id: None,
+        payload: Response::Payload(Payload::Occurrences(Vec::new())),
+    });
     let json = json(&t, r#"{"occurrences":[]}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
