@@ -35,9 +35,9 @@ pub fn outgoing(response: &types::Response) -> Outcome {
     match response {
         types::Response::Error(error) => Outcome::Error(error.kind),
         types::Response::Payload(payload) => match payload {
-            types::Payload::Created => Outcome::Created,
-            types::Payload::Updated => Outcome::Updated,
-            types::Payload::Deleted => Outcome::Deleted,
+            types::Payload::Change(types::Change::Created) => Outcome::Created,
+            types::Payload::Change(types::Change::Updated) => Outcome::Updated,
+            types::Payload::Change(types::Change::Deleted) => Outcome::Deleted,
             types::Payload::Skulls(_)
             | types::Payload::Quicks(_)
             | types::Payload::Occurrences(_) => Outcome::Ok,

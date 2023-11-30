@@ -5,7 +5,7 @@ pub mod ws;
 
 pub use error::{Error, Kind};
 pub use request::{Request, Setter};
-pub use response::{Payload, Response};
+pub use response::{Change, Payload, Response};
 pub use ws::{Message, Push, WithId};
 
 mod transparent;
