@@ -7,7 +7,7 @@ pub trait Mode: sealed::Sealed + Sized + Send + 'static {
         response: types::Message,
     ) -> Result<axum::extract::ws::Message, Self::SerializeError>;
     fn try_extract_id(bytes: &[u8]) -> Option<u32>;
-    fn deserialize(bytes: &[u8]) -> Result<types::RequestWithId, Self::DeserializeError>;
+    fn deserialize(bytes: &[u8]) -> Result<types::WithId<types::Request>, Self::DeserializeError>;
 }
 
 impl Mode for String {
@@ -25,11 +25,11 @@ impl Mode for String {
     }
 
     fn try_extract_id(bytes: &[u8]) -> Option<u32> {
-        serde_json::from_slice::<types::RequestId>(&bytes).map_or(None, |r| r.id)
+        serde_json::from_slice::<types::WithId<()>>(bytes).map_or(None, |r| r.id)
     }
 
-    fn deserialize(bytes: &[u8]) -> Result<types::RequestWithId, Self::DeserializeError> {
-        serde_json::from_slice(&bytes)
+    fn deserialize(bytes: &[u8]) -> Result<types::WithId<types::Request>, Self::DeserializeError> {
+        serde_json::from_slice(bytes)
     }
 }
 
@@ -48,11 +48,11 @@ impl Mode for Vec<u8> {
     }
 
     fn try_extract_id(bytes: &[u8]) -> Option<u32> {
-        rmp_serde::from_slice::<types::RequestId>(&bytes).map_or(None, |r| r.id)
+        rmp_serde::from_slice::<types::WithId<()>>(bytes).map_or(None, |r| r.id)
     }
 
-    fn deserialize(bytes: &[u8]) -> Result<types::RequestWithId, Self::DeserializeError> {
-        rmp_serde::from_slice(&bytes)
+    fn deserialize(bytes: &[u8]) -> Result<types::WithId<types::Request>, Self::DeserializeError> {
+        rmp_serde::from_slice(bytes)
     }
 }
 
