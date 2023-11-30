@@ -3,7 +3,7 @@ use types::{
         occurrence::{Create, Search, Update},
         Occurrence,
     },
-    Payload, Push, Setter,
+    Change, Payload, Push, Setter,
 };
 
 use super::{Broadcaster, Service};
@@ -63,7 +63,7 @@ impl Occurrences<'_> {
             .await?;
 
         self.broadcaster.send(Push::OccurrencesCreated(created));
-        Ok(Payload::Created)
+        Ok(Payload::Change(Change::Created))
     }
 
     async fn update(&self, request: Update) -> Result {
@@ -78,13 +78,13 @@ impl Occurrences<'_> {
             .await?;
 
         self.broadcaster.send(Push::OccurrenceUpdated(updated));
-        Ok(Payload::Updated)
+        Ok(Payload::Change(Change::Updated))
     }
 
     async fn delete(&self, request: types::request::occurrence::Delete) -> Result {
         self.store.delete(request.id).await?;
 
         self.broadcaster.send(Push::OccurrenceDeleted(request.id));
-        Ok(Payload::Deleted)
+        Ok(Payload::Change(Change::Deleted))
     }
 }

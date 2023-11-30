@@ -3,7 +3,7 @@ use types::{
         skull::{Create, Delete, Update},
         Skull,
     },
-    Payload, Push, Setter,
+    Change, Payload, Push, Setter,
 };
 
 use super::{Broadcaster, Service};
@@ -51,7 +51,7 @@ impl Skulls<'_> {
             .await?;
 
         self.broadcaster.send(Push::SkullCreated(created));
-        Ok(Payload::Created)
+        Ok(Payload::Change(Change::Created))
     }
 
     async fn update(&self, request: Update) -> Result {
@@ -68,13 +68,13 @@ impl Skulls<'_> {
             .await?;
 
         self.broadcaster.send(Push::SkullUpdated(updated));
-        Ok(Payload::Updated)
+        Ok(Payload::Change(Change::Updated))
     }
 
     async fn delete(&self, request: Delete) -> Result {
         self.store.delete(request.id).await?;
 
         self.broadcaster.send(Push::SkullDeleted(request.id));
-        Ok(Payload::Deleted)
+        Ok(Payload::Change(Change::Deleted))
     }
 }

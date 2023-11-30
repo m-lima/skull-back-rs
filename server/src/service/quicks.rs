@@ -3,7 +3,7 @@ use types::{
         quick::{Create, Delete, Update},
         Quick,
     },
-    Payload, Push, Setter,
+    Change, Payload, Push, Setter,
 };
 
 use super::{Broadcaster, Service};
@@ -42,7 +42,7 @@ impl Quicks<'_> {
         let created = self.store.create(request.skull, request.amount).await?;
 
         self.broadcaster.send(Push::QuickCreated(created));
-        Ok(Payload::Created)
+        Ok(Payload::Change(Change::Created))
     }
 
     async fn update(&self, request: Update) -> Result {
@@ -56,13 +56,13 @@ impl Quicks<'_> {
             .await?;
 
         self.broadcaster.send(Push::QuickUpdated(updated));
-        Ok(Payload::Updated)
+        Ok(Payload::Change(Change::Updated))
     }
 
     async fn delete(&self, request: Delete) -> Result {
         self.store.delete(request.id).await?;
 
         self.broadcaster.send(Push::QuickDeleted(request.id));
-        Ok(Payload::Deleted)
+        Ok(Payload::Change(Change::Deleted))
     }
 }

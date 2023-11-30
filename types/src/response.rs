@@ -11,10 +11,16 @@ pub enum Response {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Payload {
-    Created,
-    Updated,
-    Deleted,
+    Change(Change),
     Skulls(Vec<Skull>),
     Quicks(Vec<Quick>),
     Occurrences(Vec<Occurrence>),
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Change {
+    Created,
+    Updated,
+    Deleted,
 }

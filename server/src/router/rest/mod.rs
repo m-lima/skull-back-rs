@@ -18,8 +18,10 @@ async fn handle(
     match service.handle(request).await {
         types::Response::Payload(payload) => {
             let status = match payload {
-                types::Payload::Created => hyper::StatusCode::CREATED,
-                types::Payload::Updated | types::Payload::Deleted => hyper::StatusCode::NO_CONTENT,
+                types::Payload::Change(types::Change::Created) => hyper::StatusCode::CREATED,
+                types::Payload::Change(types::Change::Updated | types::Change::Deleted) => {
+                    hyper::StatusCode::NO_CONTENT
+                }
                 types::Payload::Skulls(_)
                 | types::Payload::Quicks(_)
                 | types::Payload::Occurrences(_) => hyper::StatusCode::OK,
