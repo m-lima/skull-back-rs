@@ -131,7 +131,7 @@ impl<T: Mode> Socket<T> {
             axum::extract::ws::Message::Binary(binary) => binary,
         };
 
-        match T::deserialize(bytes) {
+        match T::deserialize(&bytes) {
             Ok(request) => FlowControl::Pass(request),
             Err(error) => {
                 tracing::warn!(ws = %self.id, mode = %T::mode(), %error, "Failed to deserialize request");
@@ -140,7 +140,7 @@ impl<T: Mode> Socket<T> {
                     message: Some(error.to_string()),
                 };
                 self.send(types::Message::Response(types::ResponseWithId {
-                    id: None,
+                    id: T::try_extract_id(&bytes),
                     payload: types::Response::Error(error),
                 }))
                 .await
