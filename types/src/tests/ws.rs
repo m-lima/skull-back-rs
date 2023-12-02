@@ -1,19 +1,19 @@
 use super::{json, rmp};
 use crate::{
-    Error, Kind, Message, Millis, Occurrence, OccurrenceId, Payload, Push, Quick, QuickId,
-    Response, ResponseWithId, Skull, SkullId,
+    ws, Change, Error, Kind, Message, Millis, Occurrence, OccurrenceId, Payload, Push, Quick,
+    QuickId, Response, Skull, SkullId,
 };
 
 #[test]
 fn error_none_no_id() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Error(Error {
             kind: Kind::NotFound,
             message: None,
         }),
     });
-    let json = json(&t, r#"{"error":{"kind":"NotFound"}}"#).unwrap();
+    let json = json(&t, r#"{"response":{"error":{"kind":"NotFound"}}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -21,15 +21,15 @@ fn error_none_no_id() {
 }
 
 #[test]
-fn error_none_with_id() {
-    let t = Message::Response(ResponseWithId {
+fn error_none() {
+    let t = Message::Response(ws::Response {
         id: Some(1),
         payload: Response::Error(Error {
             kind: Kind::NotFound,
             message: None,
         }),
     });
-    let json = json(&t, r#"{"error":{"kind":"NotFound"}}"#).unwrap();
+    let json = json(&t, r#"{"response":{"id":1,"error":{"kind":"NotFound"}}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -38,14 +38,18 @@ fn error_none_with_id() {
 
 #[test]
 fn error_message() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Error(Error {
             kind: Kind::NotFound,
             message: Some(String::from("message")),
         }),
     });
-    let json = json(&t, r#"{"error":{"kind":"NotFound","message":"message"}}"#).unwrap();
+    let json = json(
+        &t,
+        r#"{"response":{"error":{"kind":"NotFound","message":"message"}}}"#,
+    )
+    .unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -54,11 +58,11 @@ fn error_message() {
 
 #[test]
 fn created() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
-        payload: Response::Payload(Payload::Created),
+        payload: Response::Payload(Payload::Change(Change::Created)),
     });
-    let json = json(&t, r#""created""#).unwrap();
+    let json = json(&t, r#"{"response":{"change":"created"}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -67,11 +71,11 @@ fn created() {
 
 #[test]
 fn updated() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
-        payload: Response::Payload(Payload::Updated),
+        payload: Response::Payload(Payload::Change(Change::Updated)),
     });
-    let json = json(&t, r#""updated""#).unwrap();
+    let json = json(&t, r#"{"response":{"change":"updated"}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -80,11 +84,11 @@ fn updated() {
 
 #[test]
 fn deleted() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
-        payload: Response::Payload(Payload::Deleted),
+        payload: Response::Payload(Payload::Change(Change::Deleted)),
     });
-    let json = json(&t, r#""deleted""#).unwrap();
+    let json = json(&t, r#"{"response":{"change":"deleted"}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -93,7 +97,7 @@ fn deleted() {
 
 #[test]
 fn skulls() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Skulls(vec![Skull {
             id: SkullId(27),
@@ -106,7 +110,7 @@ fn skulls() {
     });
     let json = json(
         &t,
-        r#"{"skulls":[{"id":27,"name":"name","color":1,"icon":"icon","price":1}]}"#,
+        r#"{"response":{"skulls":[{"id":27,"name":"name","color":1,"icon":"icon","price":1}]}}"#,
     )
     .unwrap();
     let rmp = rmp(&t).unwrap();
@@ -117,11 +121,11 @@ fn skulls() {
 
 #[test]
 fn skulls_empty() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Skulls(Vec::new())),
     });
-    let json = json(&t, r#"{"skulls":[]}"#).unwrap();
+    let json = json(&t, r#"{"response":{"skulls":[]}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -130,7 +134,7 @@ fn skulls_empty() {
 
 #[test]
 fn quicks() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Quicks(vec![Quick {
             id: QuickId(27),
@@ -138,7 +142,11 @@ fn quicks() {
             amount: 1.0,
         }])),
     });
-    let json = json(&t, r#"{"quicks":[{"id":27,"skull":72,"amount":1}]}"#).unwrap();
+    let json = json(
+        &t,
+        r#"{"response":{"quicks":[{"id":27,"skull":72,"amount":1}]}}"#,
+    )
+    .unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -147,11 +155,11 @@ fn quicks() {
 
 #[test]
 fn quicks_empty() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Quicks(Vec::new())),
     });
-    let json = json(&t, r#"{"quicks":[]}"#).unwrap();
+    let json = json(&t, r#"{"response":{"quicks":[]}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -160,7 +168,7 @@ fn quicks_empty() {
 
 #[test]
 fn occurrences() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Occurrences(vec![Occurrence {
             id: OccurrenceId(27),
@@ -171,7 +179,7 @@ fn occurrences() {
     });
     let json = json(
         &t,
-        r#"{"occurrences":[{"id":27,"skull":72,"amount":1,"millis":-27}]}"#,
+        r#"{"response":{"occurrences":[{"id":27,"skull":72,"amount":1,"millis":-27}]}}"#,
     )
     .unwrap();
     let rmp = rmp(&t).unwrap();
@@ -182,11 +190,11 @@ fn occurrences() {
 
 #[test]
 fn occurrences_empty() {
-    let t = Message::Response(ResponseWithId {
+    let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Occurrences(Vec::new())),
     });
-    let json = json(&t, r#"{"occurrences":[]}"#).unwrap();
+    let json = json(&t, r#"{"response":{"occurrences":[]}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
