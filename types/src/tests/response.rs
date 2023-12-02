@@ -1,6 +1,6 @@
 use crate::{
-    Error, Kind, Millis, Occurrence, OccurrenceId, Payload, Quick, QuickId, Response, Skull,
-    SkullId,
+    Change, Error, Kind, Millis, Occurrence, OccurrenceId, Payload, Quick, QuickId, Response,
+    Skull, SkullId,
 };
 
 use super::{json, rmp};
@@ -33,8 +33,8 @@ fn error_message() {
 
 #[test]
 fn created() {
-    let t = Response::Payload(Payload::Created);
-    let json = json(&t, r#""created""#).unwrap();
+    let t = Response::Payload(Payload::Change(Change::Created));
+    let json = json(&t, r#"{"change":"created"}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -43,8 +43,8 @@ fn created() {
 
 #[test]
 fn updated() {
-    let t = Response::Payload(Payload::Updated);
-    let json = json(&t, r#""updated""#).unwrap();
+    let t = Response::Payload(Payload::Change(Change::Updated));
+    let json = json(&t, r#"{"change":"updated"}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -53,8 +53,8 @@ fn updated() {
 
 #[test]
 fn deleted() {
-    let t = Response::Payload(Payload::Deleted);
-    let json = json(&t, r#""deleted""#).unwrap();
+    let t = Response::Payload(Payload::Change(Change::Deleted));
+    let json = json(&t, r#"{"change":"deleted"}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
