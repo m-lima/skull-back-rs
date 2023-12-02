@@ -385,7 +385,7 @@ mod tests {
     async fn prepare_search() -> (
         Store,
         (types::SkullId, types::SkullId),
-        [types::OccurrenceId; 6],
+        [types::Occurrence; 6],
     ) {
         let (store, skull) = skulled_store().await;
         let skull_id = skull.id;
@@ -398,19 +398,21 @@ mod tests {
 
         let occurrences = store.occurrences();
 
+        let mut new_occurrences = [
+            (other_id, 4.0, millis(4)),
+            (skull_id, 4.0, millis(4)),
+            (other_id, 3.0, millis(3)),
+            (skull_id, 3.0, millis(3)),
+            (skull_id, 2.0, millis(2)),
+            (skull_id, 1.0, millis(1)),
+        ];
+        sort(&mut new_occurrences);
+
         let occurrences = occurrences
-            .create([
-                (skull_id, 1.0, millis(1)),
-                (skull_id, 2.0, millis(2)),
-                (skull_id, 3.0, millis(3)),
-                (skull_id, 4.0, millis(4)),
-                (other_id, 3.0, millis(3)),
-                (other_id, 4.0, millis(4)),
-            ])
+            .create(new_occurrences)
             .await
             .unwrap()
             .into_iter()
-            .map(|o| o.id)
             .collect::<Vec<_>>();
 
         (store, (skull_id, other_id), occurrences.try_into().unwrap())
@@ -427,15 +429,55 @@ mod tests {
             .unwrap()
     }
 
+    trait Sortable {
+        fn millis(&self) -> &types::Millis;
+        fn skull(&self) -> &types::SkullId;
+    }
+
+    impl Sortable for types::Occurrence {
+        fn millis(&self) -> &types::Millis {
+            &self.millis
+        }
+
+        fn skull(&self) -> &types::SkullId {
+            &self.skull
+        }
+    }
+
+    impl Sortable for (types::SkullId, f32, types::Millis) {
+        fn millis(&self) -> &types::Millis {
+            &self.2
+        }
+
+        fn skull(&self) -> &types::SkullId {
+            &self.0
+        }
+    }
+
+    fn sort<S: Sortable>(occurrences: &mut [S]) {
+        occurrences.sort_unstable_by(|a, b| match b.millis().cmp(a.millis()) {
+            std::cmp::Ordering::Equal => b.skull().cmp(a.skull()),
+            c => c,
+        });
+    }
+
+    fn filter(
+        occurrences: [types::Occurrence; 6],
+        filter: impl Fn(&types::Occurrence) -> bool,
+    ) -> Vec<types::Occurrence> {
+        occurrences.into_iter().filter(filter).collect()
+    }
+
     #[tokio::test]
     async fn list() {
         let (store, skull) = skulled_store().await;
 
         let occurrences = store.occurrences();
-        let result = occurrences
+        let mut result = occurrences
             .create([(skull.id, 1.0, millis(1)), (skull.id, 2.0, millis(2))])
             .await
             .unwrap();
+        sort(&mut result);
 
         let occurrences = occurrences.list().await.unwrap();
         assert_eq!(occurrences, result);
@@ -452,19 +494,19 @@ mod tests {
 
     #[tokio::test]
     async fn search_no_filters() {
-        let (store, _, ids) = prepare_search().await;
+        let (store, _, news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
             .search(None, None, None, None)
             .await
             .unwrap();
-        assert_eq!(occurrences.iter().map(|o| o.id).collect::<Vec<_>>(), ids);
+        assert_eq!(occurrences, news);
     }
 
     #[tokio::test]
     async fn search_all_skulls() {
-        let (store, (skull_one, skull_two), ids) = prepare_search().await;
+        let (store, (skull_one, skull_two), news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
@@ -476,7 +518,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(occurrences.iter().map(|o| o.id).collect::<Vec<_>>(), ids);
+        assert_eq!(occurrences, news);
     }
 
     #[tokio::test]
@@ -493,7 +535,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_just_skulls() {
-        let (store, (_, skull_two), ids) = prepare_search().await;
+        let (store, (_, skull_two), news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
@@ -505,45 +547,36 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(
-            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
-            ids[4..]
-        );
+        assert_eq!(occurrences, filter(news, |o| o.skull == skull_two));
     }
 
     #[tokio::test]
     async fn search_just_start() {
-        let (store, _, ids) = prepare_search().await;
+        let (store, _, news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
             .search(None, Some(millis(3)), None, None)
             .await
             .unwrap();
-        assert_eq!(
-            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
-            ids[2..]
-        );
+        assert_eq!(occurrences, filter(news, |o| o.millis >= millis(3)));
     }
 
     #[tokio::test]
     async fn search_just_end() {
-        let (store, _, ids) = prepare_search().await;
+        let (store, _, news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
             .search(None, None, Some(millis(2)), None)
             .await
             .unwrap();
-        assert_eq!(
-            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
-            ids[..2]
-        );
+        assert_eq!(occurrences, filter(news, |o| o.millis <= millis(2)));
     }
 
     #[tokio::test]
     async fn search_start_and_end() {
-        let (store, _, ids) = prepare_search().await;
+        let (store, _, news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
@@ -551,29 +584,26 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
-            [ids[2], ids[4]]
+            occurrences,
+            filter(news, |o| o.millis >= millis(3) && o.millis <= millis(3))
         );
     }
 
     #[tokio::test]
     async fn search_just_limit() {
-        let (store, _, ids) = prepare_search().await;
+        let (store, _, news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
             .search(None, None, None, Some(3))
             .await
             .unwrap();
-        assert_eq!(
-            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
-            ids[..3]
-        );
+        assert_eq!(occurrences, news[..3]);
     }
 
     #[tokio::test]
     async fn search_all_filters() {
-        let (store, (skull_one, _), ids) = prepare_search().await;
+        let (store, (skull_one, _), news) = prepare_search().await;
 
         let occurrences = store
             .occurrences()
@@ -586,8 +616,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            occurrences.iter().map(|o| o.id).collect::<Vec<_>>(),
-            [ids[2]]
+            occurrences,
+            filter(news, |o| o.skull == skull_one
+                && o.millis >= millis(3)
+                && o.millis <= millis(4))[..1]
         );
     }
 
