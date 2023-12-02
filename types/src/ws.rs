@@ -1,4 +1,4 @@
-use crate::{Occurrence, OccurrenceId, Quick, QuickId, Response, Skull, SkullId};
+use crate::{Occurrence, OccurrenceId, Quick, QuickId, Skull, SkullId};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WithId<T> {
@@ -7,11 +7,15 @@ pub struct WithId<T> {
     pub payload: T,
 }
 
+pub type Request = WithId<crate::Request>;
+pub type Response = WithId<crate::Response>;
+pub type Id = WithId<()>;
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Message {
     Push(Push),
-    Response(WithId<Response>),
+    Response(Response),
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
