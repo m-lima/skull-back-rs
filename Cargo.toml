@@ -31,7 +31,5 @@ tower-service = "0.3.2"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.17", default-features = false }
 
-[profile.release]
-lto = true
-codegen-units = 1
-strip = true
+[workspace.metadata.crane]
+name = "skull-back"
