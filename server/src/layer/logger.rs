@@ -56,7 +56,7 @@ where
             path,
             user,
             length,
-            future: self.inner.call(request),
+            inner: self.inner.call(request),
         }
     }
 }
@@ -68,7 +68,7 @@ pub struct Future<F> {
     path: String,
     user: Option<String>,
     length: Option<usize>,
-    future: F,
+    inner: F,
 }
 
 impl<F, E> std::future::Future for Future<F>
@@ -84,7 +84,7 @@ where
     ) -> std::task::Poll<Self::Output> {
         let this = self.get_mut();
         let _span = this.span.enter();
-        let future = &mut this.future;
+        let future = &mut this.inner;
 
         let output = std::task::ready!(std::pin::Pin::new(future).poll(cx));
 

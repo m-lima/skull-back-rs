@@ -64,10 +64,10 @@ impl Quicks<'_> {
         skull: Option<types::SkullId>,
         amount: Option<f32>,
     ) -> Result<types::Quick> {
-        if let Some(amount) = amount {
-            if amount <= 0.0 {
-                return Err(Error::InvalidParameter("amount"));
-            }
+        if let Some(amount) = amount
+            && amount <= 0.0
+        {
+            return Err(Error::InvalidParameter("amount"));
         }
 
         match (skull, amount) {

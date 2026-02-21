@@ -15,7 +15,7 @@ fn setup_tracing(
         let subscriber = subscriber.with(::tracing::level_filters::LevelFilter::from_level(
             verbosity.level,
         ));
-        tracing::subscriber::set_global_default(subscriber).map_err(Into::into)
+        tracing::subscriber::set_global_default(subscriber)
     } else {
         let subscriber = subscriber.with(
             tracing_subscriber::filter::Targets::new()
@@ -26,7 +26,7 @@ fn setup_tracing(
                     ("ws", tracing::level_filters::LevelFilter::OFF),
                 ]),
         );
-        tracing::subscriber::set_global_default(subscriber).map_err(Into::into)
+        tracing::subscriber::set_global_default(subscriber)
     }
 }
 

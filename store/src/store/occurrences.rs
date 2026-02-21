@@ -42,7 +42,7 @@ impl Occurrences<'_> {
         limit: Option<usize>,
     ) -> Result<Vec<types::Occurrence>> {
         let mut builder = sqlx::QueryBuilder::new(
-            r#"
+            r"
             SELECT
                 id,
                 skull,
@@ -50,7 +50,7 @@ impl Occurrences<'_> {
                 millis
             FROM
                 occurrences
-            "#,
+            ",
         );
 
         let mut nowhere = true;
@@ -162,10 +162,10 @@ impl Occurrences<'_> {
         amount: Option<f32>,
         millis: Option<types::Millis>,
     ) -> Result<types::Occurrence> {
-        if let Some(amount) = amount {
-            if amount <= 0.0 {
-                return Err(Error::InvalidParameter("amount"));
-            }
+        if let Some(amount) = amount
+            && amount <= 0.0
+        {
+            return Err(Error::InvalidParameter("amount"));
         }
 
         match (skull, amount, millis) {

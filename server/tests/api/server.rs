@@ -151,6 +151,7 @@ impl Populator {
     }
 
     async fn check_items(&self, path: &'static str, template: &'static str) {
+        async {}.await;
         // let response = self.client.get(path).await;
         //
         // let template = template.replace('{', r#"{"id":$,"#);

@@ -13,9 +13,7 @@ async fn main() -> Result<(), String> {
     let quicks = make_path(&args.input, "quick")?;
     let occurrences = make_path(&args.input, "occurrence")?;
 
-    let skulls = ingest_skulls(skulls, &store)
-        .await
-        .map_err(|e| e.to_string())?;
+    let skulls = ingest_skulls(skulls, &store).await?;
 
     ingest_quicks(quicks, &store, &skulls).await?;
     ingest_occurrences(occurrences, &store, &skulls).await?;
@@ -48,7 +46,7 @@ async fn ingest_skulls(
                 return Err(format!(
                     "Skulls: Line {i}: Expected 6 columns but got {}",
                     split.len()
-                ))
+                ));
             }
         };
 
@@ -108,7 +106,7 @@ async fn ingest_quicks(
                 return Err(format!(
                     "Quicks: Line {i}: Expected 3 columns but got {}",
                     split.len()
-                ))
+                ));
             }
         };
 
@@ -151,7 +149,7 @@ async fn ingest_occurrences(
                 return Err(format!(
                     "Occurrences: Line {i}: Expected 4 columns but got {}",
                     split.len()
-                ))
+                ));
             }
         };
 

@@ -13,7 +13,7 @@ enum FlowControl<T> {
 
 pub struct Socket<T: Mode> {
     id: String,
-    socket: axum::extract::ws::WebSocket,
+    inner: axum::extract::ws::WebSocket,
     service: Service,
     _mode: std::marker::PhantomData<T>,
 }
@@ -25,7 +25,7 @@ impl<T: Mode> Socket<T> {
 
         Self {
             id,
-            socket,
+            inner: socket,
             service,
             _mode: std::marker::PhantomData,
         }
@@ -34,11 +34,17 @@ impl<T: Mode> Socket<T> {
     #[tracing::instrument(target = "ws", skip_all, fields(ws = %self.id, mode = %T::mode()))]
     pub async fn serve(mut self) {
         macro_rules! flow {
+            (continue $flow_control: expr) => {
+                flow!($flow_control, continue)
+            };
             ($flow_control: expr) => {
+                flow!($flow_control, {})
+            };
+            ($flow_control: expr, $finalizer: expr) => {
                 match $flow_control {
                     FlowControl::Pass(value) => value,
                     FlowControl::Break => break,
-                    FlowControl::Continue => continue,
+                    FlowControl::Continue => $finalizer,
                 }
             };
         }
@@ -61,7 +67,7 @@ impl<T: Mode> Socket<T> {
                 }
                 request = self.recv() => {
                     let start = std::time::Instant::now();
-                    let request = flow!(request);
+                    let request = flow!(continue request);
                     let types::ws::Request { id, payload } = request;
                     let (resource, action) = flow::incoming(&payload);
                     let response = self.service.handle(payload).await;
@@ -91,7 +97,7 @@ impl<T: Mode> Socket<T> {
     async fn heartbeat(&mut self) {
         tracing::debug!("Sending heartbeat");
         if let Err(error) = self
-            .socket
+            .inner
             .send(axum::extract::ws::Message::Ping(Vec::new()))
             .await
         {
@@ -101,7 +107,7 @@ impl<T: Mode> Socket<T> {
 
     async fn recv(&mut self) -> FlowControl<types::ws::Request> {
         // Closed socket
-        let Some(message) = self.socket.recv().await else {
+        let Some(message) = self.inner.recv().await else {
             tracing::debug!(ws = %self.id, mode = %T::mode(), "Closing websocket");
             return FlowControl::Break;
         };
@@ -151,7 +157,7 @@ impl<T: Mode> Socket<T> {
     async fn send<R>(&mut self, message: types::Message) -> FlowControl<R> {
         match T::serialize(message) {
             Ok(message) => {
-                if let Err(error) = self.socket.send(message).await {
+                if let Err(error) = self.inner.send(message).await {
                     tracing::error!(ws = %self.id, mode = %T::mode(), %error, "Failed to send message");
                     FlowControl::Break
                 } else {

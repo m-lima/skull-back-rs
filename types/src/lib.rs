@@ -1,3 +1,6 @@
+// allow(clippy::missing_errors_doc): We don't expose or generate docs for this workspace
+#![allow(clippy::missing_errors_doc)]
+
 pub mod error;
 pub mod request;
 pub mod response;

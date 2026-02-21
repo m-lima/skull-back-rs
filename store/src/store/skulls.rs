@@ -49,10 +49,10 @@ impl Skulls<'_> {
         if price < 0.0 {
             return Err(Error::InvalidParameter("price"));
         }
-        if let Some(limit) = limit {
-            if limit < 0.0 {
-                return Err(Error::InvalidParameter("limit"));
-            }
+        if let Some(limit) = limit
+            && limit < 0.0
+        {
+            return Err(Error::InvalidParameter("limit"));
         }
 
         sqlx::query_as!(
@@ -141,10 +141,10 @@ impl Skulls<'_> {
             }
         );
         push_field!(limit, {
-            if let Some(limit) = limit {
-                if limit < 0.0 {
-                    return Err(Error::InvalidParameter("limit"));
-                }
+            if let Some(limit) = limit
+                && limit < 0.0
+            {
+                return Err(Error::InvalidParameter("limit"));
             }
             limit
         });
