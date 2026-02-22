@@ -28,6 +28,10 @@
       system:
       let
         base = helper.lib.rust.helper inputs system ./. {
+          allowFilesets = [
+            ./store/.sqlx
+            ./store/migrations
+          ];
           buildInputs = pkgs: [ pkgs.openssl ];
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
           devPackages = pkgs: [ pkgs.sqlx-cli ];
