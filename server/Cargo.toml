@@ -8,21 +8,21 @@ default-run = "server"
 threads = ["boile-rs/rt-threads", "tokio/rt-multi-thread"]
 
 [dependencies]
-axum = { workspace = true, features = ["query", "ws"] }
-boile-rs = { workspace = true, features = ["log-spans", "rt-shutdown"] }
-clap = { workspace = true, features = ["derive"] }
-hyper = { workspace = true, features = ["server"] }
+axum = { workspace = true }
+boile-rs = { workspace = true }
+clap = { workspace = true }
+hyper = { workspace = true }
 rand = { workspace = true }
 rmp-serde = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 store = { path = "../store" }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true }
 tower-layer = { workspace = true }
 tower-service = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["registry"] }
+tracing-subscriber = { workspace = true }
 types = { path = "../types", features = ["query"] }
 
 [dev-dependencies]

@@ -73,7 +73,7 @@ fn main() -> std::process::ExitCode {
 
     let runtime = match boile_rs::rt::runtime(
         #[cfg(feature = "threads")]
-        threads,
+        args.threads,
     )
     .enable_all()
     .build()

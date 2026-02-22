@@ -6,9 +6,6 @@ enum Error {
     PathNotDir,
     #[error("Could not open file")]
     CouldNotOpenFile,
-    #[error("Expected `auto` or a value in the [1..=255] range")]
-    #[cfg(feature = "threads")]
-    Threads,
 }
 
 pub fn parse() -> Args {
