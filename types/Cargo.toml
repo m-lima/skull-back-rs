@@ -11,7 +11,7 @@ sqlx = ["dep:sqlx"]
 [dependencies]
 chrono = { workspace = true, optional = true }
 itoa = { workspace = true, optional = true }
-serde = { workspace = true }
+serde = { workspace = true, fetaures = ["derive"] }
 sqlx = { workspace = true, optional = true, features = ["sqlite"] }
 
 [dev-dependencies]

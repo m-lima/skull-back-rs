@@ -1,9 +1,9 @@
 use types::{
-    request::{
-        occurrence::{query::Error, Create, Delete, Search, Update},
-        Occurrence,
-    },
     Response,
+    request::{
+        Occurrence,
+        occurrence::{Create, Delete, Search, Update, query::Error},
+    },
 };
 
 use crate::service::Service;
@@ -74,17 +74,10 @@ struct SearchQuery(Search);
 impl<S> axum::extract::FromRequestParts<S> for SearchQuery {
     type Rejection = SearchQueryRejection;
 
-    fn from_request_parts<'parts, 'state, 'extractor>(
-        parts: &'parts mut hyper::http::request::Parts,
-        _: &'state S,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send + 'extractor>,
-    >
-    where
-        'parts: 'extractor,
-        'state: 'extractor,
-        Self: 'extractor,
-    {
+    fn from_request_parts(
+        parts: &mut hyper::http::request::Parts,
+        _: &S,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
         Box::pin(async move {
             Search::from_query(parts.uri.query().unwrap_or(""))
                 .map(SearchQuery)

@@ -1,9 +1,9 @@
 use types::{
-    request::{
-        occurrence::{Create, Search, Update},
-        Occurrence,
-    },
     Change, Payload, Push, Setter,
+    request::{
+        Occurrence,
+        occurrence::{Create, Search, Update},
+    },
 };
 
 use super::{Broadcaster, Service};

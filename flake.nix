@@ -30,6 +30,7 @@
         base = helper.lib.rust.helper inputs system ./. {
           buildInputs = pkgs: [ pkgs.openssl ];
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
+          devPackages = pkgs: [ pkgs.sqlx-cli ];
         };
       in
       base.outputs

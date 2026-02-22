@@ -21,7 +21,7 @@ impl Mode for String {
     fn serialize(
         response: types::Message,
     ) -> Result<axum::extract::ws::Message, Self::SerializeError> {
-        serde_json::to_string(&response).map(axum::extract::ws::Message::Text)
+        serde_json::to_string(&response).map(|s| axum::extract::ws::Message::Text(s.into()))
     }
 
     fn try_extract_id(bytes: &[u8]) -> Option<u32> {
@@ -44,7 +44,7 @@ impl Mode for Vec<u8> {
     fn serialize(
         response: types::Message,
     ) -> Result<axum::extract::ws::Message, Self::SerializeError> {
-        rmp_serde::to_vec(&response).map(axum::extract::ws::Message::Binary)
+        rmp_serde::to_vec(&response).map(|s| axum::extract::ws::Message::Binary(s.into()))
     }
 
     fn try_extract_id(bytes: &[u8]) -> Option<u32> {

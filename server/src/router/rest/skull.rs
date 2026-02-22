@@ -1,9 +1,9 @@
 use types::{
-    request::{
-        skull::{Create, Delete, Update},
-        Skull,
-    },
     Response,
+    request::{
+        Skull,
+        skull::{Create, Delete, Update},
+    },
 };
 
 use crate::service::Service;

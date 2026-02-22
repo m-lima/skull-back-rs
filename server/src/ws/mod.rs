@@ -98,7 +98,7 @@ impl<T: Mode> Socket<T> {
         tracing::debug!("Sending heartbeat");
         if let Err(error) = self
             .inner
-            .send(axum::extract::ws::Message::Ping(Vec::new()))
+            .send(axum::extract::ws::Message::Ping(hyper::body::Bytes::new()))
             .await
         {
             tracing::warn!(%error, "Failed to send heartbeat");
@@ -133,7 +133,7 @@ impl<T: Mode> Socket<T> {
             }
 
             // Payload messages
-            axum::extract::ws::Message::Text(text) => text.into_bytes(),
+            axum::extract::ws::Message::Text(text) => text.into(),
             axum::extract::ws::Message::Binary(binary) => binary,
         };
 

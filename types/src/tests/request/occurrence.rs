@@ -1,10 +1,10 @@
 use crate::{
+    Millis, OccurrenceId, Request, Setter, SkullId,
     request::{
-        occurrence::{Create, Delete, Item, Search, Update},
         Occurrence,
+        occurrence::{Create, Delete, Item, Search, Update},
     },
     tests::{json, rmp},
-    Millis, OccurrenceId, Request, Setter, SkullId,
 };
 
 #[test]

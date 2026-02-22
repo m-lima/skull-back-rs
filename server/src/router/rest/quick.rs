@@ -1,9 +1,9 @@
 use types::{
-    request::{
-        quick::{Create, Delete, Update},
-        Quick,
-    },
     Response,
+    request::{
+        Quick,
+        quick::{Create, Delete, Update},
+    },
 };
 
 use crate::service::Service;

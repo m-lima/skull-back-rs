@@ -1,9 +1,9 @@
 use types::{
-    request::{
-        quick::{Create, Delete, Update},
-        Quick,
-    },
     Change, Payload, Push, Setter,
+    request::{
+        Quick,
+        quick::{Create, Delete, Update},
+    },
 };
 
 use super::{Broadcaster, Service};

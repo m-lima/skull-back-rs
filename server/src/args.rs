@@ -12,11 +12,36 @@ enum Error {
 }
 
 pub fn parse() -> Args {
-    <Args as clap::Parser>::parse()
+    <Inner as clap::Parser>::parse().into()
+}
+
+#[derive(Debug)]
+pub struct Args {
+    pub verbosity: Verbosity,
+    pub port: u16,
+    #[cfg(feature = "threads")]
+    pub threads: boile_rs::rt::Threads,
+    pub create: bool,
+    pub users: std::collections::HashSet<String>,
+    pub db: std::path::PathBuf,
+}
+
+impl From<Inner> for Args {
+    fn from(value: Inner) -> Self {
+        Self {
+            verbosity: value.verbosity(),
+            port: value.port,
+            #[cfg(feature = "threads")]
+            threads: value.threads,
+            create: value.create,
+            users: value.users.users(),
+            db: value.db,
+        }
+    }
 }
 
 #[derive(Debug, clap::Parser)]
-pub struct Args {
+pub struct Inner {
     /// Verbosity level
     #[arg(short, action = clap::ArgAction::Count)]
     verbosity: u8,
@@ -42,7 +67,7 @@ pub struct Args {
     db: std::path::PathBuf,
 }
 
-impl Args {
+impl Inner {
     fn verbosity(&self) -> Verbosity {
         let (level, include_spans) = match self.verbosity {
             0 => (tracing::Level::ERROR, false),
@@ -59,28 +84,28 @@ impl Args {
         }
     }
 
-    pub fn decompose(
-        self,
-    ) -> (
-        Verbosity,
-        u16,
-        boile_rs::rt::Threads,
-        bool,
-        std::path::PathBuf,
-        std::collections::HashSet<String>,
-    ) {
-        (
-            self.verbosity(),
-            self.port,
-            #[cfg(feature = "threads")]
-            self.threads,
-            #[cfg(not(feature = "threads"))]
-            boile_rs::rt::Threads::Single,
-            self.create,
-            self.db,
-            self.users.users(),
-        )
-    }
+    // pub fn decompose(
+    //     self,
+    // ) -> (
+    //     Verbosity,
+    //     u16,
+    //     boile_rs::rt::Threads,
+    //     bool,
+    //     std::path::PathBuf,
+    //     std::collections::HashSet<String>,
+    // ) {
+    //     (
+    //         self.verbosity(),
+    //         self.port,
+    //         #[cfg(feature = "threads")]
+    //         self.threads,
+    //         #[cfg(not(feature = "threads"))]
+    //         boile_rs::rt::Threads::Single,
+    //         self.create,
+    //         self.db,
+    //         self.users.users(),
+    //     )
+    // }
 }
 
 #[derive(Debug, Copy, Clone)]

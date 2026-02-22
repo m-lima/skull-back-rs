@@ -9,7 +9,8 @@ fn setup_tracing(
 ) -> Result<(), tracing::subscriber::SetGlobalDefaultError> {
     use tracing_subscriber::layer::SubscriberExt;
 
-    let subscriber = tracing_subscriber::registry().with(boile_rs::log::tracing::layer());
+    let subscriber =
+        tracing_subscriber::registry().with(boile_rs::log::tracing::layer(boile_rs::log::Stdout));
 
     if verbosity.include_spans {
         let subscriber = subscriber.with(::tracing::level_filters::LevelFilter::from_level(
@@ -31,30 +32,42 @@ fn setup_tracing(
 }
 
 fn main() -> std::process::ExitCode {
-    let (verbosity, port, threads, create, db_root, users) = args::parse().decompose();
+    let args = args::parse();
 
-    if let Err(err) = setup_tracing(verbosity) {
+    if let Err(err) = setup_tracing(args.verbosity) {
         eprintln!("{err}");
         return std::process::ExitCode::FAILURE;
     }
 
+    #[cfg(feature = "threads")]
     tracing::info!(
-        verbosity = %verbosity.level,
-        spans = %verbosity.include_spans,
-        port = port,
-        threads = %threads,
-        create = %create,
-        db_root = %db_root.display(),
-        users = ?users,
+        verbosity = %args.verbosity.level,
+        spans = %args.verbosity.include_spans,
+        port = args.port,
+        threads = %args.threads,
+        create = %args.create,
+        db_root = %args.db.display(),
+        users = ?args.users,
+        "Configuration loaded"
+    );
+    #[cfg(not(feature = "threads"))]
+    tracing::info!(
+        verbosity = %args.verbosity.level,
+        spans = %args.verbosity.include_spans,
+        port = args.port,
+        threads = %"single",
+        create = %args.create,
+        db_root = %args.db.display(),
+        users = ?args.users,
         "Configuration loaded"
     );
 
-    if users.is_empty() {
+    if args.users.is_empty() {
         tracing::error!("No users provided");
         return std::process::ExitCode::FAILURE;
     }
 
-    if create && !service::create_users(&db_root, &users) {
+    if args.create && !service::create_users(&args.db, &args.users) {
         return std::process::ExitCode::FAILURE;
     }
 
@@ -72,7 +85,7 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    runtime.block_on(async_main(port, db_root, users))
+    runtime.block_on(async_main(args.port, args.db, args.users))
 }
 
 async fn async_main(
@@ -92,14 +105,21 @@ async fn async_main(
         .layer(layer::Auth::wrap(services))
         .layer(layer::Logger);
 
-    let addr = ([0, 0, 0, 0], port).into();
-
+    let addr = std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, port);
     tracing::info!(%addr, "Binding to address");
 
-    let server = hyper::Server::bind(&addr).serve(router.into_make_service());
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            tracing::error!(%error, "Failed to bind to address");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
 
     let server = match boile_rs::rt::Shutdown::new() {
-        Ok(shutdown) => server.with_graceful_shutdown(shutdown),
+        Ok(shutdown) => {
+            axum::serve(listener, router.into_make_service()).with_graceful_shutdown(shutdown)
+        }
         Err(error) => {
             tracing::error!(%error, "Failed to create shutdown hook");
             return std::process::ExitCode::FAILURE;

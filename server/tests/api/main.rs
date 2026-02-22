@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
-mod client;
+// mod client;
 mod server;
 mod utils;
 // mod test_utils;

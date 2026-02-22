@@ -1,10 +1,10 @@
 use crate::{
+    QuickId, Request, Setter, SkullId,
     request::{
-        quick::{Create, Delete, Update},
         Quick,
+        quick::{Create, Delete, Update},
     },
     tests::{json, rmp},
-    QuickId, Request, Setter, SkullId,
 };
 
 #[test]

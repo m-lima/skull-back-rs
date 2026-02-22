@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use crate::{
     client::Client,
     helper::{
-        build_skull_payload, eq, extract_last_modified, LastModified, EMPTY_USER, USER_HEADER,
+        EMPTY_USER, LastModified, USER_HEADER, build_skull_payload, eq, extract_last_modified,
     },
     server,
 };

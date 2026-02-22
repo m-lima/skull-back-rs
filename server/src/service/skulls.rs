@@ -1,9 +1,9 @@
 use types::{
-    request::{
-        skull::{Create, Delete, Update},
-        Skull,
-    },
     Change, Payload, Push, Setter,
+    request::{
+        Skull,
+        skull::{Create, Delete, Update},
+    },
 };
 
 use super::{Broadcaster, Service};

@@ -6,12 +6,12 @@
       {
         "name": "id: types::OccurrenceId",
         "ordinal": 0,
-        "type_info": "Int64"
+        "type_info": "Integer"
       },
       {
         "name": "skull: types::SkullId",
         "ordinal": 1,
-        "type_info": "Int64"
+        "type_info": "Integer"
       },
       {
         "name": "amount: f32",
@@ -21,7 +21,7 @@
       {
         "name": "millis: types::Millis",
         "ordinal": 3,
-        "type_info": "Int64"
+        "type_info": "Integer"
       }
     ],
     "parameters": {
