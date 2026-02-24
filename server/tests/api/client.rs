@@ -16,69 +16,68 @@ impl From<&server::Server> for Client {
 }
 
 impl Client {
-    pub async fn get(
-        &self,
-        path_and_query: impl AsRef<str>,
-    ) -> hyper::Response<hyper::body::Bytes> {
+    pub async fn get(&self, path_and_query: impl AsRef<str>) -> reqwest::Response {
         let request = self.get_request(path_and_query);
-        self.client.request(request).await.unwrap()
+        self.client.execute(request).await.unwrap()
     }
 
     pub async fn get_with(
         &self,
         path_and_query: impl AsRef<str>,
-        f: impl Fn(&mut hyper::Request<hyper::body::Bytes>),
-    ) -> hyper::Response<hyper::body::Bytes> {
+        f: impl Fn(&mut reqwest::Request),
+    ) -> reqwest::Response {
         let mut request = self.get_request(path_and_query);
         f(&mut request);
-        self.client.request(request).await.unwrap()
+        self.client.execute(request).await.unwrap()
     }
 
     pub async fn post(
         &self,
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::body::Bytes>,
-    ) -> hyper::Response<hyper::body::Bytes> {
+    ) -> reqwest::Response {
         let request = self.post_request(path_and_query, body);
-        self.client.request(request).await.unwrap()
+        self.client.execute(request).await.unwrap()
     }
 
     pub async fn patch(
         &self,
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::body::Bytes>,
-    ) -> hyper::Response<hyper::body::Bytes> {
+    ) -> reqwest::Response {
         let request = self.patch_request(path_and_query, body);
-        self.client.request(request).await.unwrap()
+        self.client.execute(request).await.unwrap()
     }
 
     pub async fn patch_with(
         &self,
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::body::Bytes>,
-        f: impl Fn(&mut hyper::Request<hyper::body::Bytes>),
-    ) -> hyper::Response<hyper::body::Bytes> {
+        f: impl Fn(&mut reqwest::Request),
+    ) -> reqwest::Response {
         let mut request = self.patch_request(path_and_query, body);
         f(&mut request);
-        self.client.request(request).await.unwrap()
+        self.client.execute(request).await.unwrap()
     }
 
     pub async fn delete(
         &self,
         path_and_query: impl AsRef<str>,
-    ) -> hyper::Response<hyper::body::Bytes> {
-        let request = self.delete_request(path_and_query);
-        self.client.request(request).await.unwrap()
+        body: impl Into<hyper::body::Bytes>,
+    ) -> reqwest::Response {
+        let request = self.delete_request(path_and_query, body);
+        self.client.execute(request).await.unwrap()
     }
 
     pub async fn delete_with(
         &self,
         path_and_query: impl AsRef<str>,
-        f: impl Fn(&mut hyper::Request<hyper::body::Bytes>),
-    ) -> hyper::Response<hyper::body::Bytes> {
-        let mut request = self.delete_request(path_and_query);
+        body: impl Into<hyper::body::Bytes>,
+        f: impl Fn(&mut reqwest::Request),
+    ) -> reqwest::Response {
+        let mut request = self.delete_request(path_and_query, body);
         f(&mut request);
-        self.client.request(request).await.unwrap()
+        self.client.execute(request).await.unwrap()
     }
 }
 
@@ -88,22 +87,20 @@ impl Client {
         method: hyper::Method,
         path_and_query: impl AsRef<str>,
     ) -> reqwest::RequestBuilder {
-        let uri = hyper::Uri::builder()
-            .scheme("http")
-            .authority(self.uri.as_str())
-            .path_and_query(path_and_query.as_ref())
-            .build()
-            .unwrap();
+        let uri = format!(
+            "http://{authority}/{path_and_query}",
+            authority = self.uri.as_str(),
+            path_and_query = path_and_query.as_ref(),
+        );
 
         self.client
             .request(method, uri)
             .header(utils::USER_HEADER, utils::USER)
     }
 
-    fn get_request(&self, path_and_query: impl AsRef<str>) -> hyper::Request<hyper::body::Bytes> {
-        self.request(path_and_query)
-            .method(hyper::Method::GET)
-            .body(hyper::body::Bytes::new())
+    fn get_request(&self, path_and_query: impl AsRef<str>) -> reqwest::Request {
+        self.request(hyper::Method::GET, path_and_query)
+            .build()
             .unwrap()
     }
 
@@ -111,14 +108,14 @@ impl Client {
         &self,
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::body::Bytes>,
-    ) -> hyper::Request<hyper::body::Bytes> {
-        self.request(path_and_query)
-            .method(hyper::Method::POST)
+    ) -> reqwest::Request {
+        self.request(hyper::Method::POST, path_and_query)
             .header(
                 hyper::header::CONTENT_TYPE,
                 hyper::header::HeaderValue::from_static("application/json"),
             )
             .body(body.into())
+            .build()
             .unwrap()
     }
 
@@ -126,20 +123,29 @@ impl Client {
         &self,
         path_and_query: impl AsRef<str>,
         body: impl Into<hyper::body::Bytes>,
-    ) -> hyper::Request<hyper::body::Bytes> {
-        self.request(path_and_query)
-            .method(hyper::Method::PATCH)
+    ) -> reqwest::Request {
+        self.request(hyper::Method::PATCH, path_and_query)
+            .header(
+                hyper::header::CONTENT_TYPE,
+                hyper::header::HeaderValue::from_static("application/json"),
+            )
             .body(body.into())
+            .build()
             .unwrap()
     }
 
     fn delete_request(
         &self,
         path_and_query: impl AsRef<str>,
-    ) -> hyper::Request<hyper::body::Bytes> {
-        self.request(path_and_query)
-            .method(hyper::Method::DELETE)
-            .body(hyper::body::Bytes::new())
+        body: impl Into<hyper::body::Bytes>,
+    ) -> reqwest::Request {
+        self.request(hyper::Method::DELETE, path_and_query)
+            .header(
+                hyper::header::CONTENT_TYPE,
+                hyper::header::HeaderValue::from_static("application/json"),
+            )
+            .body(body.into())
+            .build()
             .unwrap()
     }
 }

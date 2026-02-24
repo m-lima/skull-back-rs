@@ -80,29 +80,6 @@ impl Inner {
             include_spans,
         }
     }
-
-    // pub fn decompose(
-    //     self,
-    // ) -> (
-    //     Verbosity,
-    //     u16,
-    //     boile_rs::rt::Threads,
-    //     bool,
-    //     std::path::PathBuf,
-    //     std::collections::HashSet<String>,
-    // ) {
-    //     (
-    //         self.verbosity(),
-    //         self.port,
-    //         #[cfg(feature = "threads")]
-    //         self.threads,
-    //         #[cfg(not(feature = "threads"))]
-    //         boile_rs::rt::Threads::Single,
-    //         self.create,
-    //         self.db,
-    //         self.users.users(),
-    //     )
-    // }
 }
 
 #[derive(Debug, Copy, Clone)]

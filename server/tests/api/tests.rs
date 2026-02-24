@@ -1,12 +1,12 @@
-use crate::check_async as check;
 use hyper::StatusCode;
 
 use crate::{
+    check_async as check,
     client::Client,
-    helper::{
-        EMPTY_USER, LastModified, USER_HEADER, build_skull_payload, eq, extract_last_modified,
-    },
     server,
+    utils::{
+        EMPTY_USER, USER_HEADER, build_occurrence_payload, build_skull_payload, eq, extract_body,
+    },
 };
 
 pub fn test<'a>(
@@ -28,161 +28,84 @@ pub fn test<'a>(
             test!(unknown_user),
             test!(method_not_allowed),
             test!(not_found),
-            test!(head),
             test!(list),
             test!(list_empty),
-            test!(list_limited),
-            test!(list_bad_request),
             test!(create),
             test!(create_constraint),
             test!(create_conflict),
             test!(create_bad_payload),
-            test!(create_length_required),
-            test!(create_too_large),
-            test!(read),
-            test!(read_not_found),
+            test!(search),
+            test!(search_not_found),
+            test!(search_limit),
             test!(update),
+            test!(update_no_change),
             test!(update_not_found),
             test!(update_constraint),
             test!(update_conflict),
-            test!(update_out_of_sync),
-            test!(update_unmodified_missing),
             test!(update_bad_payload),
-            test!(update_length_required),
-            test!(update_too_large),
             test!(delete),
             test!(delete_not_found),
             test!(delete_rejected),
-            test!(delete_out_of_sync),
-            test!(delete_unmodified_missing),
-            test!(json::skull),
-            test!(json::quick),
-            test!(json::occurrence),
-            test!(json::list),
         ]
     })
 }
 
 async fn missing_user(client: Client) {
     let response = client
-        .get_with("/skull", |r| {
+        .get_with("skull", |r| {
             r.headers_mut().remove(USER_HEADER);
         })
         .await;
 
-    check!(eq(response, StatusCode::FORBIDDEN, LastModified::None, ""));
+    check!(eq(response, StatusCode::FORBIDDEN, ""));
 }
 
 async fn unknown_user(client: Client) {
     let response = client
-        .get_with("/skull", |r| {
+        .get_with("skull", |r| {
             r.headers_mut()
                 .insert(USER_HEADER, "unknown".try_into().unwrap());
         })
         .await;
 
-    check!(eq(response, StatusCode::FORBIDDEN, LastModified::None, ""));
+    check!(eq(response, StatusCode::FORBIDDEN, ""));
 }
 
 async fn method_not_allowed(client: Client) {
     let response = client
-        .get_with("/skull", |r| *r.method_mut() = hyper::Method::PATCH)
+        .get_with("skull", |r| *r.method_mut() = hyper::Method::PUT)
         .await;
 
-    check!(eq(
-        response,
-        StatusCode::METHOD_NOT_ALLOWED,
-        LastModified::None,
-        ""
-    ));
+    check!(eq(response, StatusCode::METHOD_NOT_ALLOWED, ""));
 }
 
 async fn not_found(client: Client) {
     let response = client.get("/bloink").await;
 
-    check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
-}
-
-async fn head(client: Client) {
-    let response = client.head("/skull").await;
-
-    check!(eq(response, StatusCode::OK, LastModified::Gt(0), ""));
+    check!(eq(response, StatusCode::NOT_FOUND, ""));
 }
 
 async fn list(client: Client) {
-    let last_modified = client.last_modified("/skull").await;
-    let response = client.get("/skull").await;
+    let response = client.get("skull").await;
 
-    check!(eq(
-        response,
-        StatusCode::OK,
-        LastModified::Eq(last_modified),
-        build_skull_payload([1, 2, 3])
-    ));
+    check!(eq(response, StatusCode::OK, build_skull_payload([1, 2, 3])));
 }
 
 async fn list_empty(client: Client) {
     let response = client
-        .head_with("/skull", |r| {
-            r.headers_mut()
-                .insert(USER_HEADER, EMPTY_USER.try_into().unwrap());
-        })
-        .await;
-    let last_modified = extract_last_modified(&response).unwrap();
-    let response = client
-        .get_with("/skull", |r| {
+        .get_with("skull", |r| {
             r.headers_mut()
                 .insert(USER_HEADER, EMPTY_USER.try_into().unwrap());
         })
         .await;
 
-    check!(eq(
-        response,
-        StatusCode::OK,
-        LastModified::Eq(last_modified),
-        "[]"
-    ));
-}
-
-async fn list_limited(client: Client) {
-    let last_modified = client.last_modified("/skull").await;
-
-    for i in 0..5 {
-        let response = client.get(format!("/skull?limit={i}")).await;
-
-        let payload = match i {
-            0 => build_skull_payload([]),
-            1 => build_skull_payload([3]),
-            2 => build_skull_payload([2, 3]),
-            _ => build_skull_payload([1, 2, 3]),
-        };
-
-        check!(eq(
-            response,
-            StatusCode::OK,
-            LastModified::Eq(last_modified),
-            payload
-        ));
-    }
-}
-
-async fn list_bad_request(client: Client) {
-    let response = client.get("/skull?limit=").await;
-
-    check!(eq(
-        response,
-        StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
-    ));
+    check!(eq(response, StatusCode::OK, build_skull_payload([])));
 }
 
 async fn create(client: Client) {
-    let last_modified = client.last_modified("/quick").await;
-
     let response = client
         .post(
-            "/quick",
+            "quick",
             r#"{
                 "skull": 1,
                 "amount": 27
@@ -193,15 +116,14 @@ async fn create(client: Client) {
     check!(eq(
         response,
         StatusCode::CREATED,
-        LastModified::Gt(last_modified),
-        "4"
+        "{\"change\":\"created\"}"
     ));
 }
 
 async fn create_constraint(client: Client) {
     let response = client
         .post(
-            "/quick",
+            "quick",
             r#"{
                 "skull": 27,
                 "amount": 27
@@ -212,120 +134,16 @@ async fn create_constraint(client: Client) {
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"referenced ID does not exist\"}}"
     ));
 }
 
 async fn create_conflict(client: Client) {
     let response = client
         .post(
-            "/quick",
+            "quick",
             r#"{
                 "skull": 1,
-                "amount": 1,
-            }"#,
-        )
-        .await;
-
-    check!(eq(
-        response,
-        StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn create_bad_payload(client: Client) {
-    let response = client.post("/quick", r#"{"bloink": 27}"#).await;
-
-    check!(eq(
-        response,
-        StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn create_length_required(client: Client) {
-    let response = client.post("/quick", hyper::Body::empty()).await;
-
-    check!(eq(
-        response,
-        StatusCode::LENGTH_REQUIRED,
-        LastModified::None,
-        ""
-    ));
-}
-async fn create_too_large(client: Client) {
-    let response = client.post("/occurrence", [0_u8; 1025].as_slice()).await;
-
-    check!(eq(
-        response,
-        StatusCode::PAYLOAD_TOO_LARGE,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn read(client: Client) {
-    let last_modified = client.last_modified("/skull").await;
-    let response = client.get("/skull/2").await;
-
-    check!(eq(
-        response,
-        StatusCode::OK,
-        LastModified::Eq(last_modified),
-        r#"{"id":2,"name":"skull2","color":"color2","icon":"icon2","price":0.2}"#
-    ));
-}
-
-async fn read_not_found(client: Client) {
-    let response = client.get("/skull/27").await;
-
-    check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
-}
-
-async fn update(client: Client) {
-    let last_modified = client.last_modified("/quick").await;
-    let response = client
-        .put(
-            "/quick/3",
-            r#"{
-                "skull": 3,
-                "amount": 27
-            }"#,
-        )
-        .await;
-
-    check!(eq(
-        response,
-        StatusCode::OK,
-        LastModified::Gt(last_modified),
-        r#"{"id":3,"skull":3,"amount":3.0}"#,
-    ));
-}
-
-async fn update_not_found(client: Client) {
-    let response = client
-        .put(
-            "/quick/27",
-            r#"{
-                "skull": 3,
-                "amount": 27
-            }"#,
-        )
-        .await;
-
-    check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
-}
-
-async fn update_constraint(client: Client) {
-    let response = client
-        .put(
-            "/quick/1",
-            r#"{
-                "skull": 27,
                 "amount": 1
             }"#,
         )
@@ -334,18 +152,132 @@ async fn update_constraint(client: Client) {
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry already exists: UNIQUE constraint failed: quicks.skull, quicks.amount\"}}"
+    ));
+}
+
+async fn create_bad_payload(client: Client) {
+    let response = client.post("quick", r#"{"bloink": 27}"#).await;
+
+    check!(eq(
+        response,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Failed to deserialize the JSON body into the target type: missing field `skull` at line 1 column 14"
+    ));
+}
+
+async fn create_empty(client: Client) {
+    let response = client.post("occurrence", "{\"items\":[]}").await;
+
+    check!(eq(
+        response,
+        StatusCode::BAD_REQUEST,
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"no changes specified\"}}"
+    ));
+}
+
+async fn search(client: Client) {
+    let response = client.get("occurrence?skulls=2").await;
+
+    check!(eq(response, StatusCode::OK, build_occurrence_payload([2])));
+}
+
+async fn search_not_found(client: Client) {
+    let response = client.get("occurrence?skulls=27").await;
+
+    check!(eq(response, StatusCode::OK, "{\"occurrences\":[]}"));
+}
+
+async fn search_limit(client: Client) {
+    for i in 0..5 {
+        let response = client.get(format!("occurrence?limit={i}")).await;
+
+        let payload = match i {
+            0 => build_occurrence_payload([]),
+            1 => build_occurrence_payload([3]),
+            2 => build_occurrence_payload([3, 2]),
+            _ => build_occurrence_payload([3, 2, 1]),
+        };
+        check!(eq(response, StatusCode::OK, payload));
+    }
+}
+
+async fn update(client: Client) {
+    let response = client.get("quick").await;
+    let original = extract_body(response).await;
+
+    let response = client
+        .patch(
+            "quick",
+            r#"{
+                "id": 3,
+                "skull": { "set": 3 },
+                "amount": { "set": 27 }
+            }"#,
+        )
+        .await;
+
+    check!(eq(response, StatusCode::NO_CONTENT, ""));
+
+    let response = client.get("quick").await;
+    let modified = original.replace("\"amount\":3.0", "\"amount\":27.0");
+    check!(eq(response, StatusCode::OK, modified));
+}
+
+async fn update_no_change(client: Client) {
+    let response = client.patch("quick", "{\"id\": 3}").await;
+    check!(eq(
+        response,
+        StatusCode::BAD_REQUEST,
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"no changes specified\"}}"
+    ));
+}
+
+async fn update_not_found(client: Client) {
+    let response = client
+        .patch(
+            "quick",
+            r#"{
+                "id": 27,
+                "skull": { "set": 3 },
+                "amount": { "set": 27 }
+            }"#,
+        )
+        .await;
+
+    check!(eq(
+        response,
+        StatusCode::NOT_FOUND,
+        "{\"error\":{\"kind\":\"NotFound\",\"message\":\"entry not found for `27`\"}}"
+    ));
+}
+
+async fn update_constraint(client: Client) {
+    let response = client
+        .patch(
+            "quick",
+            r#"{
+                "id": 3,
+                "skull": { "set": 27 }
+            }"#,
+        )
+        .await;
+
+    check!(eq(
+        response,
+        StatusCode::BAD_REQUEST,
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"referenced ID does not exist\"}}"
     ));
 }
 
 async fn update_conflict(client: Client) {
     let response = client
-        .put(
-            "/quick/1",
+        .patch(
+            "quick",
             r#"{
-                "skull": 2,
-                "amount": 2
+                "id": 1,
+                "skull": { "set": 2 },
+                "amount": { "set": 2 }
             }"#,
         )
         .await;
@@ -353,61 +285,16 @@ async fn update_conflict(client: Client) {
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn update_out_of_sync(client: Client) {
-    let response = client
-        .put_with(
-            "/quick/3",
-            r#"{
-                "skull": 3,
-                "amount": 27
-            }"#,
-            |r| {
-                r.headers_mut()
-                    .insert(hyper::header::IF_UNMODIFIED_SINCE, 1.try_into().unwrap());
-            },
-        )
-        .await;
-
-    check!(eq(
-        response,
-        StatusCode::PRECONDITION_FAILED,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn update_unmodified_missing(client: Client) {
-    let response = client
-        .put_with(
-            "/quick/3",
-            r#"{
-                "skull": 3,
-                "amount": 27
-            }"#,
-            |r| {
-                r.headers_mut().remove(hyper::header::IF_UNMODIFIED_SINCE);
-            },
-        )
-        .await;
-
-    check!(eq(
-        response,
-        StatusCode::PRECONDITION_FAILED,
-        LastModified::None,
-        ""
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry already exists: UNIQUE constraint failed: quicks.skull, quicks.amount\"}}"
     ));
 }
 
 async fn update_bad_payload(client: Client) {
     let response = client
-        .put(
-            "/quick/1",
+        .patch(
+            "quick",
             r#"{
+                "id": 1,
                 "amount": 2
             }"#,
         )
@@ -415,166 +302,39 @@ async fn update_bad_payload(client: Client) {
 
     check!(eq(
         response,
-        StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn update_length_required(client: Client) {
-    let response = client.put("/quick/1", hyper::Body::empty()).await;
-
-    check!(eq(
-        response,
-        StatusCode::LENGTH_REQUIRED,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn update_too_large(client: Client) {
-    let response = client.put("/quick/1", [0_u8; 1025].as_slice()).await;
-
-    check!(eq(
-        response,
-        StatusCode::PAYLOAD_TOO_LARGE,
-        LastModified::None,
-        ""
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Failed to deserialize the JSON body into the target type: amount: invalid type: integer `2`, expected struct Setter at line 3 column 27"
     ));
 }
 
 async fn delete(client: Client) {
-    let last_modified = client.last_modified("/occurrence").await;
-    let response = client.delete("/occurrence/3").await;
+    let response = client.delete("occurrence", "{\"id\":3}").await;
+    check!(eq(response, StatusCode::NO_CONTENT, ""));
 
+    let response = client.get("occurrence").await;
     check!(eq(
         response,
         StatusCode::OK,
-        LastModified::Gt(last_modified),
-        r#"{"id":3,"skull":3,"amount":3.0,"millis":3}"#
+        build_occurrence_payload([2, 1])
     ));
 }
 
 async fn delete_not_found(client: Client) {
-    let response = client.delete("/occurrence/27").await;
+    let response = client.delete("occurrence", "{\"id\":27}").await;
 
-    check!(eq(response, StatusCode::NOT_FOUND, LastModified::None, ""));
+    check!(eq(
+        response,
+        StatusCode::NOT_FOUND,
+        "{\"error\":{\"kind\":\"NotFound\",\"message\":\"entry not found for `27`\"}}"
+    ));
 }
 
 async fn delete_rejected(client: Client) {
-    let response = client.delete("/skull/1").await;
+    let response = client.delete("skull", "{\"id\":1}").await;
 
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
-        LastModified::None,
-        ""
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry fails constraint check: FOREIGN KEY constraint failed\"}}"
     ));
-}
-
-async fn delete_out_of_sync(client: Client) {
-    let response = client
-        .delete_with("/occurrence/3", |r| {
-            r.headers_mut()
-                .insert(hyper::header::IF_UNMODIFIED_SINCE, 1.try_into().unwrap());
-        })
-        .await;
-
-    check!(eq(
-        response,
-        StatusCode::PRECONDITION_FAILED,
-        LastModified::None,
-        ""
-    ));
-}
-
-async fn delete_unmodified_missing(client: Client) {
-    let response = client
-        .delete_with("/occurrence/3", |r| {
-            r.headers_mut().remove(hyper::header::IF_UNMODIFIED_SINCE);
-        })
-        .await;
-
-    check!(eq(
-        response,
-        StatusCode::PRECONDITION_FAILED,
-        LastModified::None,
-        ""
-    ));
-}
-
-mod json {
-    use serde_json::{Number, Value};
-
-    use crate::{client::Client, helper::extract_body};
-
-    pub async fn skull(client: Client) {
-        let response = client.get("/skull/1").await;
-        let body = extract_body(response).await;
-        let data =
-            serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&body)
-                .unwrap();
-
-        assert_eq!(data.keys().len(), 5);
-        assert_eq!(data["id"], Value::Number(Number::from(1)));
-        assert_eq!(data["name"], Value::String(String::from("skull1")));
-        assert_eq!(data["color"], Value::String(String::from("color1")));
-        assert_eq!(data["icon"], Value::String(String::from("icon1")));
-        assert_eq!(data["price"], Value::Number(Number::from_f64(0.1).unwrap()));
-    }
-
-    pub async fn quick(client: Client) {
-        let response = client.get("/quick/1").await;
-        let body = extract_body(response).await;
-        let data =
-            serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&body)
-                .unwrap();
-
-        assert_eq!(data.keys().len(), 3);
-        assert_eq!(data["id"], Value::Number(Number::from(1)));
-        assert_eq!(data["skull"], Value::Number(Number::from(1)));
-        assert_eq!(
-            data["amount"],
-            Value::Number(Number::from_f64(1.0).unwrap())
-        );
-    }
-
-    pub async fn occurrence(client: Client) {
-        let response = client.get("/occurrence/1").await;
-        let body = extract_body(response).await;
-        let data =
-            serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&body)
-                .unwrap();
-
-        assert_eq!(data.keys().len(), 4);
-        assert_eq!(data["id"], Value::Number(Number::from(1)));
-        assert_eq!(data["skull"], Value::Number(Number::from(1)));
-        assert_eq!(
-            data["amount"],
-            Value::Number(Number::from_f64(1.0).unwrap())
-        );
-        assert_eq!(data["millis"], Value::Number(Number::from(1)));
-    }
-
-    pub async fn list(client: Client) {
-        let response = client.get("/skull").await;
-        let body = extract_body(response).await;
-        let data =
-            serde_json::from_str::<Vec<std::collections::HashMap<String, serde_json::Value>>>(
-                &body,
-            )
-            .unwrap();
-
-        assert_eq!(data.len(), 3);
-        for (i, d) in data.iter().enumerate() {
-            let i = i + 1;
-            assert_eq!(d["name"], Value::String(format!("skull{i}")));
-            assert_eq!(d["color"], Value::String(format!("color{i}")));
-            assert_eq!(d["icon"], Value::String(format!("icon{i}")));
-            assert_eq!(
-                d["price"],
-                Value::Number(Number::from_f64(format!("0.{i}").parse().unwrap()).unwrap())
-            );
-        }
-    }
 }

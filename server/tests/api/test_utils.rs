@@ -70,12 +70,12 @@ impl Drop for TestPath {
     }
 }
 
-pub enum Assertion<T> {
-    Ok(T),
+pub enum Assertion {
+    Ok,
     Err(&'static str, String, Option<String>),
 }
 
-impl<T> Assertion<T> {
+impl Assertion {
     pub fn err_ne(
         message: &'static str,
         got: impl std::fmt::Debug,
@@ -84,17 +84,14 @@ impl<T> Assertion<T> {
         Self::Err(message, format!("{got:?}"), Some(format!("{wanted:?}")))
     }
 
-    pub fn assert(self, location: &'static str) -> T {
-        match self {
-            Self::Ok(r) => r,
-            Self::Err(message, got, wanted) => {
-                eprintln!("{message}");
-                eprintln!("Got:    {got}");
-                if let Some(wanted) = wanted {
-                    eprintln!("Wanted: {wanted}");
-                }
-                panic!("{location}");
+    pub fn assert(self, location: &'static str) {
+        if let Self::Err(message, got, wanted) = self {
+            eprintln!("{message}");
+            eprintln!("Got:    {got}");
+            if let Some(wanted) = wanted {
+                eprintln!("Wanted: {wanted}");
             }
+            panic!("{location}");
         }
     }
 }

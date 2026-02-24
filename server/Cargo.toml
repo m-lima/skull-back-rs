@@ -26,8 +26,9 @@ tracing-subscriber = { workspace = true }
 types = { path = "../types", features = ["query"] }
 
 [dev-dependencies]
-hyper = { workspace = true, features = ["client"] }
+hyper = { workspace = true }
 pwner = { workspace = true }
+reqwest = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [[test]]

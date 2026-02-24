@@ -1,7 +1,4 @@
-// use crate::check_async as check;
-// use crate::{client, helper, test_utils};
-
-use crate::{client, utils};
+use crate::{check_async as check, client, utils};
 
 pub struct Server {
     uri: std::sync::Arc<String>,
@@ -110,18 +107,19 @@ impl Populator {
     }
 
     async fn populate(&self) {
-        const SKULL: &str = r#"{"name":"skull$","color":$,"icon":"icon$","price":0.$}"#;
+        const SKULL: &str =
+            r#"{"name":"skull$","color":$,"icon":"icon$","price":0.$,"limit":null}"#;
         const QUICK: &str = r#"{"skull":$,"amount":$.0}"#;
         const OCCURRENCE: &str = r#"{"skull":$,"amount":$.0,"millis":$}"#;
 
-        self.insert_items("/skull", SKULL).await;
-        self.check_items("/skull", SKULL).await;
+        self.insert_items("skull", SKULL).await;
+        self.check_items("skull", SKULL).await;
 
-        self.insert_items("/quick", QUICK).await;
-        self.check_items("/quick", QUICK).await;
+        self.insert_items("quick", QUICK).await;
+        self.check_items("quick", QUICK).await;
 
-        self.insert_occurrences("/occurrence", OCCURRENCE).await;
-        self.check_items("/occurrence", OCCURRENCE).await;
+        self.insert_occurrences("occurrence", OCCURRENCE).await;
+        self.check_items("occurrence", OCCURRENCE).await;
     }
 
     async fn insert_items(&self, path: &'static str, template: &'static str) {
@@ -131,9 +129,10 @@ impl Populator {
                 .post(path, template.replace('$', &i.to_string()))
                 .await;
 
-            let body = utils::extract_body(response).await;
+            assert_eq!(response.status(), hyper::StatusCode::CREATED);
 
-            assert_eq!(body, "\"created\"");
+            let body = utils::extract_body(response).await;
+            assert_eq!(body, "{\"change\":\"created\"}");
         }
     }
 
@@ -145,38 +144,33 @@ impl Populator {
         let payload = format!(r#"{{"items":[{items}]}}"#);
 
         let response = self.client.post(path, payload).await;
+        assert_eq!(response.status(), hyper::StatusCode::CREATED);
 
         let body = utils::extract_body(response).await;
-        assert_eq!(body, "\"created\"");
+        assert_eq!(body, "{\"change\":\"created\"}");
     }
 
     async fn check_items(&self, path: &'static str, template: &'static str) {
-        async {}.await;
-        // let response = self.client.get(path).await;
-        //
-        // let template = template.replace('{', r#"{"id":$,"#);
-        //
-        // let expected_body = if path == "/occurrence" {
-        //     format!(
-        //         "[{},{},{}]",
-        //         template.replace('$', "3"),
-        //         template.replace('$', "2"),
-        //         template.replace('$', "1")
-        //     )
-        // } else {
-        //     format!(
-        //         "[{},{},{}]",
-        //         template.replace('$', "1"),
-        //         template.replace('$', "2"),
-        //         template.replace('$', "3"),
-        //     )
-        // };
-        //
-        // check!(helper::eq(
-        //     response,
-        //     hyper::StatusCode::OK,
-        //     helper::LastModified::Eq(last_modified),
-        //     expected_body,
-        // ));
+        let response = self.client.get(path).await;
+
+        let template = template.replace('{', r#"{"id":$,"#);
+
+        let expected_body = if path == "occurrence" {
+            format!(
+                "{{\"occurrences\":[{},{},{}]}}",
+                template.replace('$', "3"),
+                template.replace('$', "2"),
+                template.replace('$', "1")
+            )
+        } else {
+            format!(
+                "{{\"{path}s\":[{},{},{}]}}",
+                template.replace('$', "1"),
+                template.replace('$', "2"),
+                template.replace('$', "3"),
+            )
+        };
+
+        check!(utils::eq(response, hyper::StatusCode::OK, expected_body));
     }
 }
