@@ -27,7 +27,7 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        base = helper.lib.rust.helper inputs system ./. {
+        rust = helper.lib.rust.helper inputs system ./. {
           allowFilesets = [
             ./store/.sqlx
             ./store/migrations
@@ -37,6 +37,9 @@
           devPackages = pkgs: [ pkgs.sqlx-cli ];
         };
       in
-      base.outputs
+      rust.outputs
+      // {
+        packages.server = rust.outputs.packages.default;
+      }
     );
 }
