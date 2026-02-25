@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "migrator"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "chrono",
  "clap",
@@ -1701,7 +1701,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
  "boile-rs",
@@ -2021,7 +2021,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "store"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "chrono",
  "sqlx",
@@ -2322,7 +2322,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "types"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "chrono",
  "itoa",
