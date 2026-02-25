@@ -3,44 +3,39 @@ members = ["cli", "migrator", "server", "store", "types"]
 resolver = "2"
 
 [workspace.package]
-version = "0.10.1"
+version = "0.10.2"
 edition = "2024"
 
 [workspace.dependencies]
-axum = { version = "0.8.8", features = ["query", "ws"] }
+axum = "0.8.8"
 base64 = "0.22.1"
-boile-rs = { version = "0.1.2", git = "https://github.com/m-lima/boile-rs", features = [
-  "log-spans",
-  "rt-shutdown",
-] }
+boile-rs = { version = "0.1.2", git = "https://github.com/m-lima/boile-rs" }
 chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
-clap = { version = "4.5.60", features = ["derive"] }
+clap = "4.5.60"
 dirs = "6.0.0"
-endgame = { version = "0.1.1", git = "https://github.com/m-lima/endgame", tag = "v0.1.1" }
+endgame = { version = "0.2.1", git = "https://github.com/m-lima/endgame", tag = "v0.2.1" }
 fuzzy-matcher = "0.3.7"
-hyper = { version = "1.8.1", features = ["server"] }
+hyper = "1.8.1"
 itoa = "1.0.17"
 keyring = "3.6.3"
 pwner = "0.1.8"
 rand = "0.10.0"
 ratatui = "0.30.0"
-reqwest = { version = "0.13.2", default-features = false, features = ["json"] }
+reqwest = { version = "0.13.2", default-features = false }
 rmp-serde = "1.3.1"
 rpassword = "7.4.0"
 rucline = "0.4.0"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = "1.0.228"
 serde_json = "1.0.149"
 serde_qs = "1.0.0"
 serde_urlencoded = "0.7.1"
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-native-tls"] }
 thiserror = "2.0.18"
-tokio = { version = "1.49.0", features = ["macros"] }
+tokio = "1.49.0"
 tower-layer = "0.3.3"
 tower-service = "0.3.3"
 tracing = { version = "0.1.44", default-features = false }
-tracing-subscriber = { version = "0.3.22", default-features = false, features = [
-  "registry",
-] }
+tracing-subscriber = { version = "0.3.22", default-features = false }
 url = "2.5.8"
 
 [workspace.metadata.crane]
