@@ -32,6 +32,15 @@
             ./store/.sqlx
             ./store/migrations
           ];
+          formatters = {
+            beautysh.enable = true;
+          };
+          fmtExcludes = [
+            "Dockerfile"
+            ".dockerignore"
+            "store/.sqlx/*.json"
+            "store/migrations/*.sql"
+          ];
           buildInputs = pkgs: [ pkgs.openssl ];
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
           devPackages = pkgs: [ pkgs.sqlx-cli ];
