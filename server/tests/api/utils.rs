@@ -1,6 +1,6 @@
 use crate::test_utils::Assertion;
 
-pub const USER_HEADER: &str = "X-User";
+pub const USER_HEADER: &str = "X-Email";
 pub const USER: &str = "bloink";
 pub const EMPTY_USER: &str = "bloink-empty";
 

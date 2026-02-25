@@ -57,7 +57,7 @@ fn pre_auth<'a, B, S>(
 where
     S: Clone,
 {
-    let header = super::X_USER;
+    let header = super::X_EMAIL;
 
     let Some(user_header) = request.headers().get(&header) else {
         tracing::warn!(%header, "Header is missing");

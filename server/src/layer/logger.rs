@@ -37,7 +37,7 @@ where
         let length = get_length(request.headers());
         let user = request
             .headers()
-            .get(super::X_USER)
+            .get(super::X_EMAIL)
             .and_then(|l| l.to_str().ok())
             .map(String::from);
 
