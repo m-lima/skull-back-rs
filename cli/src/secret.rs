@@ -104,13 +104,7 @@ fn create_cookie(credentials: &Credentials) -> Result<String> {
         picture: None,
     };
     endgame::dencrypt::encrypt(credentials.key, &token)
-        .map(|b| {
-            format!(
-                "{}={}",
-                constant::ENDGAME_COOKIE,
-                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b)
-            )
-        })
+        .map(|t| format!("{}={t}", constant::ENDGAME_COOKIE))
         .ok_or(Error::FailedToEncrypt)
 }
 
