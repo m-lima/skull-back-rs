@@ -69,7 +69,7 @@ fn port_unused(port: u16) -> bool {
 fn server(port: u16, db_root: &std::path::Path) -> pwner::process::Duplex {
     use pwner::Spawner;
 
-    std::process::Command::new(env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME"))))
+    std::process::Command::new(env!("CARGO_BIN_EXE_skull-server"))
         .arg("-c")
         .arg("-U")
         .arg(utils::USER)

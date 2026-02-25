@@ -3,6 +3,10 @@ name = "server"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "skull-server"
+path = "src/main.rs"
+
 [features]
 threads = ["boile-rs/rt-threads", "tokio/rt-multi-thread"]
 

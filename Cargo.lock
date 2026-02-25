@@ -396,7 +396,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cli"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "base64",
  "chrono",
@@ -1697,7 +1697,7 @@ dependencies = [
 
 [[package]]
 name = "migrator"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "chrono",
  "clap",
@@ -2762,7 +2762,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "axum",
  "boile-rs",
@@ -3126,7 +3126,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "store"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "chrono",
  "sqlx",
@@ -3563,7 +3563,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "types"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "chrono",
  "itoa",
