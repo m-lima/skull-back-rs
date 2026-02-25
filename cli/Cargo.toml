@@ -1,0 +1,37 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+endgame = { workspace = true }
+fuzzy-matcher = { workspace = true }
+keyring = { workspace = true }
+ratatui = { workspace = true }
+reqwest = { workspace = true }
+rpassword = { workspace = true }
+rucline = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_qs = { workspace = true }
+serde_urlencoded = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+url = { workspace = true }
+
+types = { path = "../types", features = ["chrono", "query"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.2", features = [
+  "linux-native-sync-persistent",
+  "vendored",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.2", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.2", features = ["windows-native"] }

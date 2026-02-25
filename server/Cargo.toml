@@ -2,7 +2,6 @@
 name = "server"
 version.workspace = true
 edition.workspace = true
-default-run = "server"
 
 [features]
 threads = ["boile-rs/rt-threads", "tokio/rt-multi-thread"]

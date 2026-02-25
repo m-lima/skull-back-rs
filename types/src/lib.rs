@@ -97,6 +97,7 @@ impl From<Millis> for chrono::DateTime<chrono::Utc> {
     fn from(value: Millis) -> Self {
         let value = value.0;
         let seconds = value / 1000;
+        #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
         let nanos = ((value % 1000) as u32) * 1_000_000;
         chrono::DateTime::from_timestamp(seconds, nanos).unwrap()
     }

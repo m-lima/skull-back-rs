@@ -27,7 +27,7 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        rust = helper.lib.rust.helper inputs system ./. {
+        sharedOptions = {
           allowFilesets = [
             ./store/.sqlx
             ./store/migrations
@@ -36,10 +36,24 @@
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
           devPackages = pkgs: [ pkgs.sqlx-cli ];
         };
+        all = helper.lib.rust.helper inputs system ./. sharedOptions;
+        server = helper.lib.rust.helper inputs system ./. (
+          sharedOptions // { overrides.mainArgs.cargoExtraArgs = "-p server"; }
+        );
+        cli = helper.lib.rust.helper inputs system ./. (
+          sharedOptions // { overrides.mainArgs.cargoExtraArgs = "-p cli"; }
+        );
       in
-      rust.outputs
+      all.outputs
       // {
-        packages.server = rust.outputs.packages.default;
+        packages = {
+          server = server.outputs.packages.default;
+          cli = cli.outputs.packages.default;
+        };
+        apps = {
+          server = server.outputs.apps.default;
+          cli = cli.outputs.apps.default;
+        };
       }
     );
 }
