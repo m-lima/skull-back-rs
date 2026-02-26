@@ -15,7 +15,7 @@ endgame = { workspace = true }
 fuzzy-matcher = { workspace = true }
 keyring = { workspace = true }
 ratatui = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json", "native-tls"] }
 rpassword = { workspace = true }
 rucline = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

@@ -97,7 +97,7 @@ fn fetch_credentials(ring: &keyring::Entry) -> Result<(Source, Credentials)> {
 
 fn create_cookie(credentials: &Credentials) -> Result<String> {
     let token = endgame::types::Token {
-        timestamp: endgame::types::Timestamp::now(),
+        timestamp: endgame::types::Timestamp::now() + std::time::Duration::from_secs(3600),
         email: credentials.user.clone(),
         given_name: None,
         family_name: None,
