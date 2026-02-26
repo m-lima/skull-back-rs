@@ -45,16 +45,32 @@
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
           devPackages = pkgs: [ pkgs.sqlx-cli ];
         };
+        # Need to override the commonArgs here because the integration tests will fail to load libssl
+        # The tls feature is only needed in `cli`, however `server` uses reqwest without tls for tests
+        # During a `nix flake check` calling the entire workspace, would compile the union of the
+        # features and require opessl, which is not available and neither is the test executable patched
         all = helper.lib.rust.helper inputs system ./. sharedOptions;
         server = helper.lib.rust.helper inputs system ./. (
-          sharedOptions // { overrides.mainArgs.cargoExtraArgs = "-p server"; }
+          sharedOptions // { overrides.commonArgs.cargoExtraArgs = "-p server"; }
         );
         cli = helper.lib.rust.helper inputs system ./. (
-          sharedOptions // { overrides.mainArgs.cargoExtraArgs = "-p cli"; }
+          sharedOptions // { overrides.commonArgs.cargoExtraArgs = "-p cli"; }
         );
       in
       all.outputs
       // {
+        checks =
+          let
+            prefixAttrs =
+              prefix: attrs:
+              builtins.listToAttrs (
+                map (k: {
+                  name = "${prefix}-${k}";
+                  value = attrs.${k};
+                }) (builtins.attrNames attrs)
+              );
+          in
+          (prefixAttrs "server" server.checks) // (prefixAttrs "cli" cli.checks);
         packages = {
           server = server.outputs.packages.default;
           cli = cli.outputs.packages.default;
