@@ -48,7 +48,6 @@
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
           devPackages = pkgs: [
             (pkgs.writeShellScriptBin "sqlite" "exec ${pkgs.sqlite}/bin/sqlite3 -init ${pkgs.writeText "sqliteconfig" ".mode columns"} $@")
-            pkgs.git-crypt
             pkgs.sqlx-cli
             pkgs.yarn
           ];
@@ -60,12 +59,35 @@
         cli = helper.lib.rust.helper inputs system ./. (
           sharedOptions // { overrides.mainArgs.cargoExtraArgs = "-p cli"; }
         );
+        web = pkgs.mkYarnPackage {
+          nodejs = pkgs.nodejs;
+
+          src = pkgs.lib.fileset.toSource {
+            root = ./web;
+            fileset = pkgs.lib.fileset.unions [
+              ./web/src
+              ./web/yarn.lock
+              ./web/package.json
+              ./web/tsconfig.json
+              ./web/public
+            ];
+          };
+
+          doDist = false;
+
+          buildPhase = ''
+            runHook preBuild
+            yarn --offline build
+            runHook postBuild
+          '';
+        };
       in
       all.outputs
       // {
         packages = {
           server = server.outputs.packages.default;
           cli = cli.outputs.packages.default;
+          web = web;
         };
         apps = {
           server = server.outputs.apps.default;
