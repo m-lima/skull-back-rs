@@ -1,11 +1,20 @@
 use crate::{check_async as check, client, utils};
 
 pub struct Server {
+    #[cfg(unix)]
+    root: utils::TestPath,
+    #[cfg(not(unix))]
     uri: std::sync::Arc<String>,
     _process: pwner::process::Simplex,
 }
 
 impl Server {
+    #[cfg(unix)]
+    pub fn uri(&self) -> String {
+        format!("{}/socket", self.root.to_str().unwrap())
+    }
+
+    #[cfg(not(unix))]
     pub fn uri(&self) -> std::sync::Arc<String> {
         self.uri.clone()
     }
@@ -13,86 +22,168 @@ impl Server {
     pub fn client(&self) -> client::Client {
         self.into()
     }
-}
 
-pub async fn start() -> Server {
-    let port = random_port();
-    let db_root = utils::TestPath::new();
+    #[cfg(unix)]
+    async fn wait(self, mut output: pwner::process::Output) -> Self {
+        let client = reqwest::ClientBuilder::new()
+            .unix_socket(self.uri())
+            .build()
+            .unwrap();
 
-    let (process, mut output) = server(port, &db_root).decompose();
-    let server = Server {
-        uri: std::sync::Arc::new(format!("localhost:{port}")),
-        _process: process,
-    };
-
-    if !wait_for_server(port).await {
-        let mut output_string = String::new();
-        std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
-        eprintln!("Server stdout:");
-        eprintln!("{output_string}");
-        let mut output_string = String::new();
-        output.read_from(pwner::process::ReadSource::Stderr);
-        std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
-        eprintln!("Server stderr:");
-        eprintln!("{output_string}");
-        panic!("Timeout waiting for the server to start");
-    }
-
-    Populator::new(&server).populate().await;
-
-    server
-}
-
-fn random_port() -> u16 {
-    let mut port = 27720;
-    loop {
-        assert!(port >= 27720, "Could not find available port above 27720");
-        if port_unused(port) {
-            return port;
+        let mut i = 0;
+        while client
+            .execute(client.get("http://localhost/skull").build().unwrap())
+            .await
+            .is_err()
+        {
+            i += 1;
+            tokio::time::sleep(std::time::Duration::from_millis(i * 10)).await;
+            if i == 20 {
+                drop(self);
+                let mut output_string = String::new();
+                std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
+                eprintln!("Server stdout:");
+                eprintln!("{output_string}");
+                let mut output_string = String::new();
+                output.read_from(pwner::process::ReadSource::Stderr);
+                std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
+                eprintln!("Server stderr:");
+                eprintln!("{output_string}");
+                panic!("Timeout waiting for the server to start");
+            }
         }
-        port = port.wrapping_add(1);
+
+        self
     }
 }
 
-fn port_unused(port: u16) -> bool {
-    std::net::TcpListener::bind(std::net::SocketAddrV4::new(
-        std::net::Ipv4Addr::UNSPECIFIED,
-        port,
-    ))
-    .ok()
-    .and_then(|l| l.local_addr().ok())
-    .map(|l| l.port())
-    .filter(|p| *p == port)
-    .is_some()
-}
+#[cfg(unix)]
+pub use unix::start;
 
-fn server(port: u16, db_root: &std::path::Path) -> pwner::process::Duplex {
-    use pwner::Spawner;
+#[cfg(unix)]
+mod unix {
+    use super::*;
 
-    std::process::Command::new(env!("CARGO_BIN_EXE_skull-server"))
-        .arg("-c")
-        .arg("-U")
-        .arg(utils::USER)
-        .arg("-U")
-        .arg(utils::EMPTY_USER)
-        .arg("-p")
-        .arg(format!("{port}"))
-        .arg(db_root.to_str().unwrap())
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .spawn_owned()
-        .unwrap()
-}
+    pub async fn start() -> Server {
+        let test_root = utils::TestPath::new();
 
-#[must_use]
-async fn wait_for_server(port: u16) -> bool {
-    let now = std::time::Instant::now();
-    while port_unused(port) {
-        if now.elapsed() > std::time::Duration::from_secs(10) {
-            return false;
+        let (process, output) = server(test_root.to_str().unwrap()).decompose();
+        let server = Server {
+            root: test_root,
+            _process: process,
         }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        .wait(output)
+        .await;
+
+        Populator::new(&server).populate().await;
+
+        server
     }
-    true
+
+    fn server(test_root: &str) -> pwner::process::Duplex {
+        use pwner::Spawner;
+
+        std::process::Command::new(env!("CARGO_BIN_EXE_skull-server"))
+            .arg("-c")
+            .arg("-U")
+            .arg(utils::USER)
+            .arg("-U")
+            .arg(utils::EMPTY_USER)
+            .arg("-s")
+            .arg(format!("unix:{test_root}/socket"))
+            .arg(test_root)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .spawn_owned()
+            .unwrap()
+    }
+}
+
+#[cfg(not(unix))]
+pub use nonunix::start;
+
+#[cfg(not(unix))]
+mod nonunix {
+    use super::*;
+
+    pub async fn start() -> Server {
+        let port = random_port();
+        let db_root = utils::TestPath::new();
+
+        let (process, mut output) = server(port, &db_root).decompose();
+        let server = Server {
+            uri: std::sync::Arc::new(format!("localhost:{port}")),
+            _process: process,
+        };
+
+        if !wait_for_server(port).await {
+            let mut output_string = String::new();
+            std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
+            eprintln!("Server stdout:");
+            eprintln!("{output_string}");
+            let mut output_string = String::new();
+            output.read_from(pwner::process::ReadSource::Stderr);
+            std::io::Read::read_to_string(&mut output, &mut output_string).unwrap();
+            eprintln!("Server stderr:");
+            eprintln!("{output_string}");
+            panic!("Timeout waiting for the server to start");
+        }
+
+        Populator::new(&server).populate().await;
+
+        server
+    }
+
+    fn random_port() -> u16 {
+        let mut port = 27720;
+        loop {
+            assert!(port >= 27720, "Could not find available port above 27720");
+            if port_unused(port) {
+                return port;
+            }
+            port = port.wrapping_add(1);
+        }
+    }
+
+    fn port_unused(port: u16) -> bool {
+        std::net::TcpListener::bind(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::UNSPECIFIED,
+            port,
+        ))
+        .ok()
+        .and_then(|l| l.local_addr().ok())
+        .map(|l| l.port())
+        .filter(|p| *p == port)
+        .is_some()
+    }
+
+    fn server(port: u16, db_root: &std::path::Path) -> pwner::process::Duplex {
+        use pwner::Spawner;
+
+        std::process::Command::new(env!("CARGO_BIN_EXE_skull-server"))
+            .arg("-c")
+            .arg("-U")
+            .arg(utils::USER)
+            .arg("-U")
+            .arg(utils::EMPTY_USER)
+            .arg("-s")
+            .arg(format!("{port}"))
+            .arg(db_root.to_str().unwrap())
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .spawn_owned()
+            .unwrap()
+    }
+
+    #[must_use]
+    async fn wait_for_server(port: u16) -> bool {
+        let now = std::time::Instant::now();
+        while port_unused(port) {
+            if now.elapsed() > std::time::Duration::from_secs(10) {
+                return false;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        true
+    }
 }
 
 struct Populator {

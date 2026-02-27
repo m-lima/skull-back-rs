@@ -80,7 +80,7 @@ async fn method_not_allowed(client: Client) {
 }
 
 async fn not_found(client: Client) {
-    let response = client.get("/bloink").await;
+    let response = client.get("bloink").await;
 
     check!(eq(response, StatusCode::NOT_FOUND, ""));
 }

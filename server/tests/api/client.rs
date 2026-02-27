@@ -3,10 +3,22 @@ use crate::{server, utils};
 #[derive(Debug, Clone)]
 pub struct Client {
     client: reqwest::Client,
+    #[cfg(not(unix))]
     uri: std::sync::Arc<String>,
 }
 
 impl From<&server::Server> for Client {
+    #[cfg(unix)]
+    fn from(server: &server::Server) -> Self {
+        Self {
+            client: reqwest::ClientBuilder::new()
+                .unix_socket(server.uri())
+                .build()
+                .unwrap(),
+        }
+    }
+
+    #[cfg(not(unix))]
     fn from(server: &server::Server) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -87,6 +99,12 @@ impl Client {
         method: hyper::Method,
         path_and_query: impl AsRef<str>,
     ) -> reqwest::RequestBuilder {
+        #[cfg(unix)]
+        let uri = format!(
+            "http://localhost/{path_and_query}",
+            path_and_query = path_and_query.as_ref(),
+        );
+        #[cfg(not(unix))]
         let uri = format!(
             "http://{authority}/{path_and_query}",
             authority = self.uri.as_str(),

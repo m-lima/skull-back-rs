@@ -43,7 +43,7 @@ fn main() -> std::process::ExitCode {
     tracing::info!(
         verbosity = %args.verbosity.level,
         spans = %args.verbosity.include_spans,
-        port = args.port,
+        socket = %args.socket,
         threads = %args.threads,
         create = %args.create,
         db_root = %args.db.display(),
@@ -54,7 +54,7 @@ fn main() -> std::process::ExitCode {
     tracing::info!(
         verbosity = %args.verbosity.level,
         spans = %args.verbosity.include_spans,
-        port = args.port,
+        socket = %args.socket,
         threads = %"single",
         create = %args.create,
         db_root = %args.db.display(),
@@ -85,11 +85,11 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    runtime.block_on(async_main(args.port, args.db, args.users))
+    runtime.block_on(async_main(args.socket, args.db, args.users))
 }
 
 async fn async_main(
-    port: u16,
+    socket: args::Socket,
     db_root: std::path::PathBuf,
     users: std::collections::HashSet<String>,
 ) -> std::process::ExitCode {
@@ -105,21 +105,8 @@ async fn async_main(
         .layer(layer::Auth::wrap(services))
         .layer(layer::Logger);
 
-    let addr = std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, port);
-    tracing::info!(%addr, "Binding to address");
-
-    let listener = match tokio::net::TcpListener::bind(addr).await {
-        Ok(listener) => listener,
-        Err(error) => {
-            tracing::error!(%error, "Failed to bind to address");
-            return std::process::ExitCode::FAILURE;
-        }
-    };
-
-    let server = match boile_rs::rt::Shutdown::new() {
-        Ok(shutdown) => {
-            axum::serve(listener, router.into_make_service()).with_graceful_shutdown(shutdown)
-        }
+    let shutdown = match boile_rs::rt::Shutdown::new() {
+        Ok(shutdown) => shutdown,
         Err(error) => {
             tracing::error!(%error, "Failed to create shutdown hook");
             return std::process::ExitCode::FAILURE;
@@ -128,11 +115,55 @@ async fn async_main(
 
     let start = std::time::Instant::now();
 
-    if let Err(error) = server.await {
+    let result = match socket {
+        args::Socket::Port(port) => match make_tcp_listener(port).await {
+            Some(listener) => {
+                axum::serve(listener, router.into_make_service())
+                    .with_graceful_shutdown(shutdown)
+                    .await
+            }
+            None => return std::process::ExitCode::FAILURE,
+        },
+        args::Socket::Unix(path) => match make_unix_listener(path) {
+            Some(listener) => {
+                axum::serve(listener, router.into_make_service())
+                    .with_graceful_shutdown(shutdown)
+                    .await
+            }
+            None => return std::process::ExitCode::FAILURE,
+        },
+    };
+
+    if let Err(error) = result {
         tracing::error!(%error, duration = ?start.elapsed(), "Server execution aborted");
         std::process::ExitCode::FAILURE
     } else {
         tracing::info!(duration = ?start.elapsed(), "Server gracefully shutdown");
         std::process::ExitCode::SUCCESS
+    }
+}
+
+async fn make_tcp_listener(port: u16) -> Option<tokio::net::TcpListener> {
+    let addr = std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, port);
+    tracing::info!(%addr, "Binding to address");
+
+    match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => Some(listener),
+        Err(error) => {
+            tracing::error!(%error, "Failed to bind to address");
+            None
+        }
+    }
+}
+
+fn make_unix_listener(path: std::path::PathBuf) -> Option<tokio::net::UnixListener> {
+    tracing::info!(path = %path.display(), "Binding to unix socket");
+
+    match tokio::net::UnixListener::bind(path) {
+        Ok(listener) => Some(listener),
+        Err(error) => {
+            tracing::error!(%error, "Failed to bind to unix socket");
+            None
+        }
     }
 }
