@@ -1,0 +1,25 @@
+.icon-button {
+  width: 100%;
+  margin: auto;
+  text-align: center;
+}
+
+.icon-with-margin {
+  margin-right: 1rem;
+}
+
+.icon-spinner {
+  animation-name: icon-spinner-animation;
+  animation-duration: 1s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes icon-spinner-animation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

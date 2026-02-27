@@ -1,0 +1,14 @@
+.skull {
+  height: calc(100% - var(--bar-size) - 2 * var(--padding-size));
+  overflow-y: auto;
+  padding: var(--padding-size);
+}
+
+.skull-connecting {
+  position: fixed;
+  padding: 8px;
+  background-color: #00000080;
+
+  bottom: var(--bar-size);
+  z-index: 1;
+}

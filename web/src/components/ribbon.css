@@ -1,0 +1,18 @@
+.ribbon {
+  position: fixed;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+
+  width: 200px;
+  height: 30px;
+
+  line-height: 30px;
+  text-align: center;
+  font-weight: bold;
+
+  background-color: darkgreen;
+  color: white;
+
+  transform: rotate(-45deg) translate(-60px, -5px);
+}

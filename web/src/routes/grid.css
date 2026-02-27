@@ -1,0 +1,88 @@
+.grid {
+  display: grid;
+  grid-gap: 20px;
+  grid-auto-rows: minmax(var(--button-size), auto);
+  grid-template-columns: repeat(1, 1fr);
+  max-width: var(--button-size);
+
+  margin: auto;
+}
+
+/* 2 * (button-size + grid-gap + padding-size) */
+@media screen and (min-width: calc(2 * (150px + 20px + 20px))) {
+  .grid {
+    max-width: calc(2 * (var(--button-size) + 15px));
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media screen and (min-width: calc(3 * (150px + 20px + 20px))) {
+  .grid {
+    max-width: calc(3 * (var(--button-size) + 15px));
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media screen and (min-width: calc(4 * (150px + 20px + 20px))) {
+  .grid {
+    max-width: calc(4 * (var(--button-size) + 15px));
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.grid-button {
+  display: block;
+  cursor: pointer;
+
+  width: var(--button-size);
+  height: var(--button-size);
+  border-radius: calc(var(--button-size) / 10);
+  overflow: hidden;
+  box-sizing: border-box;
+
+  color: var(--background-color);
+}
+
+.grid-button > i {
+  font-size: 6em;
+
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+
+  align-items: center;
+  justify-content: center;
+
+  height: 75%;
+}
+
+.grid-button > .grid-button-amount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--font-color);
+  background: rgba(0, 0, 0, 0.5);
+
+  height: calc(var(--button-size) / 4);
+
+  font-size: 1.5em;
+}
+
+.grid-button > #grid-button-near-limit {
+  color: orange;
+  background: black;
+}
+
+.grid-button > #grid-button-over-limit {
+  color: red;
+  background: black;
+}
+
+.grid-button:hover {
+  filter: brightness(125%);
+}
+
+.grid-button:active {
+  filter: brightness(125%);
+}

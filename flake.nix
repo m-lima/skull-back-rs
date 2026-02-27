@@ -46,7 +46,12 @@
           ];
           buildInputs = pkgs: [ pkgs.openssl ];
           nativeBuildInputs = pkgs: [ pkgs.pkg-config ];
-          devPackages = pkgs: [ pkgs.sqlx-cli ];
+          devPackages = pkgs: [
+            (pkgs.writeShellScriptBin "sqlite" "exec ${pkgs.sqlite}/bin/sqlite3 -init ${pkgs.writeText "sqliteconfig" ".mode columns"} $@")
+            pkgs.git-crypt
+            pkgs.sqlx-cli
+            pkgs.yarn
+          ];
         };
         all = helper.lib.rust.helper inputs system ./. sharedOptions;
         server = helper.lib.rust.helper inputs system ./. (

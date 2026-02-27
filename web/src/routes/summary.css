@@ -1,0 +1,139 @@
+.summary {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+
+  margin: auto;
+}
+
+.summary th {
+  padding: 12px;
+
+  font-weight: bolder;
+
+  background-color: var(--shade-0);
+}
+
+.summary td {
+  padding: 8px;
+}
+
+.summary #icon {
+  padding: 0;
+  width: 1em;
+  text-align: center;
+}
+
+.summary tr {
+  cursor: pointer;
+}
+
+.summary tr#dark,
+.summary tr#bright {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+}
+
+.summary tr#dark {
+  background-color: var(--shade-1);
+  border-bottom-color: var(--shade-2);
+}
+
+.summary tr#bright {
+  background-color: var(--shade-2);
+  border-bottom-color: var(--shade-1);
+}
+
+.summary tr#dark:hover,
+.summary tr#bright:hover {
+  background-color: var(--shade-3);
+}
+
+#next {
+  width: 100%;
+  font-size: 2em;
+
+  padding-top: 5px;
+  padding-bottom: 5px;
+
+  cursor: pointer;
+}
+
+#next:hover {
+  background-color: var(--shade-3);
+}
+
+.summary-filter-toggle {
+  float: right;
+
+  margin-bottom: calc(var(--padding-size) / 2);
+  cursor: pointer;
+}
+
+.summary-filter-toggle #label {
+  margin-right: 10px;
+
+  font-size: 100%;
+  font-weight: bold;
+}
+
+.summary-filter-inputs {
+  width: 100%;
+  display: flex;
+}
+
+@media screen and (max-width: 300px) {
+  .summary-filter-inputs {
+    flex-direction: column;
+  }
+}
+
+.summary-filter-input {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  border-width: 10px 0 10px 10px;
+  border-style: solid;
+  border-color: transparent;
+}
+
+@media screen and (max-width: 300px) {
+  .summary-filter-input {
+    border-width: 10px 10px 0 10px;
+  }
+}
+
+.summary-filter-input:last-child {
+  border-width: 10px;
+}
+
+.summary-filter-input input {
+  appearance: none;
+
+  background: white;
+
+  width: 100%;
+  font-size: 100%;
+  font-weight: bold;
+
+  box-sizing: border-box;
+  padding: 6px 10px;
+  margin-top: 5px;
+
+  border-width: 1px;
+  border-style: solid;
+  border-color: #cccccc;
+  border-radius: 4px;
+}
+
+.summary-filter-skulls {
+  font-size: 100%;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.summary-filter-skulls > div {
+  display: inline-block;
+  margin-left: 10px
+}

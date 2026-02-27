@@ -1,0 +1,160 @@
+.edit {
+  position: absolute;
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  background-color: #000000aa;
+  z-index: 10;
+}
+
+.edit-container {
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  transform: translate(0, -50%);
+
+  background-color: #16181d;
+}
+
+.edit-buttons {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+
+  align-items: center;
+  justify-content: center;
+
+  border-width: 0;
+
+  margin: 0;
+  padding: 0;
+  outline: none;
+
+  line-height: var(--bar-size);
+  font-size: calc(var(--bar-size) - 40px);
+}
+
+.edit-buttons > * {
+  width: 100%;
+  cursor: pointer;
+}
+
+.edit-buttons #accept {
+  background-color: darkgreen;
+}
+
+.edit-buttons #cancel {
+  background-color: darkred;
+}
+
+.edit-buttons #accept:hover {
+  background-color: green;
+}
+
+.edit-buttons #cancel:hover {
+  background-color: red;
+}
+
+.edit-buttons #accept:active {
+  background-color: lightgreen;
+}
+
+.edit-buttons #cancel:active {
+  background-color: tomato;
+}
+
+.edit-inputs {
+  display: flex;
+}
+
+@media screen and (max-width: 800px) {
+  .edit-inputs {
+    flex-direction: column;
+  }
+}
+
+.edit-input {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  border-width: 20px 0 20px 20px;
+  border-style: solid;
+  border-color: transparent;
+}
+
+@media screen and (max-width: 800px) {
+  .edit-input {
+    border-width: 20px 20px 0 20px;
+  }
+}
+
+.edit-input:last-child {
+  border-width: 20px;
+}
+
+.edit-input input,
+.edit-input select {
+  appearance: none;
+
+  background: white;
+
+  width: 100%;
+  font-size: 100%;
+  font-weight: bold;
+
+  box-sizing: border-box;
+  padding: 12px 20px;
+  margin-top: 10px;
+
+  border-width: 1px;
+  border-style: solid;
+  border-color: #cccccc;
+  border-radius: 4px;
+}
+
+.edit-input input#invalid {
+  color: red;
+  background: pink;
+}
+
+.edit-input .edit-delete {
+  text-align: center;
+  cursor: pointer;
+
+  background: var(--shade-2);
+
+  width: 100%;
+  font-weight: bold;
+
+  box-sizing: border-box;
+  padding: 12px 20px;
+  align-self: end;
+
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--shade-3);
+  border-radius: 4px;
+}
+
+.edit-delete:after {
+  content: 'Delete';
+  padding-left: 5px;
+}
+
+#delete input,
+#delete select {
+  color: var(--shade-1);
+  background: #bbbbbb;
+  -webkit-text-fill-color: var(--shade-1);
+  -webkit-opacity: 1;
+}
+
+#delete .edit-delete {
+  color: var(--font-color-accent);
+  text-shadow: 0 0 20px var(--font-color);
+  border-color: var(--shade-4);
+}
