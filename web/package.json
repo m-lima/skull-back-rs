@@ -1,6 +1,6 @@
 {
   "name": "skull",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "private": true,
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0-beta2",
