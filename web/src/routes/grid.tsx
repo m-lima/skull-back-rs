@@ -6,44 +6,6 @@ import './grid.css';
 
 import { useMemo, useState } from 'react';
 
-
-// TODO: Make the 12 most common combinations in recent history
-// WITH
-//   last AS (
-//     SELECT
-//       MAX(millis) AS max
-//     FROM
-//       occurrences
-//   ),
-//   scored AS (
-//     SELECT
-//       o.skull,
-//       o.amount,
-//       COUNT(*) AS count,
-//       SUM(POWER(0.5, (l.max - o.millis) / 864000000.0)) AS score
-//     FROM
-//       occurrences o
-//     CROSS JOIN
-//       last l
-//     GROUP BY
-//       o.skull,
-//       o.amount
-//     ORDER BY
-//       score DESC
-//     LIMIT
-//       12
-//   )
-// SELECT
-//   *
-// FROM
-//   scored
-// LEFT JOIN
-//   skulls
-// ON
-//   skull = skulls.id
-// with recent as (select skull, amount from occurrences order by millis desc limit 1000), quicks as (select skull, amount, count(*) count from recent group by skull, amount order by count desc limit 12) select * from quicks left join skulls on quicks.skull = skulls.id
-// with new as (select skull, amount from occurrences order by millis desc limit 100), mid as (select skull, amount from occurrences order by millis desc limit 1000), old as (select skull, amount from occurrences order by millis desc limit 10000), combined as (select * from new union all select * from mid union all select * from old), quicks as (select skull, amount, count(*) count from combined group by skull, amount order by count desc limit 12) select * from quicks left join skulls on quicks.skull = skulls.id
-
 const buildSkullButton = (
   quick: Quick,
   index: number,
