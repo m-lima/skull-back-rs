@@ -248,7 +248,7 @@ export class Store {
       }
 
       const quick = { ...rawQuick, skull };
-      const index = this.quicks.findIndex(q => q.id === quick.id);
+      const index = this.quicks.findIndex(q => q.skull === quick.skull && q.amount === quick.amount);
       if (index < 0) {
         this.quicks.push(quick);
       } else {
@@ -257,14 +257,6 @@ export class Store {
     }
 
     this.broadcastQuicks();
-  }
-
-  private removeQuick(id: number) {
-    const index = this.quicks.findIndex(q => q.id === id);
-    if (index >= 0) {
-      this.quicks.splice(index, 1);
-      this.broadcastQuicks();
-    }
   }
 
   private setOccurrences(occurrences: Occurrence[], forceBroadcast: boolean = false) {
@@ -364,15 +356,6 @@ export class Store {
         return true;
       } else if ('skullDeleted' in push) {
         this.removeSkull(push.skullDeleted);
-        return true;
-      } else if ('quickCreated' in push) {
-        this.setQuicks([modelSealed.makeRawQuick(push.quickCreated)]);
-        return true;
-      } else if ('quickUpdated' in push) {
-        this.setQuicks([modelSealed.makeRawQuick(push.quickUpdated)]);
-        return true;
-      } else if ('quickDeleted' in push) {
-        this.removeQuick(push.quickDeleted);
         return true;
       } else if ('occurrencesCreated' in push) {
         this.setOccurrences(push.occurrencesCreated.map(modelSealed.makeOccurrence));

@@ -1,6 +1,6 @@
 import * as Banner from '../components/banner';
 import { Edit, Icon } from '../components/mod';
-import { check, useSkulls, useQuicks, useOccurrences, Quick, EpochDays, useEditOccurrence } from '../store/mod';
+import { check, useSkulls, useQuicks, useOccurrences, Skull, Quick, EpochDays, useEditOccurrence } from '../store/mod';
 
 import './grid.css';
 
@@ -14,7 +14,7 @@ const buildSkullButton = (
 ) => (
   <div
     key={index}
-    className='grid-button'
+    className='grid-button grid-button-quick'
     title={
       `Skull: ${quick.skull.name}\nAmount: ${quick.amount}` +
       (!!quick.skull.limit ? `\nLimit: ${quick.skull.limit}` : '')
@@ -29,6 +29,16 @@ const buildSkullButton = (
     >
       {quick.amount}
     </div>
+  </div >
+);
+
+const newSkull = (skulls: Skull[], setSelected: (q: Quick) => void) => (
+  <div
+    className='grid-button'
+    style={{ background: 'gray' }}
+    onClick={() => setSelected({ skull: skulls[0], amount: 1 })}
+  >
+    <Icon icon='fas fa-plus' />
   </div >
 );
 
@@ -80,14 +90,18 @@ export const Grid = () => {
     return <Banner.Loading />;
   }
 
-  if (quicks.items.length === 0) {
-    return <Banner.NoQuicks />;
+  if (skulls.items.length === 0) {
+    return <Banner.NoSkulls />;
   }
 
   return (
     <>
       <div className='grid'>
-        {quicks.items.map((q, i) => buildSkullButton(q, i, skullAmount, setSelected))}
+        {
+        quicks.items.length > 0
+          ? quicks.items.map((q, i) => buildSkullButton(q, i, skullAmount, setSelected))
+          : newSkull(skulls.items, setSelected)
+        }
       </div>
       {selected && (
         <Edit
@@ -96,7 +110,12 @@ export const Grid = () => {
           skulls={skulls.items}
           onAccept={occurrence => {
             edit.create(occurrence)
-              .then(() => setSelected(undefined))
+              .then(() => {
+                if (occurrences.items.length === 0) {
+                  window.location.reload();
+                }
+                setSelected(undefined)
+              })
           }}
           onCancel={() => setSelected(undefined)}
         />

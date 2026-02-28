@@ -11,13 +11,11 @@ export interface Skull {
 
 
 export interface RawQuick {
-  id: number,
   skull: number,
   amount: number,
 }
 
 export interface Quick {
-  id: number,
   skull: Skull,
   amount: number,
 }
@@ -104,11 +102,10 @@ export namespace sealed {
     };
   };
 
-  export const makeRawQuick = (q: [number, number, number]) => {
+  export const makeRawQuick = (q: [number, number]) => {
     return {
-      id: q[0],
-      skull: q[1],
-      amount: Number(q[2].toFixed(3)),
+      skull: q[0],
+      amount: Number(q[1].toFixed(3)),
     }
   };
 

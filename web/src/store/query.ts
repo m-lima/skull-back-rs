@@ -16,7 +16,7 @@ export namespace sealed {
 
   export const getQuicks = (socket: Socket): Promise<RawQuick[]> => {
     const id = newRequestId();
-    return socket.request({ id, quick: 'list' }, (message: any) => {
+    return socket.request({ id, occurrence: 'quick' }, (message: any) => {
       const response = validateMessage(message, id, 'quicks');
 
       if (!!response) {

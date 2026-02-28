@@ -73,10 +73,10 @@ export const Empty = () => (
   </div>
 );
 
-export const NoQuicks = () => (
+export const NoSkulls = () => (
   <div className='banner'>
     <Icon icon='fas fa-search' />
-    No quicks found
+    No skulls found
   </div>
 );
 

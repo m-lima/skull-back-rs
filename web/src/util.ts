@@ -12,7 +12,7 @@ export namespace path {
 
 export namespace url {
   const useTls =  process.env.REACT_APP_URL_TLS === 'true' ? 's' : '';
-  const host = process.env.REACT_APP_URL_HOST === undefined ? 'localhost:3333' : process.env.REACT_APP_URL_HOST;
+  const host = process.env.REACT_APP_URL_HOST === undefined ? 'localhost:8558' : process.env.REACT_APP_URL_HOST;
 
   export namespace ws {
     export const binary = `ws${useTls}://${host}/ws/binary`;
