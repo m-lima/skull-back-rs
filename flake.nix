@@ -51,6 +51,7 @@
             pkgs.sqlx-cli
             pkgs.yarn
           ];
+          overrides.commonArgs.LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_MATH_FUNCTIONS=1";
         };
         all = helper.lib.rust.helper inputs system ./. sharedOptions;
         server = helper.lib.rust.helper inputs system ./. (
