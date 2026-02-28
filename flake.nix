@@ -59,28 +59,41 @@
         cli = helper.lib.rust.helper inputs system ./. (
           sharedOptions // { overrides.mainArgs.cargoExtraArgs = "-p cli"; }
         );
-        web = pkgs.mkYarnPackage {
+        commonWeb = {
           nodejs = pkgs.nodejs;
 
           src = pkgs.lib.fileset.toSource {
             root = ./web;
             fileset = pkgs.lib.fileset.unions [
-              ./web/src
-              ./web/yarn.lock
               ./web/package.json
-              ./web/tsconfig.json
               ./web/public
+              ./web/src
+              ./web/tsconfig.json
+              ./web/yarn.lock
             ];
           };
 
+          nativeBuildInputs = [ pkgs.writableTmpDirAsHomeHook ];
           doDist = false;
-
-          buildPhase = ''
-            runHook preBuild
-            yarn --offline build
-            runHook postBuild
-          '';
         };
+        web = pkgs.mkYarnPackage (
+          commonWeb
+          // {
+            DISABLE_ESLINT_PLUGIN = "true";
+
+            buildPhase = ''
+              runHook preBuild
+              yarn --offline build
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mv deps/$pname/build $out
+              runHook postInstall
+            '';
+          }
+        );
       in
       all.outputs
       // {
@@ -88,6 +101,28 @@
           server = server.outputs.packages.default;
           cli = cli.outputs.packages.default;
           web = web;
+        };
+        checks = all.checks // {
+          webCheck = pkgs.mkYarnPackage (
+            commonWeb
+            // {
+              NODE_PRESERVE_SYMLINKS = "1";
+
+              buildPhase = ''
+                runHook preBuild
+                cd deps/$pname
+                yarn eslint src/
+                runHook postBuild
+              '';
+
+              installPhase = ''
+                runHook preInstall
+                mkdir -p $out
+                touch $out/ok
+                runHook postInstall
+              '';
+            }
+          );
         };
         apps = {
           server = server.outputs.apps.default;
