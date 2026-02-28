@@ -151,7 +151,7 @@ export class Socket {
     if (this.attempts === 0 && !!checkUrl) {
       fetch(checkUrl, { credentials: 'include', redirect: 'manual' })
         .then(r => {
-          if (r.status !== 200) {
+          if (r.status === 401 || r.status === 403) {
             this.setState(SocketState.Unauthorized);
           }
         })
