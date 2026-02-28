@@ -535,6 +535,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn quick() {
+        let (store, skull) = skulled_store().await;
+
+        let other_skull = store
+            .skulls()
+            .create("two", 2, "icon2", 2.0, None)
+            .await
+            .unwrap();
+
+        let occurrences = store.occurrences();
+        occurrences
+            .create([
+                (skull.id, 1.0, millis(1)),
+                (skull.id, 2.0, millis(2)),
+                (skull.id, 2.0, millis(3)),
+                (other_skull.id, 1.0, millis(4)),
+            ])
+            .await
+            .unwrap();
+
+        let occurrences = occurrences.quick().await.unwrap();
+        let result = vec![
+            types::Quick {
+                skull: skull.id,
+                amount: 2.0,
+            },
+            types::Quick {
+                skull: other_skull.id,
+                amount: 1.0,
+            },
+            types::Quick {
+                skull: skull.id,
+                amount: 1.0,
+            },
+        ];
+        assert_eq!(occurrences, result);
+    }
+
+    #[tokio::test]
+    async fn quick_recent() {
+        let (store, skull) = skulled_store().await;
+
+        let other_skull = store
+            .skulls()
+            .create("two", 2, "icon2", 2.0, None)
+            .await
+            .unwrap();
+
+        let occurrences = store.occurrences();
+        occurrences
+            .create([
+                (skull.id, 2.0, millis(2)),
+                (skull.id, 2.0, millis(3)),
+                (other_skull.id, 1.0, millis(4)),
+                (skull.id, 1.0, millis(100_000_000_000)),
+            ])
+            .await
+            .unwrap();
+
+        let occurrences = occurrences.quick().await.unwrap();
+        let result = vec![
+            types::Quick {
+                skull: skull.id,
+                amount: 1.0,
+            },
+            types::Quick {
+                skull: skull.id,
+                amount: 2.0,
+            },
+            types::Quick {
+                skull: other_skull.id,
+                amount: 1.0,
+            },
+        ];
+        assert_eq!(occurrences, result);
+    }
+
+    #[tokio::test]
+    async fn quick_empty() {
+        let store = Store::in_memory(1).await.unwrap();
+
+        let occurrences = store.occurrences();
+        let occurrences = occurrences.quick().await.unwrap();
+        assert_eq!(occurrences, Vec::new());
+    }
+
+    #[tokio::test]
     async fn search_no_filters() {
         let (store, _, news) = prepare_search().await;
 
