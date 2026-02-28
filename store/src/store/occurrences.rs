@@ -103,6 +103,48 @@ impl Occurrences<'_> {
     }
 
     #[tracing::instrument(skip(self), err)]
+    pub async fn quick(&self) -> Result<Vec<types::Quick>> {
+        sqlx::query_as!(
+            types::Quick,
+            r#"
+            WITH
+              last AS (
+                SELECT
+                  MAX(millis) AS max
+                FROM
+                  occurrences
+              ),
+              scored AS (
+                SELECT
+                  skull,
+                  amount,
+                  COUNT(*) AS count,
+                  SUM(POWER(0.5, (max - millis) / 864000000.0)) AS score
+                FROM
+                  occurrences
+                CROSS JOIN
+                  last
+                GROUP BY
+                  skull,
+                  amount
+                ORDER BY
+                  score DESC
+                LIMIT
+                  12
+              )
+            SELECT
+              skull AS "skull: types::SkullId",
+              amount AS "amount: f32"
+            FROM
+              scored
+            "#
+        )
+        .fetch_all(&self.store.pool)
+        .await
+        .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     pub async fn create<
         I: IntoIterator<Item = (types::SkullId, f32, types::Millis)> + std::fmt::Debug,
     >(

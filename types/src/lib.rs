@@ -38,19 +38,9 @@ pub struct Skull {
     pub limit: Option<f32>,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(transparent)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-#[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
-pub struct QuickId(Id);
-
-transparent::transparent!(readonly QuickId, Id);
-
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Quick {
-    pub id: QuickId,
     pub skull: SkullId,
     pub amount: f32,
 }

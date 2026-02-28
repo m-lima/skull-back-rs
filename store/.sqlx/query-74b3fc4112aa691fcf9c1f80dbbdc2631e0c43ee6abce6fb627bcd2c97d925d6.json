@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            WITH\n              last AS (\n                SELECT\n                  MAX(millis) AS max\n                FROM\n                  occurrences\n              ),\n              scored AS (\n                SELECT\n                  skull,\n                  amount,\n                  COUNT(*) AS count,\n                  SUM(POWER(0.5, (max - millis) / 864000000.0)) AS score\n                FROM\n                  occurrences\n                CROSS JOIN\n                  last\n                GROUP BY\n                  skull,\n                  amount\n                ORDER BY\n                  score DESC\n                LIMIT\n                  12\n              )\n            SELECT\n              skull AS \"skull: types::SkullId\",\n              amount AS \"amount: f32\"\n            FROM\n              scored\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "skull: types::SkullId",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "amount: f32",
+        "ordinal": 1,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "74b3fc4112aa691fcf9c1f80dbbdc2631e0c43ee6abce6fb627bcd2c97d925d6"
+}

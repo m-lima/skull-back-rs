@@ -1,5 +1,4 @@
 pub mod occurrences;
-pub mod quicks;
 pub mod skulls;
 
 use crate::{Error, Result};
@@ -47,11 +46,6 @@ impl Store {
     #[must_use]
     pub fn skulls(&self) -> skulls::Skulls<'_> {
         skulls::Skulls::new(self)
-    }
-
-    #[must_use]
-    pub fn quicks(&self) -> quicks::Quicks<'_> {
-        quicks::Quicks::new(self)
     }
 
     #[must_use]

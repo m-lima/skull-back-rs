@@ -1,6 +1,5 @@
 use crate::{
-    Change, Error, Kind, Millis, Occurrence, OccurrenceId, Payload, Quick, QuickId, Response,
-    Skull, SkullId,
+    Change, Error, Kind, Millis, Occurrence, OccurrenceId, Payload, Quick, Response, Skull, SkullId,
 };
 
 use super::{json, rmp};
@@ -95,21 +94,10 @@ fn skulls_empty() {
 #[test]
 fn quicks() {
     let t = Response::Payload(Payload::Quicks(vec![Quick {
-        id: QuickId(27),
         skull: SkullId(72),
         amount: 1.0,
     }]));
     let json = json(&t, r#"{"quicks":[{"id":27,"skull":72,"amount":1}]}"#).unwrap();
-    let rmp = rmp(&t).unwrap();
-
-    assert_eq!(t, json);
-    assert_eq!(t, rmp);
-}
-
-#[test]
-fn quicks_empty() {
-    let t = Response::Payload(Payload::Quicks(Vec::new()));
-    let json = json(&t, r#"{"quicks":[]}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);

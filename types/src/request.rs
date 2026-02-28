@@ -2,7 +2,6 @@
 #[serde(rename_all = "camelCase")]
 pub enum Request {
     Skull(Skull),
-    Quick(Quick),
     Occurrence(Occurrence),
 }
 
@@ -17,17 +16,9 @@ pub enum Skull {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Quick {
-    List,
-    Create(quick::Create),
-    Update(quick::Update),
-    Delete(quick::Delete),
-}
-
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub enum Occurrence {
     List,
+    Quick,
     Search(occurrence::Search),
     Create(occurrence::Create),
     Update(occurrence::Update),
@@ -60,29 +51,6 @@ pub mod skull {
     #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct Delete {
         pub id: SkullId,
-    }
-}
-
-pub mod quick {
-    use super::Setter;
-    use crate::{QuickId, SkullId};
-
-    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-    pub struct Create {
-        pub skull: SkullId,
-        pub amount: f32,
-    }
-
-    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-    pub struct Update {
-        pub id: QuickId,
-        pub skull: Option<Setter<SkullId>>,
-        pub amount: Option<Setter<f32>>,
-    }
-
-    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-    pub struct Delete {
-        pub id: QuickId,
     }
 }
 

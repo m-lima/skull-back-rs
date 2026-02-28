@@ -9,19 +9,11 @@ pub fn incoming(request: &types::Request) -> (Resource, Action) {
                 types::request::Skull::Delete(_) => Action::Delete,
             },
         ),
-        types::Request::Quick(quick) => (
-            Resource::Quick,
-            match quick {
-                types::request::Quick::List => Action::List,
-                types::request::Quick::Create(_) => Action::Create,
-                types::request::Quick::Update(_) => Action::Update,
-                types::request::Quick::Delete(_) => Action::Delete,
-            },
-        ),
         types::Request::Occurrence(occurrence) => (
             Resource::Occurrence,
             match occurrence {
                 types::request::Occurrence::List => Action::List,
+                types::request::Occurrence::Quick => Action::Quick,
                 types::request::Occurrence::Search(_) => Action::Search,
                 types::request::Occurrence::Create(_) => Action::Create,
                 types::request::Occurrence::Update(_) => Action::Update,
@@ -48,7 +40,6 @@ pub fn outgoing(response: &types::Response) -> Outcome {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Resource {
     Skull,
-    Quick,
     Occurrence,
 }
 
@@ -56,7 +47,6 @@ impl std::fmt::Display for Resource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Skull => f.write_str("skull"),
-            Self::Quick => f.write_str("quick"),
             Self::Occurrence => f.write_str("occurrence"),
         }
     }
@@ -65,6 +55,7 @@ impl std::fmt::Display for Resource {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Action {
     List,
+    Quick,
     Search,
     Create,
     Update,
@@ -75,6 +66,7 @@ impl std::fmt::Display for Action {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::List => f.write_str("list"),
+            Self::Quick => f.write_str("quick"),
             Self::Search => f.write_str("search"),
             Self::Create => f.write_str("create"),
             Self::Update => f.write_str("update"),

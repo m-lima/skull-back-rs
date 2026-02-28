@@ -1,4 +1,4 @@
-use crate::{Millis, Occurrence, OccurrenceId, Quick, QuickId, Skull, SkullId};
+use crate::{Millis, Occurrence, OccurrenceId, Quick, Skull, SkullId};
 
 mod error;
 mod request;
@@ -80,23 +80,12 @@ fn skull_limit() {
 }
 
 #[test]
-fn quick_id() {
-    let t = QuickId(27);
-    let json = json(&t, "27").unwrap();
-    let rmp = rmp(&t).unwrap();
-
-    assert_eq!(t, json);
-    assert_eq!(t, rmp);
-}
-
-#[test]
 fn quick() {
     let t = Quick {
-        id: QuickId(27),
         skull: SkullId(72),
         amount: 2.7,
     };
-    let json = json(&t, r#"{"id":27,"skull":72,"amount":2.7}"#).unwrap();
+    let json = json(&t, r#"{"skull":72,"amount":2.7}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);

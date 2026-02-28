@@ -10,12 +10,10 @@ async fn main() -> Result<(), String> {
     store.migrate().await.map_err(|e| e.to_string())?;
 
     let skulls = make_path(&args.input, "skull")?;
-    let quicks = make_path(&args.input, "quick")?;
     let occurrences = make_path(&args.input, "occurrence")?;
 
     let skulls = ingest_skulls(skulls, &store).await?;
 
-    ingest_quicks(quicks, &store, &skulls).await?;
     ingest_occurrences(occurrences, &store, &skulls).await?;
 
     Ok(())
@@ -88,48 +86,6 @@ async fn ingest_skulls(
     }
 
     Ok(output)
-}
-
-async fn ingest_quicks(
-    quicks: std::path::PathBuf,
-    store: &store::Store,
-    skulls: &std::collections::HashMap<types::Id, types::SkullId>,
-) -> Result<(), String> {
-    let lines = read(quicks)?;
-
-    for (i, line) in lines.into_iter().enumerate() {
-        let i = i + 1;
-        let split = line.split('\t').collect::<Vec<_>>();
-        let split = match <[&str; 3]>::try_from(split) {
-            Ok(split) => split,
-            Err(split) => {
-                return Err(format!(
-                    "Quicks: Line {i}: Expected 3 columns but got {}",
-                    split.len()
-                ));
-            }
-        };
-
-        let orig_skull = split[1]
-            .parse()
-            .map_err(|e| format!("Quicks: Line {i} column 2: value is not `i64`: {e}"))?;
-
-        let skull = *skulls
-            .get(&orig_skull)
-            .ok_or_else(|| format!("Quicks: Line {i}: could not find ID for {orig_skull}"))?;
-
-        let amount = split[2]
-            .parse()
-            .map_err(|e| format!("Quicks: Line {i} column 3: value is not `f32`: {e}"))?;
-
-        store
-            .quicks()
-            .create(skull, amount)
-            .await
-            .map_err(|e| format!("Quicks: Line {i}: Failed to write to store: {e}"))?;
-    }
-
-    Ok(())
 }
 
 async fn ingest_occurrences(

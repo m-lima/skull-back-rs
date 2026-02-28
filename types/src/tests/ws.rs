@@ -1,7 +1,7 @@
 use super::{json, rmp};
 use crate::{
-    Change, Error, Kind, Message, Millis, Occurrence, OccurrenceId, Payload, Push, Quick, QuickId,
-    Response, Skull, SkullId, ws,
+    Change, Error, Kind, Message, Millis, Occurrence, OccurrenceId, Payload, Push, Quick, Response,
+    Skull, SkullId, ws,
 };
 
 #[test]
@@ -137,7 +137,6 @@ fn quicks() {
     let t = Message::Response(ws::Response {
         id: None,
         payload: Response::Payload(Payload::Quicks(vec![Quick {
-            id: QuickId(27),
             skull: SkullId(72),
             amount: 1.0,
         }])),
@@ -147,19 +146,6 @@ fn quicks() {
         r#"{"response":{"quicks":[{"id":27,"skull":72,"amount":1}]}}"#,
     )
     .unwrap();
-    let rmp = rmp(&t).unwrap();
-
-    assert_eq!(t, json);
-    assert_eq!(t, rmp);
-}
-
-#[test]
-fn quicks_empty() {
-    let t = Message::Response(ws::Response {
-        id: None,
-        payload: Response::Payload(Payload::Quicks(Vec::new())),
-    });
-    let json = json(&t, r#"{"response":{"quicks":[]}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);
@@ -247,52 +233,6 @@ fn skull_updated() {
 fn skull_deleted() {
     let t = Message::Push(Push::SkullDeleted(SkullId(27)));
     let json = json(&t, r#"{"push":{"skullDeleted":27}}"#).unwrap();
-    let rmp = rmp(&t).unwrap();
-
-    assert_eq!(t, json);
-    assert_eq!(t, rmp);
-}
-
-#[test]
-fn quick_created() {
-    let t = Message::Push(Push::QuickCreated(Quick {
-        id: QuickId(27),
-        skull: SkullId(72),
-        amount: 1.0,
-    }));
-    let json = json(
-        &t,
-        r#"{"push":{"quickCreated":{"id":27,"skull":72,"amount":1}}}"#,
-    )
-    .unwrap();
-    let rmp = rmp(&t).unwrap();
-
-    assert_eq!(t, json);
-    assert_eq!(t, rmp);
-}
-
-#[test]
-fn quick_updated() {
-    let t = Message::Push(Push::QuickUpdated(Quick {
-        id: QuickId(27),
-        skull: SkullId(72),
-        amount: 1.0,
-    }));
-    let json = json(
-        &t,
-        r#"{"push":{"quickUpdated":{"id":27,"skull":72,"amount":1}}}"#,
-    )
-    .unwrap();
-    let rmp = rmp(&t).unwrap();
-
-    assert_eq!(t, json);
-    assert_eq!(t, rmp);
-}
-
-#[test]
-fn quick_deleted() {
-    let t = Message::Push(Push::QuickDeleted(QuickId(27)));
-    let json = json(&t, r#"{"push":{"quickDeleted":27}}"#).unwrap();
     let rmp = rmp(&t).unwrap();
 
     assert_eq!(t, json);

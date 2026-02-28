@@ -676,21 +676,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_cascade() {
-        let store = Store::in_memory(1).await.unwrap();
-
-        let skulls = store.skulls();
-        let skull = skulls.create("one", 1, "icon1", 1.0, None).await.unwrap();
-
-        let quicks = store.quicks();
-        let quick = quicks.create(skull.id, 1.0).await.unwrap();
-        assert_eq!(quicks.list().await.unwrap(), vec![quick]);
-
-        skulls.delete(skull.id).await.unwrap();
-        assert_eq!(quicks.list().await.unwrap(), Vec::new());
-    }
-
-    #[tokio::test]
     async fn delete_err_not_found() {
         let store = Store::in_memory(1).await.unwrap();
 

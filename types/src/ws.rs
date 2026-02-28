@@ -1,4 +1,4 @@
-use crate::{Occurrence, OccurrenceId, Quick, QuickId, Skull, SkullId};
+use crate::{Occurrence, OccurrenceId, Skull, SkullId};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WithId<T> {
@@ -24,9 +24,6 @@ pub enum Push {
     SkullCreated(Skull),
     SkullUpdated(Skull),
     SkullDeleted(SkullId),
-    QuickCreated(Quick),
-    QuickUpdated(Quick),
-    QuickDeleted(QuickId),
     OccurrencesCreated(Vec<Occurrence>),
     OccurrenceUpdated(Occurrence),
     OccurrenceDeleted(OccurrenceId),

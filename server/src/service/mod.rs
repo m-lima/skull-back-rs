@@ -1,5 +1,4 @@
 mod occurrences;
-mod quicks;
 mod skulls;
 
 pub async fn new(
@@ -63,7 +62,6 @@ impl Service {
     pub async fn handle(&self, request: types::Request) -> types::Response {
         let result = match request {
             types::Request::Skull(request) => skulls::handle(self, request).await,
-            types::Request::Quick(request) => quicks::handle(self, request).await,
             types::Request::Occurrence(request) => occurrences::handle(self, request).await,
         };
 

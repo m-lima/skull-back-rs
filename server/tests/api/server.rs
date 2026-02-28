@@ -200,14 +200,10 @@ impl Populator {
     async fn populate(&self) {
         const SKULL: &str =
             r#"{"name":"skull$","color":$,"icon":"icon$","price":0.$,"limit":null}"#;
-        const QUICK: &str = r#"{"skull":$,"amount":$.0}"#;
         const OCCURRENCE: &str = r#"{"skull":$,"amount":$.0,"millis":$}"#;
 
         self.insert_items("skull", SKULL).await;
         self.check_items("skull", SKULL).await;
-
-        self.insert_items("quick", QUICK).await;
-        self.check_items("quick", QUICK).await;
 
         self.insert_occurrences("occurrence", OCCURRENCE).await;
         self.check_items("occurrence", OCCURRENCE).await;

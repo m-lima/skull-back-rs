@@ -105,10 +105,12 @@ async fn list_empty(client: Client) {
 async fn create(client: Client) {
     let response = client
         .post(
-            "quick",
+            "skull",
             r#"{
-                "skull": 1,
-                "amount": 27
+                "name": "skull27",
+                "color": 27,
+                "icon": "icon27",
+                "price": 0.27
             }"#,
         )
         .await;
@@ -123,10 +125,13 @@ async fn create(client: Client) {
 async fn create_constraint(client: Client) {
     let response = client
         .post(
-            "quick",
+            "occurrence",
             r#"{
-                "skull": 27,
-                "amount": 27
+                "items": [{
+                    "skull": 27,
+                    "amount": 27,
+                    "millis": 0
+                }]
             }"#,
         )
         .await;
@@ -141,10 +146,12 @@ async fn create_constraint(client: Client) {
 async fn create_conflict(client: Client) {
     let response = client
         .post(
-            "quick",
+            "skull",
             r#"{
-                "skull": 1,
-                "amount": 1
+                "name": "skull1",
+                "color": 1,
+                "icon": "icon1",
+                "price": 0.1
             }"#,
         )
         .await;
@@ -152,17 +159,17 @@ async fn create_conflict(client: Client) {
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
-        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry already exists: UNIQUE constraint failed: quicks.skull, quicks.amount\"}}"
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry already exists: UNIQUE constraint failed: skulls.icon\"}}"
     ));
 }
 
 async fn create_bad_payload(client: Client) {
-    let response = client.post("quick", r#"{"bloink": 27}"#).await;
+    let response = client.post("occurrence", r#"{"bloink": 27}"#).await;
 
     check!(eq(
         response,
         StatusCode::UNPROCESSABLE_ENTITY,
-        "Failed to deserialize the JSON body into the target type: missing field `skull` at line 1 column 14"
+        "Failed to deserialize the JSON body into the target type: missing field `items` at line 1 column 14"
     ));
 }
 
@@ -203,12 +210,12 @@ async fn search_limit(client: Client) {
 }
 
 async fn update(client: Client) {
-    let response = client.get("quick").await;
+    let response = client.get("occurrence").await;
     let original = extract_body(response).await;
 
     let response = client
         .patch(
-            "quick",
+            "occurrence",
             r#"{
                 "id": 3,
                 "skull": { "set": 3 },
@@ -219,13 +226,13 @@ async fn update(client: Client) {
 
     check!(eq(response, StatusCode::NO_CONTENT, ""));
 
-    let response = client.get("quick").await;
+    let response = client.get("occurrence").await;
     let modified = original.replace("\"amount\":3.0", "\"amount\":27.0");
     check!(eq(response, StatusCode::OK, modified));
 }
 
 async fn update_no_change(client: Client) {
-    let response = client.patch("quick", "{\"id\": 3}").await;
+    let response = client.patch("occurrence", "{\"id\": 3}").await;
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
@@ -236,7 +243,7 @@ async fn update_no_change(client: Client) {
 async fn update_not_found(client: Client) {
     let response = client
         .patch(
-            "quick",
+            "occurrence",
             r#"{
                 "id": 27,
                 "skull": { "set": 3 },
@@ -255,7 +262,7 @@ async fn update_not_found(client: Client) {
 async fn update_constraint(client: Client) {
     let response = client
         .patch(
-            "quick",
+            "occurrence",
             r#"{
                 "id": 3,
                 "skull": { "set": 27 }
@@ -273,11 +280,10 @@ async fn update_constraint(client: Client) {
 async fn update_conflict(client: Client) {
     let response = client
         .patch(
-            "quick",
+            "skull",
             r#"{
-                "id": 1,
-                "skull": { "set": 2 },
-                "amount": { "set": 2 }
+                "id": 2,
+                "icon": { "set": "icon1" }
             }"#,
         )
         .await;
@@ -285,14 +291,14 @@ async fn update_conflict(client: Client) {
     check!(eq(
         response,
         StatusCode::BAD_REQUEST,
-        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry already exists: UNIQUE constraint failed: quicks.skull, quicks.amount\"}}"
+        "{\"error\":{\"kind\":\"BadRequest\",\"message\":\"entry already exists: UNIQUE constraint failed: skulls.icon\"}}"
     ));
 }
 
 async fn update_bad_payload(client: Client) {
     let response = client
         .patch(
-            "quick",
+            "occurrence",
             r#"{
                 "id": 1,
                 "amount": 2

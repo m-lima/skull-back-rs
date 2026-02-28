@@ -18,6 +18,16 @@ fn list() {
 }
 
 #[test]
+fn quick() {
+    let t = Request::Occurrence(Occurrence::Quick);
+    let json = json(&t, r#"{"occurrence":"quick"}"#).unwrap();
+    let rmp = rmp(&t).unwrap();
+
+    assert_eq!(t, json);
+    assert_eq!(t, rmp);
+}
+
+#[test]
 fn search_none() {
     let t = Request::Occurrence(Occurrence::Search(Search {
         skulls: None,

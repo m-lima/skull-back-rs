@@ -1,5 +1,4 @@
 mod occurrence;
-mod quick;
 mod skull;
 
 use crate::service::Service;
@@ -7,7 +6,6 @@ use crate::service::Service;
 pub fn build() -> axum::Router {
     axum::Router::new()
         .nest("/skull", skull::build())
-        .nest("/quick", quick::build())
         .nest("/occurrence", occurrence::build())
 }
 

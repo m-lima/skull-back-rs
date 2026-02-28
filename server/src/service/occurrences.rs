@@ -14,6 +14,7 @@ pub async fn handle(service: &Service, request: Occurrence) -> Result {
     let occurrences = Occurrences::new(service);
     match request {
         Occurrence::List => occurrences.list().await,
+        Occurrence::Quick => occurrences.quick().await,
         Occurrence::Search(request) => occurrences.search(request).await,
         Occurrence::Create(request) => occurrences.create(request).await,
         Occurrence::Update(request) => occurrences.update(request).await,
@@ -37,6 +38,10 @@ impl<'a> Occurrences<'a> {
 impl Occurrences<'_> {
     async fn list(&self) -> Result {
         self.store.list().await.map(Payload::Occurrences)
+    }
+
+    async fn quick(&self) -> Result {
+        self.store.quick().await.map(Payload::Quicks)
     }
 
     async fn search(&self, request: Search) -> Result {
