@@ -9,7 +9,7 @@ import './index.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-const socket = new Socket(util.url.ws.binary, util.url.access.check);
+const socket = new Socket(util.url.ws.binary, util.url.ws.check);
 const store = new Store(socket);
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
