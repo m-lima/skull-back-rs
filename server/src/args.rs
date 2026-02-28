@@ -136,7 +136,7 @@ fn parse_socket(input: &str) -> Result<Socket, Error> {
         Ok(Socket::Unix(std::path::PathBuf::from(path)))
     } else {
         match input.parse() {
-            Ok(port @ ..1) => Ok(Socket::Port(port)),
+            Ok(port @ 1..) => Ok(Socket::Port(port)),
             _ => Err(Error::InvalidPort),
         }
     }
