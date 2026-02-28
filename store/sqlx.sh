@@ -49,7 +49,7 @@ function lock {
 
   cd "${base}"
   cargo sqlx prepare -D "sqlite://${base}/db/db.sqlite"
-  rm "${base}/.env"
+  [ -f "${base}/.env" ] && rm "${base}/.env"
 }
 
 base=$(realpath "$(dirname "${0}")")
