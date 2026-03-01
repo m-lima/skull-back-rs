@@ -1,4 +1,3 @@
-import * as util from '../util';
 import { Icon } from './icon';
 
 import './footer.css';
@@ -32,16 +31,6 @@ export const Footer = (props: FooterProps) => {
             <Icon icon={route.icon} />
           </Link>
         ))}
-        {
-          util.path.chart &&
-            <Link
-              className='icon-button'
-              to={util.path.chart}
-              title='Chart'
-            >
-              <Icon icon='fas fa-chart-line' />
-            </Link>
-        }
       </div>
     </div>
   );

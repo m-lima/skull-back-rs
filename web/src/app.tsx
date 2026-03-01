@@ -1,6 +1,6 @@
 import * as util from './util';
 import { Banner, Footer, Spinner } from './components/mod';
-import { Grid, Summary } from './routes/mod';
+import { Chart, Grid, Summary } from './routes/mod';
 import { SocketState } from './socket';
 import { useSocketState } from './store/mod';
 
@@ -14,6 +14,12 @@ const routes = [
     title: 'Quick values',
     icon: 'fas fa-th-large',
     element: <Grid />,
+  },
+  {
+    path: util.path.chart,
+    title: 'Chart',
+    icon: 'fas fa-chart-line',
+    element: <Chart />,
   },
   {
     path: util.path.summary,

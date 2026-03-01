@@ -6,8 +6,8 @@ export namespace query {
 
 export namespace path {
   export const grid = '/';
+  export const chart = '/chart';
   export const summary = '/summary';
-  export const chart: string | undefined = process.env.REACT_APP_PATH_CHART;
 }
 
 export namespace url {

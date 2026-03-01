@@ -73,28 +73,6 @@ export const Summary = () => {
     [skulls],
   );
 
-  useMemo(
-    () => {
-      occurrences.items.sort((a, b) => {
-        if (a.millis > b.millis) {
-          return -1;
-        } else if (a.millis < b.millis) {
-          return 1;
-        } else {
-          if (a.skull > b.skull) {
-            return -1;
-          } else if (a.skull < b.skull) {
-            return 1;
-          } else {
-            return 0;
-          }
-        }
-      });
-      return occurrences.items;
-    },
-    [occurrences.items],
-  );
-
   const filteredOccurrences = useMemo(
     () => occurrences.items.filter(o => selectedSkulls.indexOf(o.skull) < 0),
     [occurrences.items, selectedSkulls],
@@ -150,10 +128,8 @@ export const Summary = () => {
                   onChange={() => {
                     const index = selectedSkulls.findIndex(id => id === s.id);
                     if (index < 0) {
-                      console.log(`Adding ${s.id}`);
                       selectedSkulls.push(s.id);
                     } else {
-                      console.log(`Removing ${s.id}`);
                       selectedSkulls.splice(index, 1);
                     }
                     setSelectedSkulls([...selectedSkulls]);
