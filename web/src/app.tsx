@@ -33,6 +33,8 @@ const App = () => {
       return <Banner.SocketError />;
     case SocketState.Unauthorized:
       return <Banner.Unauthorized />;
+    case SocketState.Forbidden:
+      return <Banner.Forbidden />;
   }
 
   return (

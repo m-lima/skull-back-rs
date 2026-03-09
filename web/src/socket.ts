@@ -18,6 +18,7 @@ export enum SocketState {
   Closed,
   Error,
   Unauthorized,
+  Forbidden,
 }
 
 class SocketStateListener {
@@ -127,8 +128,8 @@ export class Socket {
   }
 
   private nextAttempt() {
-    // Unauthorized is always fatal
-    if (this.state === SocketState.Unauthorized) {
+    // Auth is always fatal
+    if (this.state === SocketState.Unauthorized || this.state === SocketState.Forbidden) {
       return;
     }
 
@@ -151,8 +152,10 @@ export class Socket {
     if (this.attempts === 0 && !!checkUrl) {
       fetch(checkUrl, { credentials: 'include', redirect: 'manual' })
         .then(r => {
-          if (r.status === 401 || r.status === 403) {
+          if (r.status === 401) {
             this.setState(SocketState.Unauthorized);
+          } else if (r.status === 403) {
+            this.setState(SocketState.Forbidden);
           }
         })
         .catch(() => { });
@@ -176,13 +179,13 @@ export class Socket {
       this.attempts = 0;
       this.state = state;
     } else {
-      // Unauthorized can only be overriden by OPEN
-      if (this.state === SocketState.Unauthorized) {
+      // Auth can only be overriden by OPEN
+      if (this.state === SocketState.Unauthorized || this.state === SocketState.Forbidden) {
         return;
       }
 
       // If we are authorized and still have attempts, mark it as connecting
-      if (state !== SocketState.Unauthorized && this.nextAttempt() !== undefined) {
+      if (state !== SocketState.Unauthorized && state !== SocketState.Forbidden && this.nextAttempt() !== undefined) {
         this.state = SocketState.Connecting;
       } else {
         this.state = state;

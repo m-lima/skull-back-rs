@@ -21,6 +21,6 @@ export namespace url {
 
   export namespace access {
     const auth = process.env.REACT_APP_URL_AUTH === undefined ? host : process.env.REACT_APP_URL_AUTH;
-    export const logout = `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/login?redirect=${window.location}`;
+    export const reauthenticate = (fromScratch: boolean) => `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/login?${fromScratch ? "fromScratch=true?" : ""}redirect=${window.location}`;
   }
 }

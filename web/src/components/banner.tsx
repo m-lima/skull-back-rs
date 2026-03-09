@@ -62,7 +62,15 @@ export const Unauthorized = () => (
   <div className='banner'>
     <Icon icon='fas fa-fingerprint' />
     Unauthorized
-    <Refresh />
+    <Reauthenticate />
+  </div>
+);
+
+export const Forbidden = () => (
+  <div className='banner'>
+    <Icon icon='fas fa-user-slash' />
+    Forbidden
+    <Reauthenticate fromScratch={true} />
   </div>
 );
 
@@ -81,13 +89,17 @@ export const NoSkulls = () => (
 );
 
 const Refresh = () =>
-  <>
     <a className='banner-action' href={window.location.href}>
       <Icon margin icon='fas fa-sync' />
       Refresh
     </a>
-    <a className='banner-action' href={util.url.access.logout}>
-      <Icon margin icon='fas fa-sign-out-alt' />
-      Logout
+
+interface ReauthenticateProps {
+  fromScratch?: boolean,
+}
+
+const Reauthenticate = (props: ReauthenticateProps) =>
+    <a className='banner-action' href={util.url.access.reauthenticate(props.fromScratch === false)}>
+      <Icon margin icon='fas fa-sync' />
+     Reauthenticate
     </a>
-  </>
