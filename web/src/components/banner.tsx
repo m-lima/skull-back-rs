@@ -62,7 +62,7 @@ export const Unauthorized = () => (
   <div className='banner'>
     <Icon icon='fas fa-fingerprint' />
     Unauthorized
-    <Reauthenticate />
+    <Login />
   </div>
 );
 
@@ -70,7 +70,7 @@ export const Forbidden = () => (
   <div className='banner'>
     <Icon icon='fas fa-user-slash' />
     Forbidden
-    <Reauthenticate fromScratch={true} />
+    <Reset />
   </div>
 );
 
@@ -94,12 +94,14 @@ const Refresh = () =>
       Refresh
     </a>
 
-interface ReauthenticateProps {
-  fromScratch?: boolean,
-}
-
-const Reauthenticate = (props: ReauthenticateProps) =>
-    <a className='banner-action' href={util.url.access.reauthenticate(props.fromScratch === false)}>
+const Login = () =>
+    <a className='banner-action' href={util.url.access.login}>
       <Icon margin icon='fas fa-sync' />
-     Reauthenticate
+      Refresh
+    </a>
+
+const Reset = () =>
+    <a className='banner-action' href={util.url.access.reset}>
+      <Icon margin icon='fas fa-sign-in-alt' />
+     Login
     </a>
