@@ -64,7 +64,7 @@
 }
 
 .summary-filter-toggle {
-  float: right;
+  align-self: flex-end;
 
   margin-bottom: calc(var(--padding-size) / 2);
   cursor: pointer;

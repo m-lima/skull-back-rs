@@ -2,6 +2,8 @@
   height: calc(100% - var(--bar-size) - 2 * var(--padding-size));
   overflow-y: auto;
   padding: var(--padding-size);
+  display: flex;
+  flex-direction: column;
 }
 
 .skull-connecting {
