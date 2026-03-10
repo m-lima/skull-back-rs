@@ -1,5 +1,5 @@
 import { Banner, Edit, Icon } from '../components/mod';
-import { check, useEditOccurrence, useOccurrences, useSkulls, EpochDays, Occurrence, Skull } from '../store/mod';
+import { check, skullColor, useEditOccurrence, useOccurrences, useSkulls, EpochDays, Occurrence, Skull } from '../store/mod';
 
 import './summary.css';
 
@@ -31,7 +31,7 @@ const renderRows = (occurrences: Occurrence[], skullMap: Map<number, Skull>, set
         key={index}
         onClick={() => setSelected(occurrence)}
       >
-        <td id='icon' style={{ color: `#${skull.color.toString(16).padStart(6, '0')}` }}>
+        <td id='icon' style={{ color: skullColor(skull) }}>
           <Icon icon={skull.icon} />
         </td>
         <td>{skull.name}</td>
@@ -135,7 +135,7 @@ export const Summary = () => {
                     setSelectedSkulls([...selectedSkulls]);
                   }}
                 />
-                <label htmlFor={s.name}>{s.name}</label>
+                <label htmlFor={s.name} style={{ color: skullColor(s) }}>{s.name}</label>
               </div>
             )}
           </div>

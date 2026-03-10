@@ -1,6 +1,6 @@
 import * as Banner from '../components/banner';
 import { Edit, Icon } from '../components/mod';
-import { check, useSkulls, useQuicks, useOccurrences, Skull, Quick, EpochDays, useEditOccurrence } from '../store/mod';
+import { check, skullColor, useSkulls, useQuicks, useOccurrences, Skull, Quick, EpochDays, useEditOccurrence } from '../store/mod';
 
 import './grid.css';
 
@@ -19,7 +19,7 @@ const buildSkullButton = (
       `Skull: ${quick.skull.name}\nAmount: ${quick.amount}` +
       (!!quick.skull.limit ? `\nLimit: ${quick.skull.limit}` : '')
     }
-    style={{ background: `#${quick.skull.color.toString(16).padStart(6, '0')}` }}
+    style={{ background: skullColor(quick.skull) }}
     onClick={() => setSelected(quick)}
   >
     <Icon icon={quick.skull.icon} />

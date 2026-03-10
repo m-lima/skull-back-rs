@@ -9,6 +9,14 @@ export interface Skull {
   limit?: number,
 }
 
+const opacityToHex = (opacity?: string | number) =>
+  opacity === undefined
+    ? ''
+    : (typeof (opacity) === 'string')
+      ? opacity
+      : Math.floor(255 * opacity).toString(16).padStart(2, '0');
+
+export const skullColor = (skull: { color: number }, opacity?: number) => `#${skull.color.toString(16).padStart(6, '0')}${opacityToHex(opacity)}`;
 
 export interface RawQuick {
   skull: number,
