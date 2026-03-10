@@ -1,4 +1,3 @@
-import { Icon } from '../components/mod';
 import { skullColor, useOccurrences, useSkulls, EpochDays, Occurrence } from '../store/mod';
 
 import './chart.css';
@@ -16,7 +15,7 @@ import 'chartjs-adapter-date-fns';
 import { Line } from 'react-chartjs-2';
 import DatePicker from 'react-datepicker';
 import { useMemo, useState } from 'react';
-import { startOfDay } from 'date-fns';
+import * as datefns from 'date-fns';
 
 ChartJS.register(
   LineElement,
@@ -32,45 +31,50 @@ const options = {
   scales: {
     x: {
       type: 'time' as const,
+      time: {
+        tooltipFormat: "E, d MMM yy, k'h'",
+      },
     },
   },
-  // grid: {
-  //   lineWidth: (ctx) => {
-  //     if (!ctx.tick || !ctx.tick.value) {
-  //       return 1;
-  //     }
-  //
-  //     const date = new Date(ctx.tixk.value);
-  //
-  //     if (date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0) {
-  //       return 3;
-  //     }
-  //
-  //     return 1;
-  //   },
-  // },
 };
 
 const alternatingDaysPlugin: Plugin = {
   id: 'alternatingDays',
   beforeDraw: (chart) => {
-    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    const { ctx, canvas, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
 
     ctx.save();
     ctx.beginPath();
     ctx.rect(left, top, right - left, bottom - top);
     ctx.clip();
 
-    const minDate = new Date(x.min);
-    const maxDate = new Date(x.max);
+    const styles = getComputedStyle(canvas);
+    const dark = styles.getPropertyValue('--shade-1').trim();
+    const bright = styles.getPropertyValue('--shade-2').trim();
 
-    // TODO: If too close, don't render weekends
-    // TODO: If too far, don't render days
-    // TODO: If really far, render months
-    // TODO: All of these should be based on the width for the thresholds
+    const span = datefns.differenceInDays(x.max, x.min);
+    const checker: (prev: EpochDays, curr: EpochDays) => boolean =
+      span >= 90
+        ? (a, b) => datefns.getMonth(a.getMillis()) !== datefns.getMonth(b.getMillis())
+        : span >= 30
+          ? (a) => datefns.getDay(a.getMillis()) === 0
+          : () => true;
+    const minDay = new EpochDays(x.min);
+    for (
+      let currDay = new EpochDays(x.max),
+      prevDay = currDay.subDays(1),
+      isDark = true;
+      currDay > minDay;
+      currDay = prevDay,
+      prevDay = prevDay.subDays(1),
+      isDark = checker(prevDay, currDay) !== isDark
+    ) {
+      const startX = x.getPixelForValue(prevDay.getMillis());
+      const endX = x.getPixelForValue(currDay.getMillis());
 
-    let currentDate = startOfDay(minDate);
-    let isDark = Math.floor(currentDate.getTime() / 86400000) % 2 === 0;
+      ctx.fillStyle = isDark ? dark : bright;
+      ctx.fillRect(startX, top, endX - startX, bottom - top)
+    }
 
     ctx.restore();
   },
@@ -122,23 +126,9 @@ export const Chart = () => {
   const [queryByOverride, setQueryByOverride] = useState(false);
   const [queryBy, setQueryBy] = useState(1 * day);
 
-  // const parsedQuery = useMemo(
-  //   () => {
-  //     const parts = query.split('/');
-  //     if (parts.length > 3) {
-  //       return undefined;
-  //     }
-  //
-  //
-  //   },
-  //   [query]
-  // );
-
   const effectiveStart = useMemo(() => start.getMillis() - queryLength, [start, queryLength]);
   const effectiveEnd = useMemo(() => end.addDays(1).getMillis(), [end]);
 
-  // TODO: Need to add date ahead to accomodate the mid
-  // Basically, the start and end dates should reference the midpoint of each window
   const filter = useMemo(
     () => {
       return (o: Occurrence) => o.millis.getTime() <= effectiveEnd;
@@ -342,13 +332,15 @@ export const Chart = () => {
           </div>
         )}
       </div>
-      <Line
-        style={{ minHeight: 0, minWidth: 0 }}
-        options={options}
-        data={{
-          labels: [],
-          datasets: lineData,
-        }}
-      />
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0 }} >
+        <Line
+          options={options}
+          data={{
+            labels: [],
+            datasets: lineData,
+          }}
+          plugins={[alternatingDaysPlugin]}
+        />
+      </div>
     </>);
 }
