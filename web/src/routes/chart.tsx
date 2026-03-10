@@ -76,31 +76,6 @@ const alternatingDaysPlugin: Plugin = {
   },
 };
 
-const find = (occurrences: Occurrence[], needle: Date): number => {
-  let start = 0;
-  if (occurrences.length < 2 || occurrences[start].millis <= needle) {
-    return start;
-  }
-
-  let end = occurrences.length - 1;
-  if (occurrences[end].millis >= needle) {
-    return end;
-  }
-
-  while (start <= end) {
-    const idx = Math.floor((start + end) / 2);
-    const curr = occurrences[idx].millis;
-
-    if (curr > needle) {
-      start = idx + 1;
-    } else {
-      end = idx - 1;
-    }
-  }
-
-  return start;
-};
-
 class Timeframe {
   value: number;
   unit: number;
