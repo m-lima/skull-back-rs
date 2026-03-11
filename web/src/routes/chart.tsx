@@ -180,13 +180,13 @@ class QueryWindow {
 }
 
 export const Chart = () => {
-  const [start, setStart] = useState(EpochDays.today().subDays(365));
+  const [start, setStart] = useState(new EpochDays(datefns.subMonths(new Date(), 6)));
   const [end, setEnd] = useState(EpochDays.today());
   const [showFilters, setShowFilters] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
-  const [query, setQuery] = useState(() => new QueryWindow(new Timeframe(1, 'm'), new Timeframe(1, 'd'), new Timeframe(1, 'd')));
+  const [query, setQuery] = useState(() => new QueryWindow(new Timeframe(15, 'd'), new Timeframe(1, 'd'), new Timeframe(1, 'd')));
   const [queryStr, setQueryStr] = useState(query.toString());
 
   const [queryLength, queryStep, queryBy] = useMemo(() => [query.getLength(), query.getStep(), query.getBy()], [query]);
