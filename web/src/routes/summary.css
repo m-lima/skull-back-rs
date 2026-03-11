@@ -80,32 +80,19 @@
 .summary-filter-inputs {
   width: 100%;
   display: flex;
-}
-
-@media screen and (max-width: 300px) {
-  .summary-filter-inputs {
-    flex-direction: column;
-  }
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
 
 .summary-filter-input {
   display: grid;
-  width: 100%;
+  flex-grow: 1;
+  flex-basis: 130px;
   box-sizing: border-box;
   text-align: left;
-  border-width: 10px 0 10px 10px;
+  border-width: 10px 0 0 10px;
   border-style: solid;
   border-color: transparent;
-}
-
-@media screen and (max-width: 300px) {
-  .summary-filter-input {
-    border-width: 10px 10px 0 10px;
-  }
-}
-
-.summary-filter-input:last-child {
-  border-width: 10px;
 }
 
 .summary-filter-input input {

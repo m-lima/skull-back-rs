@@ -1,3 +1,4 @@
+import { Icon } from '../components/mod';
 import { skullColor, useOccurrences, useSkulls, EpochDays, Occurrence } from '../store/mod';
 
 import './chart.css';
@@ -80,51 +81,113 @@ const alternatingDaysPlugin: Plugin = {
   },
 };
 
+const VALID_UNITS = ['m', 'w', 'd', 'h'] as const;
+type Unit = typeof VALID_UNITS[number];
+
 class Timeframe {
-  value: number;
-  unit: number;
+  amount: number;
+  unit: Unit;
 
-  constructor(value: number, unit: 'w' | 'd' | 'h' | 'm' | 's') {
-    this.value = value;
-    this.unit = Timeframe.unitToNumber(unit);
+  constructor(amount: number, unit: Unit) {
+    this.amount = amount;
+    this.unit = unit;
   }
 
-  valueOf() {
-    return this.value * this.unit;
+  readonly toString = () => `${this.amount}${this.unit}`;
+  readonly valueOf = () => this.amount * Timeframe.unitToNumber(this.unit);
+
+  static fromString(timeframe: string) {
+    let trimmed = timeframe.trim();
+    if (trimmed.length < 2) {
+      console.log(`${timeframe} has bad length: ${trimmed.length}`);
+      return undefined;
+    }
+
+    const unit = trimmed[trimmed.length - 1];
+    trimmed = trimmed.slice(0, -1);
+    if (!Timeframe.isUnit(unit)) {
+      console.log(`${timeframe} has bad unit: ${unit}`);
+      return undefined;
+    }
+
+    const amount = Number(trimmed);
+    if (!amount) {
+      console.log(`${timeframe} has bad amount: ${trimmed}`);
+      return undefined;
+    }
+
+    return new Timeframe(amount, unit);
   }
 
-  static unitToNumber(value: 'w' | 'd' | 'h' | 'm' | 's') {
-    switch (value) {
+  static isUnit = (value: string): value is Unit => (VALID_UNITS as readonly string[]).includes(value);
+
+  static unitToNumber(unit: Unit) {
+    switch (unit) {
+      case 'm': return 31 * 24 * 60 * 60 * 1000;
       case 'w': return 7 * 24 * 60 * 60 * 1000;
       case 'd': return 24 * 60 * 60 * 1000;
       case 'h': return 60 * 60 * 1000;
-      case 'm': return 60 * 1000;
-      case 's': return 1000;
-    }
-  }
-
-  static numberToUnit(value: number) {
-    switch (value) {
-      case 7 * 24 * 60 * 60 * 1000: return 'w';
-      case 24 * 60 * 60 * 1000: return 'd';
-      case 60 * 60 * 1000: return 'h';
-      case 60 * 1000: return 'm';
-      case 1000: return 's';
     }
   }
 }
 
-const day = 24 * 60 * 60 * 1000;
+class QueryWindow {
+  length: Timeframe;
+  step: Timeframe;
+  by: Timeframe;
+
+  constructor(length: Timeframe, step: Timeframe, by: Timeframe) {
+    this.length = length;
+    this.step = step;
+    this.by = by;
+  }
+
+  readonly toString = () => `${this.length.toString()}/${this.step.toString()}/${this.by.toString()}`;
+
+  readonly getLength = () => this.length.valueOf();
+  readonly getStep = () => this.step.valueOf();
+  readonly getBy = () => this.by.valueOf();
+
+  static fromString(value: string) {
+    const parts = value.split('/');
+    if (parts.length !== 3) {
+      console.log(`'${value}' is no three parts`)
+      return undefined;
+    }
+
+    const length = Timeframe.fromString(parts[0]);
+    if (length === undefined) {
+      console.log(`'${value}' has bad length: ${parts[0]}`)
+      return undefined;
+    }
+
+    const step = Timeframe.fromString(parts[1]);
+    if (step === undefined || step > length) {
+      console.log(`'${value}' has bad step: ${parts[1]}`)
+      return undefined;
+    }
+
+    const by = Timeframe.fromString(parts[2]);
+    if (by === undefined || by > length) {
+      console.log(`'${value}' has bad by: ${parts[2]}`)
+      return undefined;
+    }
+
+    return new QueryWindow(length, step, by);
+  }
+}
 
 export const Chart = () => {
   const [start, setStart] = useState(EpochDays.today().subDays(7));
   const [end, setEnd] = useState(EpochDays.today());
+  const [showFilters, setShowFilters] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
-  const [queryLength, setQueryLength] = useState(1 * day);
-  const [queryStep, setQueryStep] = useState(1 * 0.25 * day);
-  const [queryByOverride, setQueryByOverride] = useState(false);
-  const [queryBy, setQueryBy] = useState(1 * day);
+
+  const [query, setQuery] = useState(() => new QueryWindow(new Timeframe(7, 'd'), new Timeframe(6, 'h'), new Timeframe(1, 'd')));
+  const [queryStr, setQueryStr] = useState(query.toString());
+
+  const [queryLength, queryStep, queryBy] = useMemo(() => [query.getLength(), query.getStep(), query.getBy()], [query]);
 
   const effectiveStart = useMemo(() => start.getMillis() - queryLength, [start, queryLength]);
   const effectiveEnd = useMemo(() => end.addDays(1).getMillis(), [end]);
@@ -258,80 +321,135 @@ export const Chart = () => {
   // TODO: Search for "summary" for further cleanup
   return (
     <>
-      <div className='summary-filter-inputs'>
-        <div className='summary-filter-input'>
-          <b>Start</b>
-          <DatePicker
-            selected={new Date(start.getMillis())}
-            dateFormat='dd/MM/yyyy'
-            popperPlacement='bottom'
-            onChange={d => d && setStart(new EpochDays(d))}
-          />
-        </div>
-        <div className='summary-filter-input'>
-          <b>End</b>
-          <DatePicker
-            selected={new Date(end.getMillis())}
-            dateFormat='dd/MM/yyyy'
-            popperPlacement='bottom'
-            onChange={d => d && setEnd(new EpochDays(d))}
-          />
-        </div>
-        {/*
-          <div className='summary-filter-input'>
-            <b>Length</b>
-            <input
-              id={Number(queryLength) ? '' : 'invalid'}
-              type='text'
-              inputMode='decimal'
-              min={0}
-              step={0.1}
-              value={queryLength}
-              onChange={e => setQueryLength(Number(e.target.value))}
-            />
-            <select
-              value={stagedValue.skull.name}
-              disabled={markedForDeletion}
-              onChange={e => stageSkull(e.target.value)}
-            >
-              {props.skulls.map((s, i) => (
-                <option key={i} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-            */}
+      <div
+        className='summary-filter-toggle'
+        onClick={() => setShowFilters(!showFilters)}
+      >
+        <span id='label'>Filter</span>
+        <Icon icon={showFilters ? 'fas fa-caret-up' : 'fas fa-caret-down'} />
       </div>
-      <div className='summary-filter-skulls'>
-        <div>
-          <input
-            type='checkbox'
-            checked={showLimits}
-            onChange={() => setShowLimits(!showLimits)}
-          />
-          <label>Limits</label>
-        </div>
-        {skulls.items.map((s, i) =>
-          <div key={i}>
-            <input
-              id={s.name}
-              type='checkbox'
-              defaultChecked={selectedSkulls.find(id => id === s.id) === undefined}
-              onChange={() => {
-                const index = selectedSkulls.findIndex(id => id === s.id);
-                if (index < 0) {
-                  selectedSkulls.push(s.id);
-                } else {
-                  selectedSkulls.splice(index, 1);
-                }
-                setSelectedSkulls([...selectedSkulls]);
-              }}
-            />
-            <label htmlFor={s.name} style={{ color: skullColor(s) }}>{s.name}</label>
+      {showFilters &&
+        <>
+          <div className='summary-filter-inputs'>
+            <div className='summary-filter-input'>
+              <b>Start</b>
+              <DatePicker
+                selected={new Date(start.getMillis())}
+                dateFormat='dd/MM/yyyy'
+                popperPlacement='bottom'
+                onChange={d => d && setStart(new EpochDays(d))}
+              />
+            </div>
+            <div className='summary-filter-input'>
+              <b>End</b>
+              <DatePicker
+                selected={new Date(end.getMillis())}
+                dateFormat='dd/MM/yyyy'
+                popperPlacement='bottom'
+                onChange={d => d && setEnd(new EpochDays(d))}
+              />
+            </div>
+            <div className='summary-filter-input'>
+              <b>Window</b>
+              <input
+                type='text'
+                value={queryStr}
+                onChange={e => {
+                  setQueryStr(e.target.value)
+                  const parsed = QueryWindow.fromString(e.target.value);
+                  if (parsed !== undefined) {
+                    setQuery(parsed);
+                  }
+                }}
+                onBlur={() => setQueryStr(query.toString())}
+              />
+            </div>
+            {/*
+            <div className='summary-filter-input-small'>
+              <div className='summary-filter-input'>
+                <b>Window</b>
+                <input
+                  // id={Number(queryLengthStr) ? '' : 'invalid'}
+                  type='text'
+                  inputMode='numeric'
+                  min={0}
+                  step={1}
+                  value={queryLengthStr}
+                  onChange={e => {
+                    setQueryLengthStr(e.target.value)
+                    const asNumber = Math.floor(Number(e.target.value));
+                    asNumber && setQueryLength(asNumber * day);
+                  }}
+                  onBlur={() => setQueryLengthStr(Math.floor(queryLength / day).toString())}
+                />
+              </div>
+              <div className='summary-filter-input'>
+                <b>Step</b>
+                <input
+                  id={Number(queryLengthStr) ? '' : 'invalid'}
+                  type='text'
+                  inputMode='numeric'
+                  min={0}
+                  step={1}
+                  value={queryLengthStr}
+                  onChange={e => {
+                    setQueryLengthStr(e.target.value)
+                    const asNumber = Math.floor(Number(e.target.value));
+                    asNumber && setQueryLength(asNumber * day);
+                  }}
+                  onBlur={() => setQueryLengthStr(Math.floor(queryLength / day).toString())}
+                />
+              </div>
+              <div className='summary-filter-input'>
+                <b>By</b>
+                <input
+                  id={Number(queryLengthStr) ? '' : 'invalid'}
+                  type='text'
+                  inputMode='numeric'
+                  min={0}
+                  step={1}
+                  value={queryLengthStr}
+                  onChange={e => {
+                    setQueryLengthStr(e.target.value)
+                    const asNumber = Math.floor(Number(e.target.value));
+                    asNumber && setQueryLength(asNumber * day);
+                  }}
+                  onBlur={() => setQueryLengthStr(Math.floor(queryLength / day).toString())}
+                />
+              </div>
+            </div>*/}
           </div>
-        )}
-      </div>
+          <div className='summary-filter-skulls'>
+            <div>
+              <input
+                type='checkbox'
+                checked={showLimits}
+                onChange={() => setShowLimits(!showLimits)}
+              />
+              <label>Limits</label>
+            </div>
+            {skulls.items.map((s, i) =>
+              <div key={i}>
+                <input
+                  id={s.name}
+                  type='checkbox'
+                  defaultChecked={selectedSkulls.find(id => id === s.id) === undefined}
+                  onChange={() => {
+                    const index = selectedSkulls.findIndex(id => id === s.id);
+                    if (index < 0) {
+                      selectedSkulls.push(s.id);
+                    } else {
+                      selectedSkulls.splice(index, 1);
+                    }
+                    setSelectedSkulls([...selectedSkulls]);
+                  }}
+                />
+                <label htmlFor={s.name} style={{ color: skullColor(s) }}>{s.name}</label>
+              </div>
+            )}
+          </div>
+        </>
+      }
       <div style={{ flex: 1, minHeight: 0, minWidth: 0 }} >
         <Line
           options={options}
