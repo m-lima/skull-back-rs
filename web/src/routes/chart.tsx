@@ -54,27 +54,29 @@ const alternatingDaysPlugin: Plugin = {
     const bright = styles.getPropertyValue('--shade-2').trim();
 
     const span = datefns.differenceInDays(x.max, x.min);
-    const checker: (prev: EpochDays, curr: EpochDays) => boolean =
-      span >= 90
-        ? (a, b) => datefns.getMonth(a.getMillis()) !== datefns.getMonth(b.getMillis())
-        : span >= 30
-          ? (a) => datefns.getDay(a.getMillis()) === 0
-          : () => true;
-    const minDay = new EpochDays(x.min);
-    for (
-      let currDay = new EpochDays(x.max),
-      prevDay = currDay.subDays(1),
-      isDark = true;
-      currDay > minDay;
-      currDay = prevDay,
-      prevDay = prevDay.subDays(1),
-      isDark = checker(prevDay, currDay) !== isDark
-    ) {
-      const startX = x.getPixelForValue(prevDay.getMillis());
-      const endX = x.getPixelForValue(currDay.getMillis());
+    const [stepper, firstStep]: [(date: Date) => Date, (date: Date) => Date] =
+      span >= 730
+        ? [a => datefns.subQuarters(a, 1), datefns.startOfQuarter]
+        : span >= 90
+          ? [a => datefns.subMonths(a, 1), datefns.startOfMonth]
+          : span >= 30
+            ? [a => datefns.subWeeks(a, 1), datefns.startOfWeek]
+            : [a => datefns.subDays(a, 1), datefns.startOfDay]
+    const minDay = new Date(x.min);
+
+    let currDay = new Date(x.max);
+    let prevDay = firstStep(currDay);
+    let isDark = true;
+    while (currDay > minDay) {
+      const startX = x.getPixelForValue(prevDay.getTime());
+      const endX = x.getPixelForValue(currDay.getTime());
 
       ctx.fillStyle = isDark ? dark : bright;
       ctx.fillRect(startX, top, endX - startX, bottom - top)
+
+      currDay = prevDay;
+      prevDay = stepper(prevDay);
+      isDark = !isDark;
     }
 
     ctx.restore();
@@ -178,13 +180,13 @@ class QueryWindow {
 }
 
 export const Chart = () => {
-  const [start, setStart] = useState(EpochDays.today().subDays(7));
+  const [start, setStart] = useState(EpochDays.today().subDays(365));
   const [end, setEnd] = useState(EpochDays.today());
   const [showFilters, setShowFilters] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
-  const [query, setQuery] = useState(() => new QueryWindow(new Timeframe(7, 'd'), new Timeframe(6, 'h'), new Timeframe(1, 'd')));
+  const [query, setQuery] = useState(() => new QueryWindow(new Timeframe(1, 'm'), new Timeframe(1, 'd'), new Timeframe(1, 'd')));
   const [queryStr, setQueryStr] = useState(query.toString());
 
   const [queryLength, queryStep, queryBy] = useMemo(() => [query.getLength(), query.getStep(), query.getBy()], [query]);
