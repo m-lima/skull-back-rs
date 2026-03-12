@@ -276,6 +276,22 @@ export class Store {
       }
     }
 
+    this.occurrences.sort((a, b) => {
+      if (a.millis > b.millis) {
+        return -1;
+      } else if (a.millis < b.millis) {
+        return 1;
+      } else {
+        if (a.skull > b.skull) {
+          return -1;
+        } else if (a.skull < b.skull) {
+          return 1;
+        } else {
+          return 0;
+        }
+      }
+    });
+
     this.broadcastOccurrences();
   }
 

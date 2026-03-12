@@ -194,36 +194,13 @@ export const Chart = () => {
   const effectiveStart = useMemo(() => start.getMillis() - queryLength, [start, queryLength]);
   const effectiveEnd = useMemo(() => end.addDays(1).getMillis(), [end]);
 
-  const filter = useMemo(
-    () => {
-      return (o: Occurrence) => o.millis.getTime() <= effectiveEnd;
-    },
-    [effectiveEnd],
-  );
+  const filter = useMemo(() => (o: Occurrence) => o.millis.getTime() <= effectiveEnd, [effectiveEnd]);
 
   const skulls = useSkulls();
   const occurrences = useOccurrences(effectiveStart, filter);
 
   const filteredOccurrences = useMemo(
-    () => {
-      const filtered = occurrences.items.filter(o => selectedSkulls.indexOf(o.skull) < 0);
-      filtered.sort((a, b) => {
-        if (a.millis > b.millis) {
-          return -1;
-        } else if (a.millis < b.millis) {
-          return 1;
-        } else {
-          if (a.skull > b.skull) {
-            return -1;
-          } else if (a.skull < b.skull) {
-            return 1;
-          } else {
-            return 0;
-          }
-        }
-      });
-      return filtered;
-    },
+    () => occurrences.items.filter(o => selectedSkulls.indexOf(o.skull) < 0),
     [occurrences.items, selectedSkulls],
   );
 
