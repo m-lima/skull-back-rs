@@ -11,11 +11,8 @@ export namespace path {
 }
 
 export namespace url {
-  const useTls = process.env.REACT_APP_URL_TLS === 'true' ? 's' : '';
-  const host =
-    process.env.REACT_APP_URL_HOST === undefined
-      ? 'localhost:3333'
-      : process.env.REACT_APP_URL_HOST;
+  const useTls = import.meta.env.VITE_URL_TLS === 'true' ? 's' : '';
+  const host = import.meta.env.VITE_URL_HOST ?? 'localhost:3333';
 
   export namespace ws {
     export const binary = `ws${useTls}://${host}/ws/binary`;
@@ -23,8 +20,7 @@ export namespace url {
   }
 
   export namespace access {
-    const auth =
-      process.env.REACT_APP_URL_AUTH === undefined ? host : process.env.REACT_APP_URL_AUTH;
+    const auth = import.meta.env.VITE_URL_AUTH ?? host;
     export const login = `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/login?redirect=${window.location}`;
     export const reset = `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/reset?redirect=${window.location}`;
   }

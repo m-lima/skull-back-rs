@@ -43,7 +43,7 @@ export const Filter = (props: FilterProps) => {
                 selected={new Date(start.getMillis())}
                 dateFormat='dd/MM/yyyy'
                 popperPlacement='bottom'
-                onChange={d => d && setStart(new EpochDays(d))}
+                onChange={(d: Date | null) => d && setStart(new EpochDays(d))}
               />
             </div>
             <div className='filter-input'>
@@ -52,7 +52,7 @@ export const Filter = (props: FilterProps) => {
                 selected={new Date(end.getMillis())}
                 dateFormat='dd/MM/yyyy'
                 popperPlacement='bottom'
-                onChange={d => d && setEnd(new EpochDays(d))}
+                onChange={(d: Date | null) => d && setEnd(new EpochDays(d))}
               />
             </div>
             {window && (

@@ -120,7 +120,7 @@ export const Edit = (props: EditProps) => {
               dateFormat='dd/MM/yyyy HH:mm'
               timeIntervals={15}
               popperPlacement='top'
-              onChange={d => stageMillis(d)}
+              onChange={stageMillis}
             />
           </div>
           {!!props.onDelete && (

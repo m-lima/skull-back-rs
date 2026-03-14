@@ -40,5 +40,5 @@ ${pod} run \
   --volume "${service_name}":/data \
   --rm \
   volume-updater \
-  sh -c 'rm -rf /data/* && cp -r /web/build/* /data/.'
+  sh -c 'rm -rf /data/* && cp -r /web/dist/* /data/.'
 

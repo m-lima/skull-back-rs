@@ -15,7 +15,7 @@ const store = new Store(socket);
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
-    {process.env.NODE_ENV === 'development' && <Ribbon text='Development' />}
+    {import.meta.env.DEV && <Ribbon text='Development' />}
     <StoreProvider store={store}>
       <App />
     </StoreProvider>
