@@ -61,8 +61,8 @@
           overrides.commonArgs.LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_MATH_FUNCTIONS=1";
         };
         all = helper.lib.rust.helper inputs system ./. sharedOptions;
-        server = helper.lib.rust.helper inputs system ./. (sharedOptions // { package = "server"; });
-        cli = helper.lib.rust.helper inputs system ./. (sharedOptions // { package = "cli"; });
+        server = helper.lib.rust.helper inputs system ./. (sharedOptions // { package = "-p server"; });
+        cli = helper.lib.rust.helper inputs system ./. (sharedOptions // { cargoExtraArgs = "-p cli"; });
         commonWeb = {
           nodejs = pkgs.nodejs;
 
