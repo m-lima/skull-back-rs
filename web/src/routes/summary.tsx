@@ -1,4 +1,4 @@
-import { Banner, Edit, Icon } from '../components/mod';
+import { Banner, Edit, Filter, Icon } from '../components/mod';
 import {
   check,
   skullColor,
@@ -13,7 +13,6 @@ import {
 import './summary.css';
 
 import * as datefns from 'date-fns';
-import DatePicker from 'react-datepicker';
 import { useMemo, useState } from 'react';
 
 const renderRows = (
@@ -56,6 +55,9 @@ const renderRows = (
 export const Summary = () => {
   const [start, setStart] = useState(EpochDays.today().subDays(7));
   const [end, setEnd] = useState(EpochDays.today());
+  const [selected, setSelected] = useState<Occurrence>();
+  const [showFilter, setShowFilter] = useState(false);
+  const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
   const filter = useMemo(() => {
     const effectiveEnd = end.addDays(1).getMillis();
@@ -65,9 +67,6 @@ export const Summary = () => {
   const skulls = useSkulls();
   const occurrences = useOccurrences(start, filter);
   const edit = useEditOccurrence();
-  const [selected, setSelected] = useState<Occurrence>();
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
   const skullMap = useMemo(() => {
     return skulls.items.reduce((acc, curr) => {
@@ -86,64 +85,18 @@ export const Summary = () => {
     return <Banner.Error error={error} />;
   }
 
-  if (check.pending(skulls, occurrences, edit)) {
-    return <Banner.Loading />;
-  }
-
   return (
     <>
-      <div className='summary-filter-toggle' onClick={() => setShowFilters(!showFilters)}>
-        <span id='label'>Filter</span>
-        <Icon icon={showFilters ? 'fas fa-caret-up' : 'fas fa-caret-down'} />
-      </div>
-      {showFilters && (
-        <>
-          <div className='summary-filter-inputs'>
-            <div className='summary-filter-input'>
-              <b>Start</b>
-              <DatePicker
-                selected={new Date(start.getMillis())}
-                dateFormat='dd/MM/yyyy'
-                popperPlacement='bottom'
-                onChange={d => d && setStart(new EpochDays(d))}
-              />
-            </div>
-            <div className='summary-filter-input'>
-              <b>End</b>
-              <DatePicker
-                selected={new Date(end.getMillis())}
-                dateFormat='dd/MM/yyyy'
-                popperPlacement='bottom'
-                onChange={d => d && setEnd(new EpochDays(d))}
-              />
-            </div>
-          </div>
-          <div className='summary-filter-skulls'>
-            {skulls.items.map((s, i) => (
-              <div key={i}>
-                <input
-                  id={s.name}
-                  type='checkbox'
-                  defaultChecked={selectedSkulls.find(id => id === s.id) === undefined}
-                  onChange={() => {
-                    const index = selectedSkulls.findIndex(id => id === s.id);
-                    if (index < 0) {
-                      selectedSkulls.push(s.id);
-                    } else {
-                      selectedSkulls.splice(index, 1);
-                    }
-                    setSelectedSkulls([...selectedSkulls]);
-                  }}
-                />
-                <label htmlFor={s.name} style={{ color: skullColor(s) }}>
-                  {s.name}
-                </label>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {filteredOccurrences.length === 0 ? (
+      <Filter
+        skulls={skulls.items}
+        expanded={[showFilter, setShowFilter]}
+        start={[start, setStart]}
+        end={[end, setEnd]}
+        selectedSkulls={[selectedSkulls, setSelectedSkulls]}
+      />
+      {check.pending(skulls, occurrences, edit) ? (
+        <Banner.Loading />
+      ) : filteredOccurrences.length === 0 ? (
         <Banner.Empty />
       ) : (
         <table className='summary'>

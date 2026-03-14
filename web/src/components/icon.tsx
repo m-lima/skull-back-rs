@@ -4,8 +4,6 @@ interface IconProps {
   icon: string;
   className?: string;
   margin?: boolean;
-  // TODO: Recover this vararg prop
-  // [propName: string]: any,
 }
 
 export const Icon = (props: IconProps) => {

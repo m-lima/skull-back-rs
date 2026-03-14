@@ -1,9 +1,11 @@
 .summary {
+  align-self: flex-start;
+
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 
-  margin: auto;
+  /* margin: auto; */
 }
 
 .summary th {
@@ -61,66 +63,4 @@
 
 #next:hover {
   background-color: var(--shade-3);
-}
-
-.summary-filter-toggle {
-  align-self: flex-end;
-
-  margin-bottom: calc(var(--padding-size) / 2);
-  cursor: pointer;
-}
-
-.summary-filter-toggle #label {
-  margin-right: 10px;
-
-  font-size: 100%;
-  font-weight: bold;
-}
-
-.summary-filter-inputs {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.summary-filter-input {
-  display: grid;
-  flex-grow: 1;
-  flex-basis: 130px;
-  box-sizing: border-box;
-  text-align: left;
-  border-width: 10px 0 0 10px;
-  border-style: solid;
-  border-color: transparent;
-}
-
-.summary-filter-input input {
-  appearance: none;
-
-  background: white;
-
-  width: 100%;
-  font-size: 100%;
-  font-weight: bold;
-
-  box-sizing: border-box;
-  padding: 6px 10px;
-  margin-top: 5px;
-
-  border-width: 1px;
-  border-style: solid;
-  border-color: #cccccc;
-  border-radius: 4px;
-}
-
-.summary-filter-skulls {
-  font-size: 100%;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-.summary-filter-skulls > div {
-  display: inline-block;
-  margin-left: 10px;
 }
