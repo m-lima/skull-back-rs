@@ -31,16 +31,16 @@ export const useSkulls = () => {
 
   useEffect(() => {
     const listener = store.registerSkullListener(s =>
-      setSkulls({
+      { setSkulls({
         items: s,
         pending: !store.isSkullsLoaded(),
-      }),
+      }); },
     );
-    return () => store.removeSkullListener(listener);
+    return () => { store.removeSkullListener(listener); };
   }, [store]);
 
   if (!skulls.error) {
-    store.ensureSkulls().catch(e => setSkulls({ ...skulls, error: e }));
+    store.ensureSkulls().catch(e => { setSkulls({ ...skulls, error: e }); });
   }
 
   return skulls;
@@ -55,16 +55,16 @@ export const useQuicks = () => {
 
   useEffect(() => {
     const listener = store.registerQuickListener(q =>
-      setQuicks({
+      { setQuicks({
         items: q,
         pending: !store.isQuicksLoaded(),
-      }),
+      }); },
     );
-    return () => store.removeQuickListener(listener);
+    return () => { store.removeQuickListener(listener); };
   }, [store]);
 
   if (!quicks.error) {
-    store.ensureQuicks().catch(e => setQuicks({ ...quicks, error: e }));
+    store.ensureQuicks().catch(e => { setQuicks({ ...quicks, error: e }); });
   }
 
   return quicks;
@@ -101,16 +101,16 @@ export const useOccurrences = (
 
   useEffect(() => {
     const listener = store.registerOccurrenceListener(o =>
-      setOccurrences({
+      { setOccurrences({
         items: o.filter(parsedFilter),
         pending: !store.isOccurrencesLoadedSince(startDay),
-      }),
+      }); },
     );
-    return () => store.removeOccurrenceListener(listener);
+    return () => { store.removeOccurrenceListener(listener); };
   }, [store, startDay, parsedFilter]);
 
   if (!occurrences.error) {
-    store.ensureOccurrences(startDay).catch(e => setOccurrences({ ...occurrences, error: e }));
+    store.ensureOccurrences(startDay).catch(e => { setOccurrences({ ...occurrences, error: e }); });
   }
 
   return occurrences;
@@ -125,7 +125,7 @@ export const useEditOccurrence = () => {
     setPending(true);
     return store.edit
       .create(occurrence)
-      .then(() => setPending(false))
+      .then(() => { setPending(false); })
       .catch(setError);
   };
 
@@ -133,7 +133,7 @@ export const useEditOccurrence = () => {
     setPending(true);
     return store.edit
       .update(occurrence)
-      .then(() => setPending(false))
+      .then(() => { setPending(false); })
       .catch(setError);
   };
 
@@ -141,7 +141,7 @@ export const useEditOccurrence = () => {
     setPending(true);
     return store.edit
       .remove(occurrence)
-      .then(() => setPending(false))
+      .then(() => { setPending(false); })
       .catch(setError);
   };
 

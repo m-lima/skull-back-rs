@@ -8,7 +8,7 @@ interface IconProps {
 
 export const Icon = (props: IconProps) => {
   let newClass = props.icon;
-  if (!!props.className) {
+  if (props.className) {
     newClass += ` ${props.className}`;
   }
 

@@ -231,7 +231,7 @@ export class Store {
     if (index >= 0) {
       this.skulls.splice(index, 1);
 
-      let quicksLength = this.quicks.length;
+      const quicksLength = this.quicks.length;
       this.quicks = this.quicks.filter(q => q.skull.id !== id);
       if (quicksLength > this.quicks.length) {
         this.broadcastQuicks();
@@ -352,23 +352,23 @@ export class Store {
     return new Promise((accept, reject) => {
       this.pendingRequests.push(() =>
         request()
-          .then(ok => accept(ok))
-          .catch(err => reject(err)),
+          .then(ok => { accept(ok); })
+          .catch(err => { reject(err); }),
       );
     });
   }
 
   private ensureAll() {
     if (this.hasSkulls) {
-      querySealed.getSkulls(this.socket).then(skulls => this.setSkulls(skulls));
+      querySealed.getSkulls(this.socket).then(skulls => { this.setSkulls(skulls); });
     }
     if (this.hasQuicks) {
-      querySealed.getQuicks(this.socket).then(quicks => this.setQuicks(quicks));
+      querySealed.getQuicks(this.socket).then(quicks => { this.setQuicks(quicks); });
     }
-    if (!!this.hasOccurrencesSince) {
+    if (this.hasOccurrencesSince) {
       querySealed
         .getOccurrences(this.socket, this.hasOccurrencesSince)
-        .then(occurrences => this.setOccurrences(occurrences));
+        .then(occurrences => { this.setOccurrences(occurrences); });
     }
   }
 

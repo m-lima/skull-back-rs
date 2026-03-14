@@ -27,10 +27,10 @@ const buildSkullButton = (
     className='grid-button grid-button-quick'
     title={
       `Skull: ${quick.skull.name}\nAmount: ${quick.amount}` +
-      (!!quick.skull.limit ? `\nLimit: ${quick.skull.limit}` : '')
+      (quick.skull.limit ? `\nLimit: ${quick.skull.limit}` : '')
     }
     style={{ background: skullColor(quick.skull) }}
-    onClick={() => setSelected(quick)}
+    onClick={() => { setSelected(quick); }}
   >
     <Icon icon={quick.skull.icon} />
     <div className='grid-button-amount' id={idForQuick(skullAmounts, quick)}>
@@ -43,7 +43,7 @@ const newSkull = (skulls: Skull[], setSelected: (q: Quick) => void) => (
   <div
     className='grid-button'
     style={{ background: 'gray' }}
-    onClick={() => setSelected({ skull: skulls[0], amount: 1 })}
+    onClick={() => { setSelected({ skull: skulls[0], amount: 1 }); }}
   >
     <Icon icon='fas fa-plus' />
   </div>
@@ -74,7 +74,7 @@ export const Grid = () => {
   const skullAmount = useMemo(() => {
     return occurrences.items.reduce((acc, curr) => {
       let amount = acc.get(curr.skull);
-      if (!!amount) {
+      if (amount) {
         amount += curr.amount;
       } else {
         amount = curr.amount;
@@ -85,7 +85,7 @@ export const Grid = () => {
   }, [occurrences.items]);
 
   const error = check.error(skulls, quicks, occurrences, edit);
-  if (!!error) {
+  if (error) {
     return <Banner.Error error={error} />;
   }
 
@@ -117,7 +117,7 @@ export const Grid = () => {
               setSelected(undefined);
             });
           }}
-          onCancel={() => setSelected(undefined)}
+          onCancel={() => { setSelected(undefined); }}
         />
       )}
     </>

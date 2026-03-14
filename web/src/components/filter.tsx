@@ -30,7 +30,7 @@ export const Filter = (props: FilterProps) => {
 
   return (
     <>
-      <div className='filter-toggle' onClick={() => setExpanded(!expanded)}>
+      <div className='filter-toggle' onClick={() => { setExpanded(!expanded); }}>
         <span id='label'>Filter</span>
         <Icon icon={expanded ? 'fas fa-caret-up' : 'fas fa-caret-down'} />
       </div>
@@ -68,7 +68,7 @@ export const Filter = (props: FilterProps) => {
                       window.set(parsed);
                     }
                   }}
-                  onBlur={() => setWindowStr(window.value.toString())}
+                  onBlur={() => { setWindowStr(window.value.toString()); }}
                 />
               </div>
             )}
@@ -79,7 +79,7 @@ export const Filter = (props: FilterProps) => {
                 <input
                   type='checkbox'
                   checked={showLimits.value}
-                  onChange={() => showLimits.set(!showLimits.value)}
+                  onChange={() => { showLimits.set(!showLimits.value); }}
                 />
                 <label>Limits</label>
               </div>

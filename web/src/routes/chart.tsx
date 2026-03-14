@@ -228,7 +228,7 @@ export const Chart = () => {
   ]);
 
   const error = check.error(skulls, occurrences);
-  if (!!error) {
+  if (error) {
     return <Banner.Error error={error} />;
   }
 

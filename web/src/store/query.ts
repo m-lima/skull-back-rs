@@ -15,7 +15,7 @@ export namespace sealed {
     return socket.request({ id, skull: 'list' }, (message: any) => {
       const response = validateMessage(message, id, 'skulls');
 
-      if (!!response) {
+      if (response) {
         return response.map(modelSealed.makeSkull);
       }
     });
@@ -26,7 +26,7 @@ export namespace sealed {
     return socket.request({ id, occurrence: 'quick' }, (message: any) => {
       const response = validateMessage(message, id, 'quicks');
 
-      if (!!response) {
+      if (response) {
         return response.map(modelSealed.makeRawQuick);
       }
     });
@@ -51,7 +51,7 @@ export namespace sealed {
       (message: any) => {
         const response = validateMessage(message, id, 'occurrences');
 
-        if (!!response) {
+        if (response) {
           return response.map(modelSealed.makeOccurrence);
         }
       },
@@ -122,7 +122,7 @@ export namespace sealed {
     const validateEditMessage = (message: any, id: number, action: string) => {
       const response = validateMessage(message, id, 'change');
 
-      if (!!response) {
+      if (response) {
         if (response === action) {
           return true;
         } else {

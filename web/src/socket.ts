@@ -59,14 +59,14 @@ class RequestHandler<Message, Response> implements Handler<Message> {
     this.accept = accept;
     this.reject = reject;
 
-    setTimeout(() => reject(new Timeout(timeout)), timeout);
+    setTimeout(() => { reject(new Timeout(timeout)); }, timeout);
   }
 
   handle(message: Message): boolean {
     try {
       const response = this.handleInner(message);
 
-      if (!!response) {
+      if (response) {
         this.accept(response);
         return true;
       } else {

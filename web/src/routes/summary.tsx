@@ -38,7 +38,7 @@ const renderRows = (
     }
 
     return (
-      <tr id={id ? 'bright' : 'dark'} key={index} onClick={() => setSelected(occurrence)}>
+      <tr id={id ? 'bright' : 'dark'} key={index} onClick={() => { setSelected(occurrence); }}>
         <td id='icon' style={{ color: skullColor(skull) }}>
           <Icon icon={skull.icon} />
         </td>
@@ -81,7 +81,7 @@ export const Summary = () => {
   );
 
   const error = check.error(skulls, occurrences, edit);
-  if (!!error) {
+  if (error) {
     return <Banner.Error error={error} />;
   }
 
@@ -118,12 +118,12 @@ export const Summary = () => {
           millis={selected.millis}
           skulls={skulls.items}
           onAccept={occurrence => {
-            edit.update({ ...occurrence, id: selected.id }).then(() => setSelected(undefined));
+            edit.update({ ...occurrence, id: selected.id }).then(() => { setSelected(undefined); });
           }}
           onDelete={() => {
-            edit.remove(selected).then(() => setSelected(undefined));
+            edit.remove(selected).then(() => { setSelected(undefined); });
           }}
-          onCancel={() => setSelected(undefined)}
+          onCancel={() => { setSelected(undefined); }}
         />
       )}
     </>

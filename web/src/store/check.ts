@@ -3,7 +3,7 @@ import { StoreStatus } from './model';
 export namespace check {
   export const error = (...states: StoreStatus[]) => {
     for (const state of states) {
-      if (!!state.error) {
+      if (state.error) {
         return state.error;
       }
     }
