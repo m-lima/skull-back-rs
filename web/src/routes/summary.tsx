@@ -1,5 +1,14 @@
 import { Banner, Edit, Icon } from '../components/mod';
-import { check, skullColor, useEditOccurrence, useOccurrences, useSkulls, EpochDays, Occurrence, Skull } from '../store/mod';
+import {
+  check,
+  skullColor,
+  useEditOccurrence,
+  useOccurrences,
+  useSkulls,
+  EpochDays,
+  Occurrence,
+  Skull,
+} from '../store/mod';
 
 import './summary.css';
 
@@ -7,7 +16,11 @@ import * as datefns from 'date-fns';
 import DatePicker from 'react-datepicker';
 import { useMemo, useState } from 'react';
 
-const renderRows = (occurrences: Occurrence[], skullMap: Map<number, Skull>, setSelected: (o: Occurrence) => void) => {
+const renderRows = (
+  occurrences: Occurrence[],
+  skullMap: Map<number, Skull>,
+  setSelected: (o: Occurrence) => void,
+) => {
   let id = true;
   let day = Number.NaN;
 
@@ -26,11 +39,7 @@ const renderRows = (occurrences: Occurrence[], skullMap: Map<number, Skull>, set
     }
 
     return (
-      <tr
-        id={id ? 'bright' : 'dark'}
-        key={index}
-        onClick={() => setSelected(occurrence)}
-      >
+      <tr id={id ? 'bright' : 'dark'} key={index} onClick={() => setSelected(occurrence)}>
         <td id='icon' style={{ color: skullColor(skull) }}>
           <Icon icon={skull.icon} />
         </td>
@@ -48,13 +57,10 @@ export const Summary = () => {
   const [start, setStart] = useState(EpochDays.today().subDays(7));
   const [end, setEnd] = useState(EpochDays.today());
 
-  const filter = useMemo(
-    () => {
-      const effectiveEnd = end.addDays(1).getMillis();
-      return (o: Occurrence) => o.millis.getTime() <= effectiveEnd;
-    },
-    [end],
-  );
+  const filter = useMemo(() => {
+    const effectiveEnd = end.addDays(1).getMillis();
+    return (o: Occurrence) => o.millis.getTime() <= effectiveEnd;
+  }, [end]);
 
   const skulls = useSkulls();
   const occurrences = useOccurrences(start, filter);
@@ -63,15 +69,12 @@ export const Summary = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
-  const skullMap = useMemo(
-    () => {
-      return skulls.items.reduce((acc, curr) => {
-        acc.set(curr.id, curr);
-        return acc;
-      }, new Map<number, Skull>());
-    },
-    [skulls],
-  );
+  const skullMap = useMemo(() => {
+    return skulls.items.reduce((acc, curr) => {
+      acc.set(curr.id, curr);
+      return acc;
+    }, new Map<number, Skull>());
+  }, [skulls]);
 
   const filteredOccurrences = useMemo(
     () => occurrences.items.filter(o => selectedSkulls.indexOf(o.skull) < 0),
@@ -89,14 +92,11 @@ export const Summary = () => {
 
   return (
     <>
-      <div
-        className='summary-filter-toggle'
-        onClick={() => setShowFilters(!showFilters)}
-      >
+      <div className='summary-filter-toggle' onClick={() => setShowFilters(!showFilters)}>
         <span id='label'>Filter</span>
         <Icon icon={showFilters ? 'fas fa-caret-up' : 'fas fa-caret-down'} />
       </div>
-      {showFilters &&
+      {showFilters && (
         <>
           <div className='summary-filter-inputs'>
             <div className='summary-filter-input'>
@@ -119,7 +119,7 @@ export const Summary = () => {
             </div>
           </div>
           <div className='summary-filter-skulls'>
-            {skulls.items.map((s, i) =>
+            {skulls.items.map((s, i) => (
               <div key={i}>
                 <input
                   id={s.name}
@@ -135,15 +135,18 @@ export const Summary = () => {
                     setSelectedSkulls([...selectedSkulls]);
                   }}
                 />
-                <label htmlFor={s.name} style={{ color: skullColor(s) }}>{s.name}</label>
+                <label htmlFor={s.name} style={{ color: skullColor(s) }}>
+                  {s.name}
+                </label>
               </div>
-            )}
+            ))}
           </div>
         </>
-      }
-      {(filteredOccurrences.length === 0)
-        ? <Banner.Empty />
-        : <table className='summary'>
+      )}
+      {filteredOccurrences.length === 0 ? (
+        <Banner.Empty />
+      ) : (
+        <table className='summary'>
           <tbody>
             <tr>
               <th id='icon' />
@@ -154,24 +157,22 @@ export const Summary = () => {
             {renderRows(filteredOccurrences, skullMap, setSelected)}
           </tbody>
         </table>
-      }
-      {selected &&
+      )}
+      {selected && (
         <Edit
           skull={skullMap.get(selected.skull)!}
           amount={selected.amount}
           millis={selected.millis}
           skulls={skulls.items}
           onAccept={occurrence => {
-            edit.update({ ...occurrence, id: selected.id })
-              .then(() => setSelected(undefined))
+            edit.update({ ...occurrence, id: selected.id }).then(() => setSelected(undefined));
           }}
           onDelete={() => {
-            edit.remove(selected)
-              .then(() => setSelected(undefined))
+            edit.remove(selected).then(() => setSelected(undefined));
           }}
           onCancel={() => setSelected(undefined)}
         />
-      }
+      )}
     </>
   );
-}
+};

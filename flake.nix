@@ -37,9 +37,16 @@
           systemLinker = pkgs.stdenv.isLinux;
           formatters = {
             beautysh.enable = true;
+            prettier = {
+              enable = true;
+              settings = builtins.fromJSON (builtins.readFile ./web/.prettierrc.json);
+            };
           };
           fmtExcludes = [
-            "Dockerfile"
+            "*.png"
+            "*.sqlite"
+            "*.txt"
+            "*Dockerfile"
             ".dockerignore"
             "store/.sqlx/*.json"
             "store/migrations/*.sql"

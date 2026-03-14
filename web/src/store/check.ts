@@ -1,4 +1,4 @@
-import { StoreStatus } from "./model";
+import { StoreStatus } from './model';
 
 export namespace check {
   export const error = (...states: StoreStatus[]) => {
@@ -7,7 +7,7 @@ export namespace check {
         return state.error;
       }
     }
-  }
+  };
 
   export const pending = (...states: StoreStatus[]) => {
     for (const state of states) {
@@ -16,6 +16,5 @@ export namespace check {
       }
     }
     return false;
-  }
+  };
 }
-

@@ -8,19 +8,19 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { useRef, useState } from 'react';
 
 interface EditProps {
-  skull: Skull,
-  amount: number,
-  millis?: Date,
-  skulls: Skull[],
+  skull: Skull;
+  amount: number;
+  millis?: Date;
+  skulls: Skull[];
   onAccept: (value: ProtoOccurrence) => void;
   onDelete?: () => void;
   onCancel: () => void;
 }
 
 interface StagedOccurrence {
-  skull: Skull,
-  amount: string,
-  millis: Date,
+  skull: Skull;
+  amount: string;
+  millis: Date;
 }
 
 export const Edit = (props: EditProps) => {
@@ -33,9 +33,10 @@ export const Edit = (props: EditProps) => {
   const amountRef = useRef<HTMLInputElement>(null);
 
   const stageSkull = (skull: string | number) => {
-    const maybeSkull = typeof skull === 'string'
-      ? props.skulls.find(s => s.name === skull)
-      : props.skulls.find(s => s.id === skull);
+    const maybeSkull =
+      typeof skull === 'string'
+        ? props.skulls.find(s => s.name === skull)
+        : props.skulls.find(s => s.id === skull);
     if (!!maybeSkull) {
       setStagedValue({
         ...stagedValue,
@@ -49,7 +50,7 @@ export const Edit = (props: EditProps) => {
       ...stagedValue,
       amount: amount.replace(',', '.'),
     });
-  }
+  };
 
   const stageMillis = (millis: Date | null) => {
     if (!!millis) {
@@ -58,7 +59,7 @@ export const Edit = (props: EditProps) => {
         millis: millis,
       });
     }
-  }
+  };
 
   const commit = () => {
     if (markedForDeletion) {
@@ -124,10 +125,7 @@ export const Edit = (props: EditProps) => {
           </div>
           {!!props.onDelete && (
             <div className='edit-input'>
-              <div
-                className='edit-delete'
-                onClick={() => setMarkedForDeletion(!markedForDeletion)}
-              >
+              <div className='edit-delete' onClick={() => setMarkedForDeletion(!markedForDeletion)}>
                 <Icon icon='fas fa-trash' />
               </div>
             </div>
@@ -144,4 +142,4 @@ export const Edit = (props: EditProps) => {
       </div>
     </div>
   );
-}
+};

@@ -30,7 +30,7 @@ class SocketStateListener {
 }
 
 export interface Handler<Message> {
-  handle(message: Message): boolean,
+  handle(message: Message): boolean;
 }
 
 class GlobalHandler<Message> implements Handler<Message> {
@@ -104,22 +104,34 @@ export class Socket {
     const socket = new WebSocket(url);
     socket.binaryType = 'arraybuffer';
 
-    socket.addEventListener('error', () => {
-      this.tryCheckAuthorized(checkUrl);
-      this.setState(SocketState.Error);
-    }, false);
+    socket.addEventListener(
+      'error',
+      () => {
+        this.tryCheckAuthorized(checkUrl);
+        this.setState(SocketState.Error);
+      },
+      false,
+    );
 
-    socket.addEventListener('close', () => {
-      if (this.state !== SocketState.Error) {
-        this.setState(SocketState.Closed);
-      }
+    socket.addEventListener(
+      'close',
+      () => {
+        if (this.state !== SocketState.Error) {
+          this.setState(SocketState.Closed);
+        }
 
-      this.tryReconnect(url, checkUrl);
-    }, false);
+        this.tryReconnect(url, checkUrl);
+      },
+      false,
+    );
 
-    socket.addEventListener('open', () => {
-      this.setState(SocketState.Open);
-    }, false);
+    socket.addEventListener(
+      'open',
+      () => {
+        this.setState(SocketState.Open);
+      },
+      false,
+    );
 
     socket.onmessage = this.onMessage.bind(this);
 
@@ -158,7 +170,7 @@ export class Socket {
             this.setState(SocketState.Forbidden);
           }
         })
-        .catch(() => { });
+        .catch(() => {});
     }
   }
 
@@ -185,7 +197,11 @@ export class Socket {
       }
 
       // If we are authorized and still have attempts, mark it as connecting
-      if (state !== SocketState.Unauthorized && state !== SocketState.Forbidden && this.nextAttempt() !== undefined) {
+      if (
+        state !== SocketState.Unauthorized &&
+        state !== SocketState.Forbidden &&
+        this.nextAttempt() !== undefined
+      ) {
         this.state = SocketState.Connecting;
       } else {
         this.state = state;
@@ -224,7 +240,7 @@ export class Socket {
   public async request<Message, Response, Request>(
     request: Request,
     handler: (message: Message) => Response | undefined,
-    timeout: number = 30000
+    timeout: number = 30000,
   ): Promise<Response> {
     const payload = encode(request);
     const id = Math.random();

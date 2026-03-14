@@ -7,13 +7,13 @@ export namespace sealed {
 }
 
 interface StoreProviderProps {
-  store: Store,
+  store: Store;
 }
 
 export const StoreProvider = (props: PropsWithChildren<StoreProviderProps>) => {
   return (
-    <sealed.StoreContext.Provider value={props.store} >
+    <sealed.StoreContext.Provider value={props.store}>
       {props.children}
     </sealed.StoreContext.Provider>
   );
-}
+};

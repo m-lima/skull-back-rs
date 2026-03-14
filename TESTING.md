@@ -1,16 +1,19 @@
 # Behind nginx on nix
 
 ## Backend
+
 ```bash
 $ cargo r -p server -- -U <user> -c -vvv -s 8558 <location>
 ```
 
 ## Frontend
+
 ```bash
 $ PORT=8855 WDS_SOCKET_PATH='/ws' WDS_SOCKET_PORT='0' REACT_APP_URL_HOST='<host>' REACT_APP_URL_TLS='true' REACT_APP_URL_AUTH='<auth_host>' yarn start
 ```
 
 ## Nginx
+
 ```nginx
 
 nginx = {

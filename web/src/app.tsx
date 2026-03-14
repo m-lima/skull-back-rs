@@ -45,20 +45,18 @@ const App = () => {
 
   return (
     <Router>
-      {socketState === SocketState.Connecting && <div className='skull-connecting'><Spinner className='skull-connecting-spinner' margin />Connecting..</div>}
+      {socketState === SocketState.Connecting && (
+        <div className='skull-connecting'>
+          <Spinner className='skull-connecting-spinner' margin />
+          Connecting..
+        </div>
+      )}
       <div className='skull'>
         <Routes>
           {routes.map((route, key) => (
-            <Route
-              key={key}
-              path={route.path}
-              element={route.element}
-            />)
-          )}
-          <Route
-            path='/*'
-            element=<Navigate to={routes[0].path} />
-          />
+            <Route key={key} path={route.path} element={route.element} />
+          ))}
+          <Route path='/*' element=<Navigate to={routes[0].path} /> />
         </Routes>
       </div>
       <Footer routes={routes} />

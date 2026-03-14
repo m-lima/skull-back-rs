@@ -12,7 +12,7 @@ export const Loading = () => (
 );
 
 interface ErrorProps {
-  error?: any,
+  error?: any;
 }
 
 export const Error = (props: ErrorProps) => {
@@ -26,17 +26,13 @@ export const Error = (props: ErrorProps) => {
     );
   }
 
-  const icon = props.error.kind === ErrorKind.Timeout
-    ? 'fas fa-clock'
-    : 'fas fa-sad-tear';
+  const icon = props.error.kind === ErrorKind.Timeout ? 'fas fa-clock' : 'fas fa-sad-tear';
 
   return (
     <div className='banner'>
       <Icon icon={icon} />
       {props.error.kindString()}
-      <code className='banner-error-message'>
-        {props.error.message}
-      </code>
+      <code className='banner-error-message'>{props.error.message}</code>
       <Refresh />
     </div>
   );
@@ -88,20 +84,23 @@ export const NoSkulls = () => (
   </div>
 );
 
-const Refresh = () =>
-    <a className='banner-action' href={window.location.href}>
-      <Icon margin icon='fas fa-sync' />
-      Refresh
-    </a>
+const Refresh = () => (
+  <a className='banner-action' href={window.location.href}>
+    <Icon margin icon='fas fa-sync' />
+    Refresh
+  </a>
+);
 
-const Login = () =>
-    <a className='banner-action' href={util.url.access.login}>
-      <Icon margin icon='fas fa-sync' />
-      Refresh
-    </a>
+const Login = () => (
+  <a className='banner-action' href={util.url.access.login}>
+    <Icon margin icon='fas fa-sync' />
+    Refresh
+  </a>
+);
 
-const Reset = () =>
-    <a className='banner-action' href={util.url.access.reset}>
-      <Icon margin icon='fas fa-sign-in-alt' />
-     Login
-    </a>
+const Reset = () => (
+  <a className='banner-action' href={util.url.access.reset}>
+    <Icon margin icon='fas fa-sign-in-alt' />
+    Login
+  </a>
+);

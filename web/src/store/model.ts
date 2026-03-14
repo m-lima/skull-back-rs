@@ -1,53 +1,56 @@
 import * as datefns from 'date-fns';
 
 export interface Skull {
-  id: number,
-  name: string,
-  color: number,
-  icon: string,
-  price: number,
-  limit?: number,
+  id: number;
+  name: string;
+  color: number;
+  icon: string;
+  price: number;
+  limit?: number;
 }
 
 const opacityToHex = (opacity?: string | number) =>
   opacity === undefined
     ? ''
-    : (typeof (opacity) === 'string')
+    : typeof opacity === 'string'
       ? opacity
-      : Math.floor(255 * opacity).toString(16).padStart(2, '0');
+      : Math.floor(255 * opacity)
+          .toString(16)
+          .padStart(2, '0');
 
-export const skullColor = (skull: { color: number }, opacity?: number) => `#${skull.color.toString(16).padStart(6, '0')}${opacityToHex(opacity)}`;
+export const skullColor = (skull: { color: number }, opacity?: number) =>
+  `#${skull.color.toString(16).padStart(6, '0')}${opacityToHex(opacity)}`;
 
 export interface RawQuick {
-  skull: number,
-  amount: number,
+  skull: number;
+  amount: number;
 }
 
 export interface Quick {
-  skull: Skull,
-  amount: number,
+  skull: Skull;
+  amount: number;
 }
 
 export interface Occurrence {
-  id: number,
-  skull: number,
-  amount: number,
-  millis: Date,
+  id: number;
+  skull: number;
+  amount: number;
+  millis: Date;
 }
 
 export interface ProtoOccurrence {
-  skull: number,
-  amount: number,
-  millis: Date,
+  skull: number;
+  amount: number;
+  millis: Date;
 }
 
 export interface Response<T> extends StoreStatus {
-  items: T[],
+  items: T[];
 }
 
 export interface StoreStatus {
-  pending: boolean,
-  error?: any,
+  pending: boolean;
+  error?: any;
 }
 
 export class EpochDays {
@@ -70,9 +73,7 @@ export class EpochDays {
   }
 
   public static toBoundary(date: EpochDays | Date | number) {
-    const millis = (date instanceof EpochDays)
-      ? date.millis
-      : EpochDays.clampToHours(date);
+    const millis = date instanceof EpochDays ? date.millis : EpochDays.clampToHours(date);
 
     return datefns.subHours(millis, 5).getTime();
   }
@@ -114,7 +115,7 @@ export namespace sealed {
     return {
       skull: q[0],
       amount: Number(q[1].toFixed(3)),
-    }
+    };
   };
 
   export const makeOccurrence = (o: [number, number, number, number]) => {
@@ -123,6 +124,6 @@ export namespace sealed {
       skull: o[1],
       amount: Number(o[2].toFixed(3)),
       millis: new Date(o[3]),
-    }
+    };
   };
 }

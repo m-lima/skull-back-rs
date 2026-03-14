@@ -1,6 +1,16 @@
 import * as Banner from '../components/banner';
 import { Edit, Icon } from '../components/mod';
-import { check, skullColor, useSkulls, useQuicks, useOccurrences, Skull, Quick, EpochDays, useEditOccurrence } from '../store/mod';
+import {
+  check,
+  skullColor,
+  useSkulls,
+  useQuicks,
+  useOccurrences,
+  Skull,
+  Quick,
+  EpochDays,
+  useEditOccurrence,
+} from '../store/mod';
 
 import './grid.css';
 
@@ -23,13 +33,10 @@ const buildSkullButton = (
     onClick={() => setSelected(quick)}
   >
     <Icon icon={quick.skull.icon} />
-    <div
-      className='grid-button-amount'
-      id={idForQuick(skullAmounts, quick)}
-    >
+    <div className='grid-button-amount' id={idForQuick(skullAmounts, quick)}>
       {quick.amount}
     </div>
-  </div >
+  </div>
 );
 
 const newSkull = (skulls: Skull[], setSelected: (q: Quick) => void) => (
@@ -39,13 +46,10 @@ const newSkull = (skulls: Skull[], setSelected: (q: Quick) => void) => (
     onClick={() => setSelected({ skull: skulls[0], amount: 1 })}
   >
     <Icon icon='fas fa-plus' />
-  </div >
+  </div>
 );
 
-const idForQuick = (
-  skullAmounts: Map<number, number>,
-  quick: Quick,
-) => {
+const idForQuick = (skullAmounts: Map<number, number>, quick: Quick) => {
   if (quick.skull.limit && skullAmounts.has(quick.skull.id)) {
     const skullAmount = skullAmounts.get(quick.skull.id)! + quick.amount;
     if (skullAmount >= quick.skull.limit) {
@@ -68,17 +72,16 @@ export const Grid = () => {
   const [selected, setSelected] = useState<Quick>();
 
   const skullAmount = useMemo(() => {
-    return occurrences.items
-      .reduce((acc, curr) => {
-        let amount = acc.get(curr.skull);
-        if (!!amount) {
-          amount += curr.amount;
-        } else {
-          amount = curr.amount;
-        }
-        acc.set(curr.skull, amount);
-        return acc;
-      }, new Map<number, number>());
+    return occurrences.items.reduce((acc, curr) => {
+      let amount = acc.get(curr.skull);
+      if (!!amount) {
+        amount += curr.amount;
+      } else {
+        amount = curr.amount;
+      }
+      acc.set(curr.skull, amount);
+      return acc;
+    }, new Map<number, number>());
   }, [occurrences.items]);
 
   const error = check.error(skulls, quicks, occurrences, edit);
@@ -97,11 +100,9 @@ export const Grid = () => {
   return (
     <>
       <div className='grid'>
-        {
-        quicks.items.length > 0
+        {quicks.items.length > 0
           ? quicks.items.map((q, i) => buildSkullButton(q, i, skullAmount, setSelected))
-          : newSkull(skulls.items, setSelected)
-        }
+          : newSkull(skulls.items, setSelected)}
       </div>
       {selected && (
         <Edit
@@ -109,13 +110,12 @@ export const Grid = () => {
           amount={selected.amount}
           skulls={skulls.items}
           onAccept={occurrence => {
-            edit.create(occurrence)
-              .then(() => {
-                if (occurrences.items.length === 0) {
-                  window.location.reload();
-                }
-                setSelected(undefined)
-              })
+            edit.create(occurrence).then(() => {
+              if (occurrences.items.length === 0) {
+                window.location.reload();
+              }
+              setSelected(undefined);
+            });
           }}
           onCancel={() => setSelected(undefined)}
         />

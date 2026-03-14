@@ -1,6 +1,14 @@
 import { Socket, SocketState } from '../socket';
 import { sealed as querySealed } from './query';
-import { sealed as modelSealed, Occurrence, Quick, RawQuick, Skull, EpochDays, ProtoOccurrence } from './model';
+import {
+  sealed as modelSealed,
+  Occurrence,
+  Quick,
+  RawQuick,
+  Skull,
+  EpochDays,
+  ProtoOccurrence,
+} from './model';
 
 export class Store {
   private readonly socket: Socket;
@@ -111,14 +119,15 @@ export class Store {
     this.fetchingSkulls = true;
 
     return this.wrapRequest(() =>
-      querySealed.getSkulls(this.socket)
+      querySealed
+        .getSkulls(this.socket)
         .then(skulls => {
           this.hasSkulls = true;
           this.setSkulls(skulls, true);
         })
         .finally(() => {
           this.fetchingSkulls = false;
-        })
+        }),
     );
   }
 
@@ -138,14 +147,15 @@ export class Store {
     this.fetchingQuicks = true;
 
     return this.wrapRequest(() =>
-      querySealed.getQuicks(this.socket)
+      querySealed
+        .getQuicks(this.socket)
         .then(quicks => {
           this.hasQuicks = true;
           this.setQuicks(quicks, true);
         })
         .finally(() => {
           this.fetchingQuicks = false;
-        })
+        }),
     );
   }
 
@@ -165,14 +175,15 @@ export class Store {
     this.fetchingOccurrences = true;
 
     return this.wrapRequest(() =>
-      querySealed.getOccurrences(this.socket, start, this.hasOccurrencesSince)
+      querySealed
+        .getOccurrences(this.socket, start, this.hasOccurrencesSince)
         .then(occurrences => {
           this.hasOccurrencesSince = start;
           this.setOccurrences(occurrences, true);
         })
         .finally(() => {
           this.fetchingOccurrences = false;
-        })
+        }),
     );
   }
 
@@ -181,15 +192,12 @@ export class Store {
   }
 
   public edit = {
-    create: (occurrence: ProtoOccurrence) => this.wrapRequest(() =>
-      querySealed.edit.create(this.socket, occurrence)
-    ),
-    update: (occurrence: Occurrence) => this.wrapRequest(() =>
-      querySealed.edit.update(this.socket, occurrence)
-    ),
-    remove: (occurrence: Occurrence) => this.wrapRequest(() =>
-      querySealed.edit.remove(this.socket, occurrence)
-    ),
+    create: (occurrence: ProtoOccurrence) =>
+      this.wrapRequest(() => querySealed.edit.create(this.socket, occurrence)),
+    update: (occurrence: Occurrence) =>
+      this.wrapRequest(() => querySealed.edit.update(this.socket, occurrence)),
+    remove: (occurrence: Occurrence) =>
+      this.wrapRequest(() => querySealed.edit.remove(this.socket, occurrence)),
   };
 
   private setSkulls(skulls: Skull[], forceBroadcast: boolean = false) {
@@ -248,7 +256,9 @@ export class Store {
       }
 
       const quick = { ...rawQuick, skull };
-      const index = this.quicks.findIndex(q => q.skull === quick.skull && q.amount === quick.amount);
+      const index = this.quicks.findIndex(
+        q => q.skull === quick.skull && q.amount === quick.amount,
+      );
       if (index < 0) {
         this.quicks.push(quick);
       } else {
@@ -334,29 +344,30 @@ export class Store {
     return modified;
   }
 
-  private wrapRequest<T>(
-    request: () => Promise<T>
-  ): Promise<T> {
+  private wrapRequest<T>(request: () => Promise<T>): Promise<T> {
     if (this.socket.getState() === SocketState.Open) {
       return request();
     }
 
     return new Promise((accept, reject) => {
-      this.pendingRequests.push(() => request().then(ok => accept(ok)).catch(err => reject(err)));
+      this.pendingRequests.push(() =>
+        request()
+          .then(ok => accept(ok))
+          .catch(err => reject(err)),
+      );
     });
   }
 
   private ensureAll() {
     if (this.hasSkulls) {
-      querySealed.getSkulls(this.socket)
-        .then(skulls => this.setSkulls(skulls));
+      querySealed.getSkulls(this.socket).then(skulls => this.setSkulls(skulls));
     }
     if (this.hasQuicks) {
-      querySealed.getQuicks(this.socket)
-        .then(quicks => this.setQuicks(quicks));
+      querySealed.getQuicks(this.socket).then(quicks => this.setQuicks(quicks));
     }
     if (!!this.hasOccurrencesSince) {
-      querySealed.getOccurrences(this.socket, this.hasOccurrencesSince)
+      querySealed
+        .getOccurrences(this.socket, this.hasOccurrencesSince)
         .then(occurrences => this.setOccurrences(occurrences));
     }
   }

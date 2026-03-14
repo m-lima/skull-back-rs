@@ -33,7 +33,7 @@ export class ErrorMessage {
 
     this.kind = parseKind(error.kind);
 
-    if (!!error['message'] && typeof (error.message) === 'string') {
+    if (!!error['message'] && typeof error.message === 'string') {
       this.message = error.message;
     } else {
       this.message = kindToString(this.kind);
@@ -65,7 +65,7 @@ const parseKind = (kind?: string): ErrorKind => {
     default:
       return ErrorKind.Unknown;
   }
-}
+};
 
 const kindToString = (kind: ErrorKind) => {
   switch (kind) {
@@ -82,4 +82,4 @@ const kindToString = (kind: ErrorKind) => {
     default:
       return 'Unknown Error';
   }
-}
+};

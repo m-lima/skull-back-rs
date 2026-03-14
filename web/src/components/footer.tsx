@@ -5,13 +5,13 @@ import './footer.css';
 import { Link, useLocation } from 'react-router-dom';
 
 interface Route {
-  path: string,
-  title: string,
-  icon: string,
+  path: string;
+  title: string;
+  icon: string;
 }
 
 interface FooterProps {
-  routes: Route[],
+  routes: Route[];
 }
 
 export const Footer = (props: FooterProps) => {

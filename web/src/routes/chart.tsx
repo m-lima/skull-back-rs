@@ -18,13 +18,7 @@ import DatePicker from 'react-datepicker';
 import { useMemo, useState } from 'react';
 import * as datefns from 'date-fns';
 
-ChartJS.register(
-  LineElement,
-  LinearScale,
-  PointElement,
-  TimeScale,
-  Tooltip,
-);
+ChartJS.register(LineElement, LinearScale, PointElement, TimeScale, Tooltip);
 
 const options = {
   responsive: true,
@@ -41,8 +35,13 @@ const options = {
 
 const alternatingDaysPlugin: Plugin = {
   id: 'alternatingDays',
-  beforeDraw: (chart) => {
-    const { ctx, canvas, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+  beforeDraw: chart => {
+    const {
+      ctx,
+      canvas,
+      chartArea: { top, bottom, left, right },
+      scales: { x },
+    } = chart;
 
     ctx.save();
     ctx.beginPath();
@@ -61,7 +60,7 @@ const alternatingDaysPlugin: Plugin = {
           ? [a => datefns.subMonths(a, 1), datefns.startOfMonth]
           : span >= 30
             ? [a => datefns.subWeeks(a, 1), datefns.startOfWeek]
-            : [a => datefns.subDays(a, 1), datefns.startOfDay]
+            : [a => datefns.subDays(a, 1), datefns.startOfDay];
     const minDay = new Date(x.min);
 
     let currDay = new Date(x.max);
@@ -72,7 +71,7 @@ const alternatingDaysPlugin: Plugin = {
       const endX = x.getPixelForValue(currDay.getTime());
 
       ctx.fillStyle = isDark ? dark : bright;
-      ctx.fillRect(startX, top, endX - startX, bottom - top)
+      ctx.fillRect(startX, top, endX - startX, bottom - top);
 
       currDay = prevDay;
       prevDay = stepper(prevDay);
@@ -84,7 +83,7 @@ const alternatingDaysPlugin: Plugin = {
 };
 
 const VALID_UNITS = ['m', 'w', 'd', 'h'] as const;
-type Unit = typeof VALID_UNITS[number];
+type Unit = (typeof VALID_UNITS)[number];
 
 class Timeframe {
   amount: number;
@@ -121,14 +120,19 @@ class Timeframe {
     return new Timeframe(amount, unit);
   }
 
-  static isUnit = (value: string): value is Unit => (VALID_UNITS as readonly string[]).includes(value);
+  static isUnit = (value: string): value is Unit =>
+    (VALID_UNITS as readonly string[]).includes(value);
 
   static unitToNumber(unit: Unit) {
     switch (unit) {
-      case 'm': return 31 * 24 * 60 * 60 * 1000;
-      case 'w': return 7 * 24 * 60 * 60 * 1000;
-      case 'd': return 24 * 60 * 60 * 1000;
-      case 'h': return 60 * 60 * 1000;
+      case 'm':
+        return 31 * 24 * 60 * 60 * 1000;
+      case 'w':
+        return 7 * 24 * 60 * 60 * 1000;
+      case 'd':
+        return 24 * 60 * 60 * 1000;
+      case 'h':
+        return 60 * 60 * 1000;
     }
   }
 }
@@ -144,7 +148,8 @@ class QueryWindow {
     this.by = by;
   }
 
-  readonly toString = () => `${this.length.toString()}/${this.step.toString()}/${this.by.toString()}`;
+  readonly toString = () =>
+    `${this.length.toString()}/${this.step.toString()}/${this.by.toString()}`;
 
   readonly getLength = () => this.length.valueOf();
   readonly getStep = () => this.step.valueOf();
@@ -153,25 +158,25 @@ class QueryWindow {
   static fromString(value: string) {
     const parts = value.split('/');
     if (parts.length !== 3) {
-      console.log(`'${value}' is no three parts`)
+      console.log(`'${value}' is no three parts`);
       return undefined;
     }
 
     const length = Timeframe.fromString(parts[0]);
     if (length === undefined) {
-      console.log(`'${value}' has bad length: ${parts[0]}`)
+      console.log(`'${value}' has bad length: ${parts[0]}`);
       return undefined;
     }
 
     const step = Timeframe.fromString(parts[1]);
     if (step === undefined || step > length) {
-      console.log(`'${value}' has bad step: ${parts[1]}`)
+      console.log(`'${value}' has bad step: ${parts[1]}`);
       return undefined;
     }
 
     const by = Timeframe.fromString(parts[2]);
     if (by === undefined || by > length) {
-      console.log(`'${value}' has bad by: ${parts[2]}`)
+      console.log(`'${value}' has bad by: ${parts[2]}`);
       return undefined;
     }
 
@@ -186,15 +191,23 @@ export const Chart = () => {
   const [showLimits, setShowLimits] = useState(false);
   const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
-  const [query, setQuery] = useState(() => new QueryWindow(new Timeframe(15, 'd'), new Timeframe(1, 'd'), new Timeframe(1, 'd')));
+  const [query, setQuery] = useState(
+    () => new QueryWindow(new Timeframe(15, 'd'), new Timeframe(1, 'd'), new Timeframe(1, 'd')),
+  );
   const [queryStr, setQueryStr] = useState(query.toString());
 
-  const [queryLength, queryStep, queryBy] = useMemo(() => [query.getLength(), query.getStep(), query.getBy()], [query]);
+  const [queryLength, queryStep, queryBy] = useMemo(
+    () => [query.getLength(), query.getStep(), query.getBy()],
+    [query],
+  );
 
   const effectiveStart = useMemo(() => start.getMillis() - queryLength, [start, queryLength]);
   const effectiveEnd = useMemo(() => end.addDays(1).getMillis(), [end]);
 
-  const filter = useMemo(() => (o: Occurrence) => o.millis.getTime() <= effectiveEnd, [effectiveEnd]);
+  const filter = useMemo(
+    () => (o: Occurrence) => o.millis.getTime() <= effectiveEnd,
+    [effectiveEnd],
+  );
 
   const skulls = useSkulls();
   const occurrences = useOccurrences(effectiveStart, filter);
@@ -204,110 +217,121 @@ export const Chart = () => {
     [occurrences.items, selectedSkulls],
   );
 
-  const lineData = useMemo(
-    () => {
-      let cutPoint = 0;
-      for (cutPoint = 0; cutPoint < filteredOccurrences.length && filteredOccurrences[cutPoint].millis.getTime() > effectiveEnd; cutPoint++) { }
-      cutPoint = Math.max(0, cutPoint - 1);
-      let occurrences = filteredOccurrences.slice(cutPoint);
+  const lineData = useMemo(() => {
+    let cutPoint = 0;
+    for (
+      cutPoint = 0;
+      cutPoint < filteredOccurrences.length &&
+      filteredOccurrences[cutPoint].millis.getTime() > effectiveEnd;
+      cutPoint++
+    ) {}
+    cutPoint = Math.max(0, cutPoint - 1);
+    let occurrences = filteredOccurrences.slice(cutPoint);
 
-      const datapoints = new Map<number, { millis: Date, amount: number }[]>();
-      skulls
-        .items
-        .filter(s => selectedSkulls.find(id => id === s.id) === undefined)
-        .forEach(s => datapoints.set(s.id, []));
+    const datapoints = new Map<number, { millis: Date; amount: number }[]>();
+    skulls.items
+      .filter(s => selectedSkulls.find(id => id === s.id) === undefined)
+      .forEach(s => datapoints.set(s.id, []));
 
-      // Loop while
-      // - there are more windows to explore
-      // - there are more occurrences to explore
-      // - we have occurrences that are inside the range
-      for (
-        let windowTop = effectiveEnd;
-        windowTop >= start.getMillis() && occurrences.length > 0 && occurrences[0].millis.getTime() >= effectiveStart;
-        windowTop -= queryStep
-      ) {
-        const label = new Date(windowTop);
-        const windowBottom = windowTop - queryLength;
+    // Loop while
+    // - there are more windows to explore
+    // - there are more occurrences to explore
+    // - we have occurrences that are inside the range
+    for (
+      let windowTop = effectiveEnd;
+      windowTop >= start.getMillis() &&
+      occurrences.length > 0 &&
+      occurrences[0].millis.getTime() >= effectiveStart;
+      windowTop -= queryStep
+    ) {
+      const label = new Date(windowTop);
+      const windowBottom = windowTop - queryLength;
 
-        datapoints.forEach((amounts, _) => amounts.push({ millis: label, amount: 0 }));
+      datapoints.forEach((amounts, _) => amounts.push({ millis: label, amount: 0 }));
 
-        cutPoint = 0;
-        for (let i = 0; i < occurrences.length; i++) {
-          const occ = occurrences[i];
-          const millis = occ.millis.getTime();
-          // Remove the head of the array, so next iteration can skip these
-          if (millis > windowTop - queryStep) {
-            cutPoint = i;
-            if (millis > windowTop) {
-              continue;
-            }
-          } else if (millis < windowBottom) {
-            break;
+      cutPoint = 0;
+      for (let i = 0; i < occurrences.length; i++) {
+        const occ = occurrences[i];
+        const millis = occ.millis.getTime();
+        // Remove the head of the array, so next iteration can skip these
+        if (millis > windowTop - queryStep) {
+          cutPoint = i;
+          if (millis > windowTop) {
+            continue;
           }
-
-          let skull = datapoints.get(occ.skull);
-          if (!skull) {
-            skull = [];
-            datapoints.set(occ.skull, skull);
-          }
-          if (skull.length > 0 && skull[skull.length - 1].millis === label) {
-            skull[skull.length - 1].amount += occ.amount * (queryBy / queryLength);
-          } else {
-            skull.push({ millis: label, amount: occ.amount });
-          }
+        } else if (millis < windowBottom) {
+          break;
         }
 
-        if (cutPoint > 0) {
-          occurrences = occurrences.slice(cutPoint);
+        let skull = datapoints.get(occ.skull);
+        if (!skull) {
+          skull = [];
+          datapoints.set(occ.skull, skull);
+        }
+        if (skull.length > 0 && skull[skull.length - 1].millis === label) {
+          skull[skull.length - 1].amount += occ.amount * (queryBy / queryLength);
+        } else {
+          skull.push({ millis: label, amount: occ.amount });
         }
       }
 
-      const data = Array.from(datapoints, ([k, v]) => {
-        const skull = skulls.items.find(s => s.id === k);
-        if (skull === undefined || v.length === 0) {
-          return [];
-        }
-        return [
-          {
-            type: 'line' as const,
-            data: v.map(p => ({ x: p.millis, y: p.amount })),
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHitRadius: 20,
-            backgroundColor: skullColor(skull),
-            borderColor: skullColor(skull),
-          },
-          {
-            hidden: !showLimits || skull.limit === undefined,
-            type: 'line' as const,
-            data: [
-              { x: new Date(start.getMillis()), y: skull.limit },
-              { x: new Date(effectiveEnd), y: skull.limit },
-            ],
-            pointRadius: 0,
-            borderColor: skullColor(skull, 0.6),
-            borderDash: [5, 10],
-          },
-        ];
-      }).flat();
+      if (cutPoint > 0) {
+        occurrences = occurrences.slice(cutPoint);
+      }
+    }
 
-      return data;
-    },
-    [filteredOccurrences, selectedSkulls, showLimits, skulls.items, start, effectiveStart, effectiveEnd, queryLength, queryStep, queryBy],
-  );
+    const data = Array.from(datapoints, ([k, v]) => {
+      const skull = skulls.items.find(s => s.id === k);
+      if (skull === undefined || v.length === 0) {
+        return [];
+      }
+      return [
+        {
+          type: 'line' as const,
+          data: v.map(p => ({ x: p.millis, y: p.amount })),
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHitRadius: 20,
+          backgroundColor: skullColor(skull),
+          borderColor: skullColor(skull),
+        },
+        {
+          hidden: !showLimits || skull.limit === undefined,
+          type: 'line' as const,
+          data: [
+            { x: new Date(start.getMillis()), y: skull.limit },
+            { x: new Date(effectiveEnd), y: skull.limit },
+          ],
+          pointRadius: 0,
+          borderColor: skullColor(skull, 0.6),
+          borderDash: [5, 10],
+        },
+      ];
+    }).flat();
+
+    return data;
+  }, [
+    filteredOccurrences,
+    selectedSkulls,
+    showLimits,
+    skulls.items,
+    start,
+    effectiveStart,
+    effectiveEnd,
+    queryLength,
+    queryStep,
+    queryBy,
+  ]);
 
   // TODO: Move filter to separate component
   // TODO: Search for "summary" for further cleanup
   return (
     <>
-      <div
-        className='summary-filter-toggle'
-        onClick={() => setShowFilters(!showFilters)}
-      >
+      <div className='summary-filter-toggle' onClick={() => setShowFilters(!showFilters)}>
         <span id='label'>Filter</span>
         <Icon icon={showFilters ? 'fas fa-caret-up' : 'fas fa-caret-down'} />
       </div>
-      {showFilters &&
+      {showFilters && (
         <>
           <div className='summary-filter-inputs'>
             <div className='summary-filter-input'>
@@ -334,7 +358,7 @@ export const Chart = () => {
                 type='text'
                 value={queryStr}
                 onChange={e => {
-                  setQueryStr(e.target.value)
+                  setQueryStr(e.target.value);
                   const parsed = QueryWindow.fromString(e.target.value);
                   if (parsed !== undefined) {
                     setQuery(parsed);
@@ -407,7 +431,7 @@ export const Chart = () => {
               />
               <label>Limits</label>
             </div>
-            {skulls.items.map((s, i) =>
+            {skulls.items.map((s, i) => (
               <div key={i}>
                 <input
                   id={s.name}
@@ -423,13 +447,15 @@ export const Chart = () => {
                     setSelectedSkulls([...selectedSkulls]);
                   }}
                 />
-                <label htmlFor={s.name} style={{ color: skullColor(s) }}>{s.name}</label>
+                <label htmlFor={s.name} style={{ color: skullColor(s) }}>
+                  {s.name}
+                </label>
               </div>
-            )}
+            ))}
           </div>
         </>
-      }
-      <div style={{ flex: 1, minHeight: 0, minWidth: 0 }} >
+      )}
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
         <Line
           options={options}
           data={{
@@ -439,5 +465,6 @@ export const Chart = () => {
           plugins={[alternatingDaysPlugin]}
         />
       </div>
-    </>);
-}
+    </>
+  );
+};

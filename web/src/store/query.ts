@@ -1,5 +1,12 @@
 import { ErrorMessage } from './error';
-import { sealed as modelSealed, Occurrence, ProtoOccurrence, RawQuick, Skull, EpochDays } from './model';
+import {
+  sealed as modelSealed,
+  Occurrence,
+  ProtoOccurrence,
+  RawQuick,
+  Skull,
+  EpochDays,
+} from './model';
 import { Socket } from '../socket';
 
 export namespace sealed {
@@ -25,7 +32,11 @@ export namespace sealed {
     });
   };
 
-  export const getOccurrences = (socket: Socket, start: EpochDays, end?: EpochDays): Promise<Occurrence[]> => {
+  export const getOccurrences = (
+    socket: Socket,
+    start: EpochDays,
+    end?: EpochDays,
+  ): Promise<Occurrence[]> => {
     const id = newRequestId();
     return socket.request(
       {
@@ -34,8 +45,8 @@ export namespace sealed {
           search: {
             start: start.getMillis(),
             end: end?.getMillis(),
-          }
-        }
+          },
+        },
       },
       (message: any) => {
         const response = validateMessage(message, id, 'occurrences');
@@ -43,7 +54,7 @@ export namespace sealed {
         if (!!response) {
           return response.map(modelSealed.makeOccurrence);
         }
-      }
+      },
     );
   };
 
@@ -115,15 +126,13 @@ export namespace sealed {
         if (response === action) {
           return true;
         } else {
-          throw new ErrorMessage(
-            {
-              kind: 'invalidresponse',
-              message: `Expected "${action}", got ${response}`,
-            }
-          );
+          throw new ErrorMessage({
+            kind: 'invalidresponse',
+            message: `Expected "${action}", got ${response}`,
+          });
         }
       }
-    }
+    };
   }
 }
 
@@ -143,7 +152,10 @@ const validateMessage = (message: any, id: number, field: string) => {
     if (field in response) {
       return response[field];
     } else {
-      throw new ErrorMessage({ kind: 'invalidresponse', message: `Got: ${JSON.stringify(response)}` });
+      throw new ErrorMessage({
+        kind: 'invalidresponse',
+        message: `Got: ${JSON.stringify(response)}`,
+      });
     }
   }
-}
+};
