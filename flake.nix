@@ -77,13 +77,12 @@
             ];
           };
 
-          nativeBuildInputs = [ pkgs.writableTmpDirAsHomeHook ];
           doDist = false;
         };
         web = pkgs.mkYarnPackage (
           commonWeb
           // {
-            DISABLE_ESLINT_PLUGIN = "true";
+            nativeBuildInputs = [ pkgs.writableTmpDirAsHomeHook ];
 
             buildPhase = ''
               runHook preBuild
@@ -110,21 +109,16 @@
           webCheck = pkgs.mkYarnPackage (
             commonWeb
             // {
-              NODE_PRESERVE_SYMLINKS = "1";
+              dontBuild = true;
 
-              buildPhase = ''
+              checkPhase = ''
                 runHook preBuild
                 cd deps/$pname
                 yarn eslint src/
                 runHook postBuild
               '';
 
-              installPhase = ''
-                runHook preInstall
-                mkdir -p $out
-                touch $out/ok
-                runHook postInstall
-              '';
+              installPhase = "mkdir -p $out";
             }
           );
         };
