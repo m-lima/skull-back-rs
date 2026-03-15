@@ -1,10 +1,12 @@
-FROM docker.io/node:21.2.0-bookworm-slim AS web
+FROM docker.io/node:22-bookworm-slim AS web
+
 WORKDIR /web
 
-COPY package.json yarn.lock .
-RUN yarn
+COPY package.json yarn.lock tsconfig.json tsconfig.node.json vite.config.ts index.html ./
+RUN yarn install
 
-COPY . .
+COPY src src
+COPY public public
 RUN yarn build
 
 FROM docker.io/alpine:3.18.4
