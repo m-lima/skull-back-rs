@@ -131,7 +131,6 @@ export const Chart = () => {
   }, [occurrences.items, start]);
 
   const lineData = useMemo(() => {
-    console.log('lineData useMemo IN');
     const cutPoint = filteredOccurrences.findIndex(o => o.millis.getTime() <= effectiveEnd);
     let occurrences = cutPoint < 0 ? [] : filteredOccurrences.slice(cutPoint);
 
@@ -217,7 +216,6 @@ export const Chart = () => {
       ];
     }).flat();
 
-    console.log('lineData useMemo OUT');
     return data;
   }, [
     effectiveEnd,
