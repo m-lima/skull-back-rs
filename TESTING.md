@@ -3,13 +3,13 @@
 ## Backend
 
 ```bash
-$ cargo r -p server -- -U <user> -c -vvv -s 8558 <location>
+$ cargo r -p server -- -U <user> -c -vvv -s <PORT1> <location>
 ```
 
 ## Frontend
 
 ```bash
-$ PORT=8855 WDS_SOCKET_PATH='/ws' WDS_SOCKET_PORT='0' REACT_APP_URL_HOST='<host>' REACT_APP_URL_TLS='true' REACT_APP_URL_AUTH='<auth_host>' yarn start
+$ VITE_URL_HOST='<host>' VITE_URL_TLS='true' VITE_URL_AUTH='<auth_host>' yarn dev --host --port <PORT2>
 ```
 
 ## Nginx
@@ -29,21 +29,21 @@ nginx = {
 
           locations = {
             "/" = {
-              proxyPass = "http://localhost:8855/";
+              proxyPass = "http://localhost:<PORT2>/";
               recommendedProxySettings = true;
               proxyWebsockets = true;
             };
             "/api/" = {
-              proxyPass = "http://localhost:8558/api/";
+              proxyPass = "http://localhost:<PORT1>/api/";
               recommendedProxySettings = true;
             };
             "/ws/binary" = {
-              proxyPass = "http://localhost:8558/ws/binary";
+              proxyPass = "http://localhost:<PORT1>/ws/binary";
               recommendedProxySettings = true;
               proxyWebsockets = true;
             };
             "/ws/text" = {
-              proxyPass = "http://localhost:8558/ws/text";
+              proxyPass = "http://localhost:<PORT1>/ws/text";
               recommendedProxySettings = true;
               proxyWebsockets = true;
             };
