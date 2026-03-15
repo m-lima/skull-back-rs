@@ -34,14 +34,12 @@ export const useSkulls = () => {
   const store = useStore();
   const [skulls, setSkulls] = useState<Response<Skull>>({
     items: store.getSkulls(),
-    pending: !store.isSkullsLoaded(),
   });
 
   useEffect(() => {
     const listener = store.registerSkullListener(s => {
       setSkulls({
         items: s,
-        pending: !store.isSkullsLoaded(),
       });
     });
     return () => {
@@ -55,21 +53,19 @@ export const useSkulls = () => {
     });
   }
 
-  return skulls;
+  return { ...skulls, pending: !store.isSkullsLoaded() };
 };
 
 export const useQuicks = () => {
   const store = useStore();
   const [quicks, setQuicks] = useState<Response<Quick>>({
     items: store.getQuicks(),
-    pending: !store.isQuicksLoaded(),
   });
 
   useEffect(() => {
     const listener = store.registerQuickListener(q => {
       setQuicks({
         items: q,
-        pending: !store.isQuicksLoaded(),
       });
     });
     return () => {
@@ -83,7 +79,7 @@ export const useQuicks = () => {
     });
   }
 
-  return quicks;
+  return { ...quicks, pending: !store.isQuicksLoaded() };
 };
 
 export const useOccurrences = (
@@ -103,22 +99,12 @@ export const useOccurrences = (
   const store = useStore();
   const [occurrences, setOccurrences] = useState<Response<Occurrence>>({
     items: store.getOccurrences().filter(parsedFilter),
-    pending: !store.isOccurrencesLoadedSince(startDay),
   });
-
-  // TODO: This is a bit of a hack to force update when start changes
-  useEffect(() => {
-    setOccurrences({
-      items: store.getOccurrences().filter(parsedFilter),
-      pending: !store.isOccurrencesLoadedSince(startDay),
-    });
-  }, [store, startDay, parsedFilter]);
 
   useEffect(() => {
     const listener = store.registerOccurrenceListener(o => {
       setOccurrences({
         items: o.filter(parsedFilter),
-        pending: !store.isOccurrencesLoadedSince(startDay),
       });
     });
     return () => {
@@ -132,7 +118,7 @@ export const useOccurrences = (
     });
   }
 
-  return occurrences;
+  return {...occurrences, pending: !store.isOccurrencesLoadedSince(startDay)};
 };
 
 export const useEditOccurrence = () => {

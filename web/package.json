@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint:prettier": "prettier . --list-different",
     "lint:eslint": "eslint .",
+    "lint:tsc": "tsc",
     "fix:prettier": "prettier . --write",
     "fix:eslint": "eslint . --fix"
   },

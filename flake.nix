@@ -113,8 +113,8 @@
 
               checkPhase = ''
                 runHook preBuild
-                cd deps/$pname
-                yarn eslint src/
+                yarn --offline lint:eslint
+                yarn --offline lint:tsc
                 runHook postBuild
               '';
 

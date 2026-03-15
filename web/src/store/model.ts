@@ -44,8 +44,9 @@ export interface ProtoOccurrence {
   millis: Date;
 }
 
-export interface Response<T> extends StoreStatus {
+export interface Response<T> {
   items: T[];
+  error?: unknown;
 }
 
 export interface StoreStatus {
@@ -56,6 +57,7 @@ export interface StoreStatus {
 export class EpochDays {
   private millis: number;
 
+  // TODO: We need to know if we clamp down one day or up one day
   public constructor(date: EpochDays | Date | number) {
     if (date instanceof EpochDays) {
       this.millis = date.millis;
@@ -78,6 +80,12 @@ export class EpochDays {
     return datefns.subHours(millis, 5).getTime();
   }
 
+  public subMonths(days: number): EpochDays {
+    const out = new EpochDays(this);
+    out.millis = datefns.subMonths(out.millis, days).getTime();
+    return out;
+  }
+
   public addDays(days: number): EpochDays {
     const out = new EpochDays(this);
     out.millis = datefns.addDays(out.millis, days).getTime();
@@ -87,6 +95,14 @@ export class EpochDays {
   public subDays(days: number): EpochDays {
     const out = new EpochDays(this);
     out.millis = datefns.subDays(out.millis, days).getTime();
+    return out;
+  }
+
+  public subMillis(millis: number): EpochDays {
+    const out = new EpochDays(this.millis - millis);
+    if (out.millis == this.millis) {
+      return this.subDays(1);
+    }
     return out;
   }
 

@@ -90,14 +90,14 @@ const alternatingDaysPlugin: Plugin = {
 };
 
 export const Chart = () => {
-  const [start, setStart] = useState(new EpochDays(datefns.subMonths(new Date(), 6)));
+  const [start, setStart] = useState(EpochDays.today().subMonths(2));
   const [end, setEnd] = useState(EpochDays.today());
   const [showFilter, setShowFilter] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [selectedSkulls, setSelectedSkulls] = useState<number[]>([]);
 
   const [window, setWindow] = useState(
-    () => new Window({ amount: 15, unit: 'd' }, { amount: 1, unit: 'd' }, { amount: 1, unit: 'd' }),
+    () => new Window({ amount: 7, unit: 'd' }, { amount: 1, unit: 'd' }, { amount: 1, unit: 'd' }),
   );
 
   const [windowLength, windowStep, windowBy] = useMemo(
@@ -105,7 +105,7 @@ export const Chart = () => {
     [window],
   );
 
-  const effectiveStart = useMemo(() => new EpochDays(start.getMillis() - windowLength), [start, windowLength]);
+  const effectiveStart = useMemo(() => start.subMillis(windowLength), [start, windowLength]);
   const effectiveEnd = useMemo(() => end.addDays(1).getMillis(), [end]);
 
   const filter = useMemo(
@@ -121,7 +121,17 @@ export const Chart = () => {
     [occurrences.items, selectedSkulls],
   );
 
+  const realStart = useMemo(() => {
+    if (occurrences.items.length > 0) {
+      const minDate = occurrences.items[occurrences.items.length -1].millis;
+      return new EpochDays(Math.max(start.getMillis(), minDate.getTime()));
+    }
+
+    return start;
+  }, [occurrences.items, start]);
+
   const lineData = useMemo(() => {
+    console.log('lineData useMemo IN');
     const cutPoint = filteredOccurrences.findIndex(o => o.millis.getTime() <= effectiveEnd);
     let occurrences = cutPoint < 0 ? [] : filteredOccurrences.slice(cutPoint);
 
@@ -136,7 +146,7 @@ export const Chart = () => {
     // - we have occurrences that are inside the range
     for (
       let windowTop = effectiveEnd;
-      windowTop >= start.getMillis() &&
+      windowTop >= realStart.getMillis() &&
       occurrences.length > 0 &&
       occurrences[0].millis.getTime() >= effectiveStart.getMillis();
       windowTop -= windowStep
@@ -197,7 +207,7 @@ export const Chart = () => {
           hidden: !showLimits || skull.limit === undefined,
           type: 'line' as const,
           data: [
-            { x: new Date(start.getMillis()), y: skull.limit },
+            { x: new Date(realStart.getMillis()), y: skull.limit },
             { x: new Date(effectiveEnd), y: skull.limit },
           ],
           pointRadius: 0,
@@ -207,18 +217,19 @@ export const Chart = () => {
       ];
     }).flat();
 
+    console.log('lineData useMemo OUT');
     return data;
   }, [
+    effectiveEnd,
+    effectiveStart,
     filteredOccurrences,
+    realStart,
     selectedSkulls,
     showLimits,
     skulls,
-    start,
-    effectiveStart,
-    effectiveEnd,
+    windowBy,
     windowLength,
     windowStep,
-    windowBy,
   ]);
 
   const error = check.error(skulls, occurrences);
