@@ -13,13 +13,6 @@ export default [
   ...typescript.configs.strictTypeChecked,
   {
     files: ['**/*.{ts,tsx}'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      parserOptions: {
-        project: ['./tsconfig.json'],
-        ecmaFeatures: { jsx: true },
-      },
-    },
     settings: {
       react: { version: 'detect' },
     },
