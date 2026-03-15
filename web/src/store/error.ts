@@ -61,7 +61,7 @@ const parseKind = (kind: unknown): ErrorKind => {
 };
 
 const parseMessage = (message: unknown, kind: ErrorKind): string => {
-  if (message === 'string') {
+  if (typeof message === 'string') {
     return message;
   }
 

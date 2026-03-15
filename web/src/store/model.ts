@@ -15,8 +15,8 @@ const opacityToHex = (opacity?: string | number) =>
     : typeof opacity === 'string'
       ? opacity
       : Math.floor(255 * opacity)
-          .toString(16)
-          .padStart(2, '0');
+        .toString(16)
+        .padStart(2, '0');
 
 export const skullColor = (skull: { color: number }, opacity?: number) =>
   `#${skull.color.toString(16).padStart(6, '0')}${opacityToHex(opacity)}`;
@@ -108,7 +108,7 @@ export const sealed = {
     typeof v[2] === 'number' &&
     typeof v[3] === 'string' &&
     typeof v[4] === 'number' &&
-    (v.length === 5 || typeof v[5] === 'number'),
+    (v[5] === undefined || v[5] === null || typeof v[5] === 'number'),
   makeSkull: (s: [number, string, number, string, number, number?]) => {
     return {
       id: s[0],

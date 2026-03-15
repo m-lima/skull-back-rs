@@ -105,7 +105,7 @@ export const Chart = () => {
     [window],
   );
 
-  const effectiveStart = useMemo(() => start.getMillis() - windowLength, [start, windowLength]);
+  const effectiveStart = useMemo(() => new EpochDays(start.getMillis() - windowLength), [start, windowLength]);
   const effectiveEnd = useMemo(() => end.addDays(1).getMillis(), [end]);
 
   const filter = useMemo(
@@ -138,7 +138,7 @@ export const Chart = () => {
       let windowTop = effectiveEnd;
       windowTop >= start.getMillis() &&
       occurrences.length > 0 &&
-      occurrences[0].millis.getTime() >= effectiveStart;
+      occurrences[0].millis.getTime() >= effectiveStart.getMillis();
       windowTop -= windowStep
     ) {
       const label = new Date(windowTop);

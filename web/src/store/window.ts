@@ -16,20 +16,17 @@ class Timeframe {
   static fromString(timeframe: string) {
     let trimmed = timeframe.trim();
     if (trimmed.length < 2) {
-      console.log(`${timeframe} has bad length: ${trimmed.length}`);
       return undefined;
     }
 
     const unit = trimmed[trimmed.length - 1];
     trimmed = trimmed.slice(0, -1);
     if (!Timeframe.isUnit(unit)) {
-      console.log(`${timeframe} has bad unit: ${unit}`);
       return undefined;
     }
 
     const amount = Number(trimmed);
     if (!amount) {
-      console.log(`${timeframe} has bad amount: ${trimmed}`);
       return undefined;
     }
 
@@ -79,25 +76,21 @@ export class Window {
   static fromString(value: string) {
     const parts = value.split('/');
     if (parts.length !== 3) {
-      console.log(`'${value}' is no three parts`);
       return undefined;
     }
 
     const length = Timeframe.fromString(parts[0]);
     if (length === undefined) {
-      console.log(`'${value}' has bad length: ${parts[0]}`);
       return undefined;
     }
 
     const step = Timeframe.fromString(parts[1]);
     if (step === undefined || step > length) {
-      console.log(`'${value}' has bad step: ${parts[1]}`);
       return undefined;
     }
 
     const by = Timeframe.fromString(parts[2]);
     if (by === undefined || by > length) {
-      console.log(`'${value}' has bad by: ${parts[2]}`);
       return undefined;
     }
 
