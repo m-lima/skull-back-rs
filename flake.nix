@@ -61,7 +61,9 @@
           overrides.commonArgs.LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_MATH_FUNCTIONS=1";
         };
         all = helper.lib.rust.helper inputs system ./. sharedOptions;
-        server = helper.lib.rust.helper inputs system ./. (sharedOptions // { package = "-p server"; });
+        server = helper.lib.rust.helper inputs system ./. (
+          sharedOptions // { cargoExtraArgs = "-p server"; }
+        );
         cli = helper.lib.rust.helper inputs system ./. (sharedOptions // { cargoExtraArgs = "-p cli"; });
         commonWeb = {
           nodejs = pkgs.nodejs;
@@ -69,14 +71,20 @@
           src = pkgs.lib.fileset.toSource {
             root = ./web;
             fileset = pkgs.lib.fileset.unions [
+              ./web/.prettierrc.json
+              ./web/eslint.config.js
+              ./web/index.html
               ./web/package.json
               ./web/public
               ./web/src
               ./web/tsconfig.json
+              ./web/tsconfig.node.json
+              ./web/vite.config.ts
               ./web/yarn.lock
             ];
           };
 
+          doCheck = true;
           doDist = false;
         };
         web = pkgs.mkYarnPackage (
@@ -92,7 +100,7 @@
 
             installPhase = ''
               runHook preInstall
-              mv deps/$pname/build $out
+              mv deps/$pname/dist $out
               runHook postInstall
             '';
           }
@@ -105,7 +113,7 @@
           cli = cli.outputs.packages.default;
           web = web;
         };
-        checks = all.checks // {
+        checks = all.outputs.checks // {
           webCheck = pkgs.mkYarnPackage (
             commonWeb
             // {
