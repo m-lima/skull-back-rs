@@ -212,7 +212,7 @@ export const Chart = () => {
     filteredOccurrences,
     selectedSkulls,
     showLimits,
-    skulls.items,
+    skulls,
     start,
     effectiveStart,
     effectiveEnd,

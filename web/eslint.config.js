@@ -1,17 +1,41 @@
 import javascript from '@eslint/js';
 import prettier from 'eslint-config-prettier';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
 import typescript from 'typescript-eslint';
 
-export default typescript.config(
+export default [
   {
-    ignores: ['**/dist/', '**/dev-dist/', 'vite.config.ts'],
+    ignores: ['**/dist/', '**/dev-dist/', 'vite.config.ts', 'eslint.config.js'],
   },
   javascript.configs.recommended,
+  ...typescript.configs.strictTypeChecked,
   {
     files: ['**/*.{ts,tsx}'],
-
-    extends: typescript.configs.strictTypeChecked,
+    languageOptions: {
+      ecmaVersion: 2022,
+      parserOptions: {
+        project: ['./tsconfig.json'],
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    settings: {
+      react: { version: 'detect' },
+    },
+    plugins: {
+      'react': react,
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+      },
     rules: {
+      ...react.configs.recommended.rules,
+      ...react.configs['jsx-runtime'].rules,
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': [
+        'error',
+        {},
+      ],
       '@typescript-eslint/restrict-template-expressions': [
         'error',
         {
@@ -40,4 +64,4 @@ export default typescript.config(
     },
   },
   prettier,
-);
+];

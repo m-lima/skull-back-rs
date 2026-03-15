@@ -1,10 +1,7 @@
 import { Store } from './store';
+import { sealed } from './hooks';
 
-import { createContext, PropsWithChildren } from 'react';
-
-export const sealed = {
-  StoreContext: createContext<Store | undefined>(undefined),
-} as const;
+import { PropsWithChildren } from 'react';
 
 interface StoreProviderProps {
   store: Store;

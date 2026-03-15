@@ -1,7 +1,11 @@
 import { EpochDays, Occurrence, Skull, Response, Quick, ProtoOccurrence } from './model';
-import { sealed } from './context';
+import {Store} from './store';
 
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+
+export const sealed = {
+  StoreContext: createContext<Store | undefined>(undefined),
+} as const;
 
 export function useStore() {
   const context = useContext(sealed.StoreContext);
@@ -83,11 +87,10 @@ export const useQuicks = () => {
 };
 
 export const useOccurrences = (
-  start: EpochDays | Date | number,
+  startDay: EpochDays,
   filter?: (o: Occurrence) => boolean,
 ) => {
-  const startMillis = getMillis(start);
-  const startDay = useMemo(() => new EpochDays(startMillis), [startMillis]);
+  const startMillis = getMillis(startDay);
 
   const parsedFilter = useMemo(
     () =>
@@ -103,13 +106,13 @@ export const useOccurrences = (
     pending: !store.isOccurrencesLoadedSince(startDay),
   });
 
-  // TODO: This is a bit of a hack to force update when start changes
-  useEffect(() => {
-    setOccurrences({
-      items: store.getOccurrences().filter(parsedFilter),
-      pending: !store.isOccurrencesLoadedSince(startDay),
-    });
-  }, [store, startDay, parsedFilter]);
+  // // TODO: This is a bit of a hack to force update when start changes
+  // useEffect(() => {
+  //   setOccurrences({
+  //     items: store.getOccurrences().filter(parsedFilter),
+  //     pending: !store.isOccurrencesLoadedSince(startDay),
+  //   });
+  // }, [store, startDay, parsedFilter]);
 
   useEffect(() => {
     const listener = store.registerOccurrenceListener(o => {

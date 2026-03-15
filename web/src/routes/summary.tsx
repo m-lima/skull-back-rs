@@ -86,12 +86,6 @@ export const Summary = () => {
     [occurrences.items, selectedSkulls],
   );
 
-  const error = check.error(skulls, occurrences, edit);
-  if (error) {
-    return <Banner.Error error={error} />;
-  }
-
-  // TODO: ERROR: Add react lints. This should start to fail
   const selectedItem = useMemo(() => {
     if (selected === undefined) {
       return undefined;
@@ -106,7 +100,12 @@ export const Summary = () => {
       occurrence: selected,
       skull: selectedSkull,
     };
-  }, []);
+  }, [selected, skullMap]);
+
+  const error = check.error(skulls, occurrences, edit);
+  if (error) {
+    return <Banner.Error error={error} />;
+  }
 
   return (
     <>
