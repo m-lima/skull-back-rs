@@ -122,15 +122,8 @@ export const Chart = () => {
   );
 
   const lineData = useMemo(() => {
-    let cutPoint = 0;
-    for (
-      cutPoint = 0;
-      cutPoint < filteredOccurrences.length &&
-      filteredOccurrences[cutPoint].millis.getTime() > effectiveEnd;
-      cutPoint++
-    ) {}
-    cutPoint = Math.max(0, cutPoint - 1);
-    let occurrences = filteredOccurrences.slice(cutPoint);
+    const cutPoint = filteredOccurrences.findIndex(o => o.millis.getTime() <= effectiveEnd);
+    let occurrences = cutPoint < 0 ? [] : filteredOccurrences.slice(cutPoint);
 
     const datapoints = new Map<number, { millis: Date; amount: number }[]>();
     skulls.items
@@ -153,7 +146,7 @@ export const Chart = () => {
 
       datapoints.forEach((amounts, _) => amounts.push({ millis: label, amount: 0 }));
 
-      cutPoint = 0;
+      let cutPoint = 0;
       for (let i = 0; i < occurrences.length; i++) {
         const occ = occurrences[i];
         const millis = occ.millis.getTime();
@@ -180,6 +173,7 @@ export const Chart = () => {
       }
 
       if (cutPoint > 0) {
+        // TODO: Consider no `slice`ing and simply move the header forward. The array is dropped in the end, so we don't need to care
         occurrences = occurrences.slice(cutPoint);
       }
     }

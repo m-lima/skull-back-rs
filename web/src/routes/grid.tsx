@@ -30,7 +30,9 @@ const buildSkullButton = (
       (quick.skull.limit ? `\nLimit: ${quick.skull.limit}` : '')
     }
     style={{ background: skullColor(quick.skull) }}
-    onClick={() => { setSelected(quick); }}
+    onClick={() => {
+      setSelected(quick);
+    }}
   >
     <Icon icon={quick.skull.icon} />
     <div className='grid-button-amount' id={idForQuick(skullAmounts, quick)}>
@@ -43,7 +45,9 @@ const newSkull = (skulls: Skull[], setSelected: (q: Quick) => void) => (
   <div
     className='grid-button'
     style={{ background: 'gray' }}
-    onClick={() => { setSelected({ skull: skulls[0], amount: 1 }); }}
+    onClick={() => {
+      setSelected({ skull: skulls[0], amount: 1 });
+    }}
   >
     <Icon icon='fas fa-plus' />
   </div>
@@ -51,7 +55,7 @@ const newSkull = (skulls: Skull[], setSelected: (q: Quick) => void) => (
 
 const idForQuick = (skullAmounts: Map<number, number>, quick: Quick) => {
   if (quick.skull.limit && skullAmounts.has(quick.skull.id)) {
-    const skullAmount = skullAmounts.get(quick.skull.id)! + quick.amount;
+    const skullAmount = (skullAmounts.get(quick.skull.id) ?? 0) + quick.amount;
     if (skullAmount >= quick.skull.limit) {
       return 'grid-button-over-limit';
     } else if (skullAmount >= quick.skull.limit * 0.75) {
@@ -110,14 +114,16 @@ export const Grid = () => {
           amount={selected.amount}
           skulls={skulls.items}
           onAccept={occurrence => {
-            edit.create(occurrence).then(() => {
+            void edit.create(occurrence).then(() => {
               if (occurrences.items.length === 0) {
                 window.location.reload();
               }
               setSelected(undefined);
             });
           }}
-          onCancel={() => { setSelected(undefined); }}
+          onCancel={() => {
+            setSelected(undefined);
+          }}
         />
       )}
     </>

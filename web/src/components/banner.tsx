@@ -12,7 +12,7 @@ export const Loading = () => (
 );
 
 interface ErrorProps {
-  error?: any;
+  error?: unknown;
 }
 
 export const Error = (props: ErrorProps) => {
@@ -31,7 +31,7 @@ export const Error = (props: ErrorProps) => {
   return (
     <div className='banner'>
       <Icon icon={icon} />
-      {props.error.kindString()}
+      {props.error.kind}
       <code className='banner-error-message'>{props.error.message}</code>
       <Refresh />
     </div>

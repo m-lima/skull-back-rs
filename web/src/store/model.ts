@@ -50,7 +50,7 @@ export interface Response<T> extends StoreStatus {
 
 export interface StoreStatus {
   pending: boolean;
-  error?: any;
+  error?: unknown;
 }
 
 export class EpochDays {
@@ -99,8 +99,17 @@ export class EpochDays {
   }
 }
 
-export namespace sealed {
-  export const makeSkull = (s: [number, string, number, string, number, number?]) => {
+export const sealed = {
+  isSkullTuple: (v: unknown): v is [number, string, number, string, number, number?] =>
+    v instanceof Array &&
+    (v.length === 5 || v.length === 6) &&
+    typeof v[0] === 'number' &&
+    typeof v[1] === 'string' &&
+    typeof v[2] === 'number' &&
+    typeof v[3] === 'string' &&
+    typeof v[4] === 'number' &&
+    (v.length === 5 || typeof v[5] === 'number'),
+  makeSkull: (s: [number, string, number, string, number, number?]) => {
     return {
       id: s[0],
       name: s[1],
@@ -109,21 +118,30 @@ export namespace sealed {
       price: s[4],
       limit: s[5],
     };
-  };
+  },
 
-  export const makeRawQuick = (q: [number, number]) => {
+  isQuickTuple: (v: unknown): v is [number, number] =>
+    v instanceof Array && v.length === 2 && typeof v[0] === 'number' && typeof v[1] === 'number',
+  makeRawQuick: (q: [number, number]) => {
     return {
       skull: q[0],
       amount: Number(q[1].toFixed(3)),
     };
-  };
+  },
 
-  export const makeOccurrence = (o: [number, number, number, number]) => {
+  isOccurrenceTuple: (v: unknown): v is [number, number, number, number] =>
+    v instanceof Array &&
+    v.length === 4 &&
+    typeof v[0] === 'number' &&
+    typeof v[1] === 'number' &&
+    typeof v[2] === 'number' &&
+    typeof v[3] === 'number',
+  makeOccurrence: (o: [number, number, number, number]) => {
     return {
       id: o[0],
       skull: o[1],
       amount: Number(o[2].toFixed(3)),
       millis: new Date(o[3]),
     };
-  };
-}
+  },
+} as const;

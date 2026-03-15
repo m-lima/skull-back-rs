@@ -45,13 +45,13 @@ class RequestHandler<Message, Response> implements Handler<Message> {
   readonly id: number;
   readonly handleInner: (message: Message) => Response | undefined;
   readonly accept: (response: Response | PromiseLike<Response>) => void;
-  readonly reject: (reason?: any) => void;
+  readonly reject: (reason?: unknown) => void;
 
   constructor(
     id: number,
     handler: (message: Message) => Response | undefined,
     accept: (response: Response | PromiseLike<Response>) => void,
-    reject: (reason?: any) => void,
+    reject: (reason?: unknown) => void,
     timeout: number,
   ) {
     this.id = id;
@@ -59,7 +59,9 @@ class RequestHandler<Message, Response> implements Handler<Message> {
     this.accept = accept;
     this.reject = reject;
 
-    setTimeout(() => { reject(new Timeout(timeout)); }, timeout);
+    setTimeout(() => {
+      reject(new Timeout(timeout));
+    }, timeout);
   }
 
   handle(message: Message): boolean {
@@ -80,8 +82,8 @@ class RequestHandler<Message, Response> implements Handler<Message> {
 }
 
 export class Socket {
-  private readonly requests: RequestHandler<any, any>[];
-  private readonly handlers: Handler<any>[];
+  private readonly requests: RequestHandler<unknown, unknown>[];
+  private readonly handlers: Handler<unknown>[];
   private readonly stateListeners: SocketStateListener[];
 
   private socket: WebSocket;
@@ -217,9 +219,10 @@ export class Socket {
     if (!(e.data instanceof ArrayBuffer)) {
       console.error('Received a text message on a binary channel:');
       console.error(e.data);
+      return;
     }
 
-    const message = decode(e.data) as any;
+    const message = decode(e.data);
 
     for (let i = 0; i < this.requests.length; ++i) {
       if (this.requests[i].handle(message)) {
@@ -237,16 +240,16 @@ export class Socket {
     }
   }
 
-  public async request<Message, Response, Request>(
-    request: Request,
-    handler: (message: Message) => Response | undefined,
+  public async request<Response>(
+    request: unknown,
+    handler: (message: unknown) => Response | undefined,
     timeout: number = 30000,
   ): Promise<Response> {
     const payload = encode(request);
     const id = Math.random();
     const promise: Promise<Response> = new Promise((accept, reject) => {
       const requestInstance = new RequestHandler(id, handler, accept, reject, timeout);
-      this.requests.push(requestInstance);
+      this.requests.push(requestInstance as RequestHandler<unknown, unknown>);
       this.socket.send(payload);
     });
 

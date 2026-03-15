@@ -62,8 +62,8 @@ export const Edit = (props: EditProps) => {
   };
 
   const commit = () => {
-    if (markedForDeletion) {
-      props.onDelete!();
+    if (markedForDeletion && props.onDelete) {
+      props.onDelete();
     } else {
       const amount = Number(stagedValue.amount);
       if (!amount && amountRef.current) {
@@ -88,7 +88,9 @@ export const Edit = (props: EditProps) => {
             <select
               value={stagedValue.skull.name}
               disabled={markedForDeletion}
-              onChange={e => { stageSkull(e.target.value); }}
+              onChange={e => {
+                stageSkull(e.target.value);
+              }}
             >
               {props.skulls.map((s, i) => (
                 <option key={i} value={s.name}>
@@ -108,7 +110,9 @@ export const Edit = (props: EditProps) => {
               min={0}
               step={0.1}
               value={stagedValue.amount}
-              onChange={e => { stageAmount(e.target.value); }}
+              onChange={e => {
+                stageAmount(e.target.value);
+              }}
             />
           </div>
           <div className='edit-input'>
@@ -125,7 +129,12 @@ export const Edit = (props: EditProps) => {
           </div>
           {!!props.onDelete && (
             <div className='edit-input'>
-              <div className='edit-delete' onClick={() => { setMarkedForDeletion(!markedForDeletion); }}>
+              <div
+                className='edit-delete'
+                onClick={() => {
+                  setMarkedForDeletion(!markedForDeletion);
+                }}
+              >
                 <Icon icon='fas fa-trash' />
               </div>
             </div>

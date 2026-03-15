@@ -1,52 +1,45 @@
 import { Timeout } from '../socket';
 
 export enum ErrorKind {
-  Timeout,
-  BadRequest,
-  NotFound,
-  InternalError,
-  InvalidResponse,
-  Unknown,
+  Timeout = 'Timeout',
+  BadRequest = 'Bad Request',
+  NotFound = 'Not Found',
+  InternalError = 'Internal Error',
+  InvalidResponse = 'Invalid Response',
+  Unknown = 'Unknown Error',
 }
 
-export class ErrorMessage {
+export class ErrorMessage extends Error {
   readonly kind: ErrorKind;
   readonly message: string;
 
-  public constructor(error: any) {
-    if (error instanceof ErrorMessage) {
-      this.kind = error.kind;
-      this.message = error.message;
-      return;
-    } else if (error instanceof Timeout) {
+  public constructor(cause: unknown, message?: string) {
+    super();
+
+    if (typeof cause === 'string') {
+      this.kind = parseKind(cause);
+      this.message = parseMessage(message, this.kind);
+    } else if (cause instanceof ErrorMessage) {
+      this.kind = cause.kind;
+      this.message = cause.message;
+    } else if (cause instanceof Timeout) {
       this.kind = ErrorKind.Timeout;
-      this.message = `Request timed out after ${error.getMillis()}ms`;
-      return;
-    }
-
-    if (error instanceof Array && error.length < 3) {
-      error = {
-        kind: error[0],
-        message: error[1],
-      };
-    }
-
-    this.kind = parseKind(error.kind);
-
-    if (!!error['message'] && typeof error.message === 'string') {
-      this.message = error.message;
+      this.message = `Request timed out after ${cause.getMillis()}ms`;
+    } else if (cause instanceof Array && cause.length < 3) {
+      this.kind = parseKind(cause[0]);
+      this.message = parseMessage(cause[1], this.kind);
+    } else if (typeof cause === 'object' && cause !== null) {
+      this.kind = parseKind('kind' in cause ? cause.kind : undefined);
+      this.message = parseMessage('message' in cause ? cause.message : undefined, this.kind);
     } else {
-      this.message = kindToString(this.kind);
+      this.kind = ErrorKind.Unknown;
+      this.message = ErrorKind.Unknown;
     }
-  }
-
-  public kindString() {
-    return kindToString(this.kind);
   }
 }
 
-const parseKind = (kind?: string): ErrorKind => {
-  if (!kind) {
+const parseKind = (kind: unknown): ErrorKind => {
+  if (typeof kind !== 'string') {
     return ErrorKind.Unknown;
   }
 
@@ -67,19 +60,10 @@ const parseKind = (kind?: string): ErrorKind => {
   }
 };
 
-const kindToString = (kind: ErrorKind) => {
-  switch (kind) {
-    case ErrorKind.Timeout:
-      return 'Timeout';
-    case ErrorKind.BadRequest:
-      return 'Bad Request';
-    case ErrorKind.NotFound:
-      return 'Not Found';
-    case ErrorKind.InternalError:
-      return 'Internal Error';
-    case ErrorKind.InvalidResponse:
-      return 'Invalid Response';
-    default:
-      return 'Unknown Error';
+const parseMessage = (message: unknown, kind: ErrorKind): string => {
+  if (message === 'string') {
+    return message;
   }
+
+  return kind;
 };

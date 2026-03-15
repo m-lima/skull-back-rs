@@ -1,27 +1,27 @@
-export namespace query {
-  export const skulls = 'skulls';
-  export const quicks = 'quicks';
-  export const occurrences = 'occurrences';
-}
+const useTls = import.meta.env.VITE_URL_TLS === 'true' ? 's' : '';
+const host = import.meta.env.VITE_URL_HOST ?? 'localhost:3333';
+const auth = import.meta.env.VITE_URL_AUTH ?? host;
 
-export namespace path {
-  export const grid = '/';
-  export const chart = '/chart';
-  export const summary = '/summary';
-}
+export const query = {
+  skulls: 'skulls',
+  quicks: 'quicks',
+  occurrences: 'occurrences',
+};
 
-export namespace url {
-  const useTls = import.meta.env.VITE_URL_TLS === 'true' ? 's' : '';
-  const host = import.meta.env.VITE_URL_HOST ?? 'localhost:3333';
+export const path = {
+  grid: '/',
+  chart: '/chart',
+  summary: '/summary',
+} as const;
 
-  export namespace ws {
-    export const binary = `ws${useTls}://${host}/ws/binary`;
-    export const check = `http${useTls}://${host}/ws/binary`;
-  }
+export const url = {
+  ws: {
+    binary: `ws${useTls}://${host}/ws/binary`,
+    check: `http${useTls}://${host}/ws/binary`,
+  },
 
-  export namespace access {
-    const auth = import.meta.env.VITE_URL_AUTH ?? host;
-    export const login = `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/login?redirect=${window.location}`;
-    export const reset = `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/reset?redirect=${window.location}`;
-  }
-}
+  access: {
+    login: `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/login?redirect=${window.location.href}`,
+    reset: `http${useTls}://${auth}/logout?redirect=http${useTls}://${auth}/reset?redirect=${window.location.href}`,
+  },
+} as const;

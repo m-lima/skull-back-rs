@@ -9,6 +9,7 @@ import {
   EpochDays,
   ProtoOccurrence,
 } from './model';
+import { ErrorMessage } from './error';
 
 export class Store {
   private readonly socket: Socket;
@@ -350,49 +351,88 @@ export class Store {
     }
 
     return new Promise((accept, reject) => {
-      this.pendingRequests.push(() =>
+      this.pendingRequests.push(() => {
         request()
-          .then(ok => { accept(ok); })
-          .catch(err => { reject(err); }),
-      );
+          .then(ok => {
+            accept(ok);
+          })
+          .catch((err: unknown) => {
+            if (err instanceof ErrorMessage) {
+              reject(err);
+            } else {
+              reject(new ErrorMessage(err));
+            }
+          });
+      });
     });
   }
 
   private ensureAll() {
     if (this.hasSkulls) {
-      querySealed.getSkulls(this.socket).then(skulls => { this.setSkulls(skulls); });
+      void querySealed.getSkulls(this.socket).then(skulls => {
+        this.setSkulls(skulls);
+      });
     }
     if (this.hasQuicks) {
-      querySealed.getQuicks(this.socket).then(quicks => { this.setQuicks(quicks); });
+      void querySealed.getQuicks(this.socket).then(quicks => {
+        this.setQuicks(quicks);
+      });
     }
     if (this.hasOccurrencesSince) {
-      querySealed
-        .getOccurrences(this.socket, this.hasOccurrencesSince)
-        .then(occurrences => { this.setOccurrences(occurrences); });
+      void querySealed.getOccurrences(this.socket, this.hasOccurrencesSince).then(occurrences => {
+        this.setOccurrences(occurrences);
+      });
     }
   }
 
-  private readonly changeHandler = (message: any) => {
-    if ('push' in message) {
+  private readonly changeHandler = (message: unknown) => {
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      'push' in message &&
+      typeof message.push === 'object' &&
+      message.push !== null
+    ) {
       const push = message.push;
       if ('skullCreated' in push) {
-        this.setSkulls([modelSealed.makeSkull(push.skullCreated)]);
-        return true;
+        if (modelSealed.isSkullTuple(push.skullCreated)) {
+          this.setSkulls([modelSealed.makeSkull(push.skullCreated)]);
+          return true;
+        }
+        console.error('Expected push.occurrenceDeleted to be a skull tuple');
       } else if ('skullUpdated' in push) {
-        this.setSkulls([modelSealed.makeSkull(push.skullUpdated)]);
-        return true;
+        if (modelSealed.isSkullTuple(push.skullUpdated)) {
+          this.setSkulls([modelSealed.makeSkull(push.skullUpdated)]);
+          return true;
+        }
+        console.error('Expected push.skullUpdated to be a skull tuple');
       } else if ('skullDeleted' in push) {
-        this.removeSkull(push.skullDeleted);
-        return true;
+        if (typeof push.skullDeleted === 'number') {
+          this.removeSkull(push.skullDeleted);
+          return true;
+        }
+        console.error('Expected push.skullDeleted to be a number');
       } else if ('occurrencesCreated' in push) {
-        this.setOccurrences(push.occurrencesCreated.map(modelSealed.makeOccurrence));
-        return true;
+        if (
+          push.occurrencesCreated instanceof Array &&
+          push.occurrencesCreated.every(modelSealed.isOccurrenceTuple)
+        ) {
+          this.setOccurrences(push.occurrencesCreated.map(modelSealed.makeOccurrence));
+          return true;
+        }
+        console.error('Expected push.occurrencesCreated to be a list of occurrence tuples');
       } else if ('occurrenceUpdated' in push) {
-        this.setOccurrences([modelSealed.makeOccurrence(push.occurrenceUpdated)]);
-        return true;
+        if (modelSealed.isOccurrenceTuple(push.occurrenceUpdated)) {
+          this.setOccurrences([modelSealed.makeOccurrence(push.occurrenceUpdated)]);
+          return true;
+        }
+        console.error('Expected push.occurrenceUpdated to be an occurrence tuple');
       } else if ('occurrenceDeleted' in push) {
-        this.removeOccurrence(push.occurrenceDeleted);
-        return true;
+        if (typeof push.occurrenceDeleted === 'number') {
+          this.removeOccurrence(push.occurrenceDeleted);
+          return true;
+        }
+        console.error('Expected push.occurrenceDeleted to be a number');
       }
     }
     return false;

@@ -13,13 +13,13 @@ export default defineConfig({
         name: 'Skull',
         start_url: '.',
         display: 'standalone',
-        theme_color: "#282c34",
-        background_color: "#282c34",
+        theme_color: '#282c34',
+        background_color: '#282c34',
         icons: [
           {
             src: 'favicon.png',
             sizes: '64x64 32x32 24x24 16x16',
-            type: 'image/x-icon'
+            type: 'image/x-icon',
           },
         ],
       },

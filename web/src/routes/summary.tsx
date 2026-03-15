@@ -38,7 +38,13 @@ const renderRows = (
     }
 
     return (
-      <tr id={id ? 'bright' : 'dark'} key={index} onClick={() => { setSelected(occurrence); }}>
+      <tr
+        id={id ? 'bright' : 'dark'}
+        key={index}
+        onClick={() => {
+          setSelected(occurrence);
+        }}
+      >
         <td id='icon' style={{ color: skullColor(skull) }}>
           <Icon icon={skull.icon} />
         </td>
@@ -85,6 +91,23 @@ export const Summary = () => {
     return <Banner.Error error={error} />;
   }
 
+  // TODO: ERROR: Add react lints. This should start to fail
+  const selectedItem = useMemo(() => {
+    if (selected === undefined) {
+      return undefined;
+    }
+
+    const selectedSkull = skullMap.get(selected.skull);
+    if (selectedSkull === undefined) {
+      return undefined;
+    }
+
+    return {
+      occurrence: selected,
+      skull: selectedSkull,
+    };
+  }, []);
+
   return (
     <>
       <Filter
@@ -111,19 +134,25 @@ export const Summary = () => {
           </tbody>
         </table>
       )}
-      {selected && (
+      {selectedItem && (
         <Edit
-          skull={skullMap.get(selected.skull)!}
-          amount={selected.amount}
-          millis={selected.millis}
+          skull={selectedItem.skull}
+          amount={selectedItem.occurrence.amount}
+          millis={selectedItem.occurrence.millis}
           skulls={skulls.items}
           onAccept={occurrence => {
-            edit.update({ ...occurrence, id: selected.id }).then(() => { setSelected(undefined); });
+            void edit.update({ ...occurrence, id: selectedItem.occurrence.id }).then(() => {
+              setSelected(undefined);
+            });
           }}
           onDelete={() => {
-            edit.remove(selected).then(() => { setSelected(undefined); });
+            void edit.remove(selectedItem.occurrence).then(() => {
+              setSelected(undefined);
+            });
           }}
-          onCancel={() => { setSelected(undefined); }}
+          onCancel={() => {
+            setSelected(undefined);
+          }}
         />
       )}
     </>

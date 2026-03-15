@@ -4,7 +4,11 @@ import { sealed } from './context';
 import { useContext, useEffect, useMemo, useState } from 'react';
 
 export function useStore() {
-  return useContext(sealed.StoreContext)!;
+  const context = useContext(sealed.StoreContext);
+  if (context === undefined) {
+    throw new Error('`useStore` must be used inside a <StoreProvider>');
+  }
+  return context;
 }
 
 export const useSocketState = () => {
@@ -30,17 +34,21 @@ export const useSkulls = () => {
   });
 
   useEffect(() => {
-    const listener = store.registerSkullListener(s =>
-      { setSkulls({
+    const listener = store.registerSkullListener(s => {
+      setSkulls({
         items: s,
         pending: !store.isSkullsLoaded(),
-      }); },
-    );
-    return () => { store.removeSkullListener(listener); };
+      });
+    });
+    return () => {
+      store.removeSkullListener(listener);
+    };
   }, [store]);
 
   if (!skulls.error) {
-    store.ensureSkulls().catch(e => { setSkulls({ ...skulls, error: e }); });
+    store.ensureSkulls().catch((e: unknown) => {
+      setSkulls({ ...skulls, error: e });
+    });
   }
 
   return skulls;
@@ -54,17 +62,21 @@ export const useQuicks = () => {
   });
 
   useEffect(() => {
-    const listener = store.registerQuickListener(q =>
-      { setQuicks({
+    const listener = store.registerQuickListener(q => {
+      setQuicks({
         items: q,
         pending: !store.isQuicksLoaded(),
-      }); },
-    );
-    return () => { store.removeQuickListener(listener); };
+      });
+    });
+    return () => {
+      store.removeQuickListener(listener);
+    };
   }, [store]);
 
   if (!quicks.error) {
-    store.ensureQuicks().catch(e => { setQuicks({ ...quicks, error: e }); });
+    store.ensureQuicks().catch((e: unknown) => {
+      setQuicks({ ...quicks, error: e });
+    });
   }
 
   return quicks;
@@ -100,17 +112,21 @@ export const useOccurrences = (
   }, [store, startDay, parsedFilter]);
 
   useEffect(() => {
-    const listener = store.registerOccurrenceListener(o =>
-      { setOccurrences({
+    const listener = store.registerOccurrenceListener(o => {
+      setOccurrences({
         items: o.filter(parsedFilter),
         pending: !store.isOccurrencesLoadedSince(startDay),
-      }); },
-    );
-    return () => { store.removeOccurrenceListener(listener); };
+      });
+    });
+    return () => {
+      store.removeOccurrenceListener(listener);
+    };
   }, [store, startDay, parsedFilter]);
 
   if (!occurrences.error) {
-    store.ensureOccurrences(startDay).catch(e => { setOccurrences({ ...occurrences, error: e }); });
+    store.ensureOccurrences(startDay).catch((e: unknown) => {
+      setOccurrences({ ...occurrences, error: e });
+    });
   }
 
   return occurrences;
@@ -125,7 +141,9 @@ export const useEditOccurrence = () => {
     setPending(true);
     return store.edit
       .create(occurrence)
-      .then(() => { setPending(false); })
+      .then(() => {
+        setPending(false);
+      })
       .catch(setError);
   };
 
@@ -133,7 +151,9 @@ export const useEditOccurrence = () => {
     setPending(true);
     return store.edit
       .update(occurrence)
-      .then(() => { setPending(false); })
+      .then(() => {
+        setPending(false);
+      })
       .catch(setError);
   };
 
@@ -141,7 +161,9 @@ export const useEditOccurrence = () => {
     setPending(true);
     return store.edit
       .remove(occurrence)
-      .then(() => { setPending(false); })
+      .then(() => {
+        setPending(false);
+      })
       .catch(setError);
   };
 

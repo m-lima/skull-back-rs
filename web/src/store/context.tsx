@@ -2,9 +2,9 @@ import { Store } from './store';
 
 import { createContext, PropsWithChildren } from 'react';
 
-export namespace sealed {
-  export const StoreContext = createContext<Store | undefined>(undefined);
-}
+export const sealed = {
+  StoreContext: createContext<Store | undefined>(undefined),
+} as const;
 
 interface StoreProviderProps {
   store: Store;
