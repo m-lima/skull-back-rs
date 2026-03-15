@@ -123,7 +123,7 @@ export const Chart = () => {
 
   const realStart = useMemo(() => {
     if (occurrences.items.length > 0) {
-      const minDate = occurrences.items[occurrences.items.length -1].millis;
+      const minDate = occurrences.items[occurrences.items.length - 1].millis;
       return new EpochDays(Math.max(start.getMillis(), minDate.getTime()));
     }
 

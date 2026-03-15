@@ -1,5 +1,5 @@
 import { EpochDays, Occurrence, Skull, Response, Quick, ProtoOccurrence } from './model';
-import {Store} from './store';
+import { Store } from './store';
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -82,10 +82,7 @@ export const useQuicks = () => {
   return { ...quicks, pending: !store.isQuicksLoaded() };
 };
 
-export const useOccurrences = (
-  startDay: EpochDays,
-  filter?: (o: Occurrence) => boolean,
-) => {
+export const useOccurrences = (startDay: EpochDays, filter?: (o: Occurrence) => boolean) => {
   const startMillis = getMillis(startDay);
 
   const parsedFilter = useMemo(
@@ -118,7 +115,7 @@ export const useOccurrences = (
     });
   }
 
-  return {...occurrences, pending: !store.isOccurrencesLoadedSince(startDay)};
+  return { ...occurrences, pending: !store.isOccurrencesLoadedSince(startDay) };
 };
 
 export const useEditOccurrence = () => {
