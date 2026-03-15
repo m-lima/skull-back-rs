@@ -17,6 +17,8 @@ interface FilterProps {
   showLimits?: [boolean, (showLimits: boolean) => void];
 }
 
+const minDate = new Date('2000-01-01');
+
 export const Filter = (props: FilterProps) => {
   const [expanded, setExpanded] = props.expanded;
   const [start, setStart] = props.start;
@@ -49,7 +51,7 @@ export const Filter = (props: FilterProps) => {
                 dateFormat='dd/MM/yyyy'
                 popperPlacement='bottom'
                 onChange={(d: Date | null) => {
-                  if (d) {
+                  if (d && d > minDate) {
                     setStart(new EpochDays(d));
                   }
                 }}
@@ -62,7 +64,7 @@ export const Filter = (props: FilterProps) => {
                 dateFormat='dd/MM/yyyy'
                 popperPlacement='bottom'
                 onChange={(d: Date | null) => {
-                  if (d) {
+                  if (d && d > minDate) {
                     setEnd(new EpochDays(d));
                   }
                 }}
