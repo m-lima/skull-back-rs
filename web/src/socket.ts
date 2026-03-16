@@ -101,7 +101,7 @@ export class Socket {
     this.heartbeat = new Date();
     this.state = SocketState.Closed;
     this.attempts = 0;
-    this.socket = this.connect(url, checkUrl);
+    this.socket = this.connect(url, checkUrl, true);
 
     setInterval(() => {
       const now = new Date();
@@ -116,16 +116,24 @@ export class Socket {
     }, HeartbeatMillis);
   }
 
-  private connect(url: string | URL, checkUrl?: string | URL) {
+  private connect(url: string | URL, checkUrl?: string | URL, firstRun: boolean = false) {
     this.setState(SocketState.Connecting);
 
+    if (!firstRun) {
+      this.socket.close();
+      if (this.noHeartbeat()) {
+        return this.socket;
+      }
+    }
+
     const socket = new WebSocket(url);
+    this.socket = socket;
     socket.binaryType = 'arraybuffer';
 
     socket.addEventListener(
       'error',
       () => {
-        if (this.noHeartbeat()) {
+        if (socket !== this.socket || this.noHeartbeat()) {
           return;
         }
         this.tryCheckAuthorized(checkUrl);
@@ -137,7 +145,7 @@ export class Socket {
     socket.addEventListener(
       'close',
       () => {
-        if (this.noHeartbeat()) {
+        if (socket !== this.socket || this.noHeartbeat()) {
           return;
         }
 
@@ -153,7 +161,7 @@ export class Socket {
     socket.addEventListener(
       'open',
       () => {
-        if (this.noHeartbeat()) {
+        if (socket !== this.socket || this.noHeartbeat()) {
           return;
         }
         this.setState(SocketState.Open);
@@ -163,7 +171,6 @@ export class Socket {
 
     socket.onmessage = this.onMessage.bind(this);
 
-    this.socket = socket;
     return socket;
   }
 
