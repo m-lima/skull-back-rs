@@ -1,4 +1,3 @@
-import * as datefns from 'date-fns';
 import { encode, decode } from '@msgpack/msgpack';
 
 export class Timeout {
@@ -21,6 +20,8 @@ export enum SocketState {
   Unauthorized,
   Forbidden,
 }
+
+const HeartbeatMillis = 5000;
 
 class SocketStateListener {
   readonly update: (state: SocketState) => void;
@@ -90,21 +91,32 @@ export class Socket {
   private socket: WebSocket;
   private state: SocketState;
   private attempts: number;
-  private lastAttempt: Date;
+  private heartbeat: Date;
 
   public constructor(url: string | URL, checkUrl?: string | URL) {
     this.requests = [];
     this.handlers = [];
     this.stateListeners = [];
 
+    this.heartbeat = new Date();
     this.state = SocketState.Closed;
     this.attempts = 0;
-    this.lastAttempt = new Date(0);
     this.socket = this.connect(url, checkUrl);
+
+    setInterval(() => {
+      const now = new Date();
+      const noHeartbeat = this.noHeartbeat(now);
+      this.heartbeat = now;
+
+      if (noHeartbeat) {
+        this.state = SocketState.Closed;
+        this.attempts = 0;
+        this.connect(url, checkUrl);
+      }
+    }, HeartbeatMillis);
   }
 
   private connect(url: string | URL, checkUrl?: string | URL) {
-    this.lastAttempt = new Date();
     this.setState(SocketState.Connecting);
 
     const socket = new WebSocket(url);
@@ -113,6 +125,9 @@ export class Socket {
     socket.addEventListener(
       'error',
       () => {
+        if (this.noHeartbeat()) {
+          return;
+        }
         this.tryCheckAuthorized(checkUrl);
         this.setState(SocketState.Error);
       },
@@ -122,6 +137,10 @@ export class Socket {
     socket.addEventListener(
       'close',
       () => {
+        if (this.noHeartbeat()) {
+          return;
+        }
+
         if (this.state !== SocketState.Error) {
           this.setState(SocketState.Closed);
         }
@@ -134,6 +153,9 @@ export class Socket {
     socket.addEventListener(
       'open',
       () => {
+        if (this.noHeartbeat()) {
+          return;
+        }
         this.setState(SocketState.Open);
       },
       false,
@@ -143,6 +165,10 @@ export class Socket {
 
     this.socket = socket;
     return socket;
+  }
+
+  private noHeartbeat(now: Date = new Date()) {
+    return now.getTime() - this.heartbeat.getTime() >= 2 * HeartbeatMillis;
   }
 
   private nextAttempt() {
@@ -181,10 +207,6 @@ export class Socket {
   }
 
   private tryReconnect(url: string | URL, checkUrl?: string | URL) {
-    if (datefns.differenceInMinutes(new Date(), this.lastAttempt) >= 5) {
-      this.attempts = 0;
-    }
-
     const timeout = this.nextAttempt();
 
     if (timeout === undefined) {
