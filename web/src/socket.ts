@@ -1,3 +1,4 @@
+import * as datefns from 'date-fns';
 import { encode, decode } from '@msgpack/msgpack';
 
 export class Timeout {
@@ -150,11 +151,6 @@ export class Socket {
       return;
     }
 
-    const now = new Date();
-    if (now.getTime() - this.lastAttempt.getTime() > 5 * 60 * 1000) {
-      this.attempts = 0;
-    }
-
     switch (this.attempts) {
       case 0:
         return 0;
@@ -185,6 +181,10 @@ export class Socket {
   }
 
   private tryReconnect(url: string | URL, checkUrl?: string | URL) {
+    if (datefns.differenceInMinutes(new Date(), this.lastAttempt) >= 5) {
+      this.attempts = 0;
+    }
+
     const timeout = this.nextAttempt();
 
     if (timeout === undefined) {
