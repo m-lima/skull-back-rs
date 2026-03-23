@@ -11,6 +11,7 @@ use crate::service::Service;
 pub fn build() -> axum::Router {
     axum::Router::new()
         .route("/", axum::routing::get(get))
+        .route("/quick", axum::routing::get(quick))
         .route("/", axum::routing::post(post))
         .route("/", axum::routing::patch(patch))
         .route("/", axum::routing::delete(delete))
@@ -33,6 +34,12 @@ async fn get(
         )
         .await
     }
+}
+
+async fn quick(
+    axum::Extension(service): axum::Extension<Service>,
+) -> (hyper::StatusCode, axum::Json<Response>) {
+    super::handle(service, types::Request::Occurrence(Occurrence::Quick)).await
 }
 
 async fn post(
